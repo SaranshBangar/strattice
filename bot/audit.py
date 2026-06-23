@@ -49,17 +49,29 @@ def init() -> None:
                 dry_run         INTEGER NOT NULL,
                 exchange_order_id TEXT,
                 realized_pnl    REAL NOT NULL DEFAULT 0,
+                tds             REAL NOT NULL DEFAULT 0,   -- India TDS withheld (cash drag, not P&L)
                 response        TEXT
             );
             CREATE TABLE IF NOT EXISTS positions (
-                strategy  TEXT NOT NULL,
-                market    TEXT NOT NULL,
-                qty       REAL NOT NULL DEFAULT 0,   -- signed: + long, - short
-                avg_price REAL NOT NULL DEFAULT 0,
+                strategy   TEXT NOT NULL,
+                market     TEXT NOT NULL,
+                qty        REAL NOT NULL DEFAULT 0,   -- signed: + long, - short
+                avg_price  REAL NOT NULL DEFAULT 0,
+                peak_price REAL NOT NULL DEFAULT 0,   -- highest close since entry (chandelier stop)
+                entry_ts   INTEGER NOT NULL DEFAULT 0,-- entry candle ts (ms) for the time-stop
                 PRIMARY KEY (strategy, market)
             );
             """
         )
+        # ponytail: lazy migrations for DBs created before these columns existed.
+        ocols = {r["name"] for r in c.execute("PRAGMA table_info(orders)")}
+        if "tds" not in ocols:
+            c.execute("ALTER TABLE orders ADD COLUMN tds REAL NOT NULL DEFAULT 0")
+        pcols = {r["name"] for r in c.execute("PRAGMA table_info(positions)")}
+        if "peak_price" not in pcols:
+            c.execute("ALTER TABLE positions ADD COLUMN peak_price REAL NOT NULL DEFAULT 0")
+        if "entry_ts" not in pcols:
+            c.execute("ALTER TABLE positions ADD COLUMN entry_ts INTEGER NOT NULL DEFAULT 0")
 
 
 def _now() -> str:
@@ -89,13 +101,13 @@ def log_order(o: dict) -> bool:
             c.execute(
                 """INSERT INTO orders
                    (client_order_id,ts,strategy,market,side,qty,price,notional,
-                    status,dry_run,exchange_order_id,realized_pnl,response)
-                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    status,dry_run,exchange_order_id,realized_pnl,tds,response)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     o["client_order_id"], _now(), o["strategy"], o["market"], o["side"],
                     o["qty"], o["price"], o["notional"], o["status"], int(o["dry_run"]),
                     o.get("exchange_order_id"), o.get("realized_pnl", 0.0),
-                    json.dumps(o.get("response", {})),
+                    o.get("tds", 0.0), json.dumps(o.get("response", {})),
                 ),
             )
             return True
@@ -112,12 +124,35 @@ def get_position(strategy: str, market: str) -> tuple[float, float]:
         return (row["qty"], row["avg_price"]) if row else (0.0, 0.0)
 
 
-def set_position(strategy: str, market: str, qty: float, avg_price: float) -> None:
+def set_position(strategy: str, market: str, qty: float, avg_price: float,
+                 peak_price: float = 0.0, entry_ts: int = 0) -> None:
     with _lock, _conn() as c:
         c.execute(
-            """INSERT INTO positions(strategy,market,qty,avg_price) VALUES(?,?,?,?)
-               ON CONFLICT(strategy,market) DO UPDATE SET qty=excluded.qty, avg_price=excluded.avg_price""",
-            (strategy, market, qty, avg_price),
+            """INSERT INTO positions(strategy,market,qty,avg_price,peak_price,entry_ts)
+               VALUES(?,?,?,?,?,?)
+               ON CONFLICT(strategy,market) DO UPDATE SET
+                 qty=excluded.qty, avg_price=excluded.avg_price,
+                 peak_price=excluded.peak_price, entry_ts=excluded.entry_ts""",
+            (strategy, market, qty, avg_price, peak_price, entry_ts),
+        )
+
+
+def get_meta(strategy: str, market: str) -> tuple[float, int]:
+    """(peak_price, entry_ts) for the open position; (0.0, 0) if none."""
+    with _lock, _conn() as c:
+        row = c.execute(
+            "SELECT peak_price,entry_ts FROM positions WHERE strategy=? AND market=?",
+            (strategy, market),
+        ).fetchone()
+        return (row["peak_price"], row["entry_ts"]) if row else (0.0, 0)
+
+
+def update_peak(strategy: str, market: str, price: float) -> None:
+    """Raise the running high-water mark for an open long (feeds the chandelier stop)."""
+    with _lock, _conn() as c:
+        c.execute(
+            "UPDATE positions SET peak_price=MAX(peak_price,?) WHERE strategy=? AND market=? AND qty>0",
+            (price, strategy, market),
         )
 
 
@@ -126,14 +161,35 @@ def today_stats() -> dict:
     day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     with _lock, _conn() as c:
         row = c.execute(
-            """SELECT COUNT(*) AS n, COALESCE(SUM(realized_pnl),0) AS pnl
+            """SELECT COUNT(*) AS n, COALESCE(SUM(realized_pnl),0) AS pnl,
+                      COALESCE(SUM(tds),0) AS tds
                FROM orders WHERE status IN ('placed','dry_run') AND substr(ts,1,10)=?""",
             (day,),
         ).fetchone()
         exposure = c.execute(
             "SELECT COALESCE(SUM(ABS(qty)*avg_price),0) AS exp FROM positions"
         ).fetchone()["exp"]
-    return {"trades_today": row["n"], "realized_today": row["pnl"], "capital_at_risk": exposure}
+    return {"trades_today": row["n"], "realized_today": row["pnl"],
+            "tds_today": row["tds"], "capital_at_risk": exposure}
+
+
+def total_realized() -> float:
+    """All-time realized P&L (placed/dry_run), for simulated-equity accounting."""
+    with _lock, _conn() as c:
+        return c.execute(
+            "SELECT COALESCE(SUM(realized_pnl),0) AS pnl FROM orders "
+            "WHERE status IN ('placed','dry_run')"
+        ).fetchone()["pnl"]
+
+
+def position_held_by_other(strategy: str, market: str) -> bool:
+    """True if a DIFFERENT strategy holds a nonzero position in this market (no-dup-asset rule)."""
+    with _lock, _conn() as c:
+        row = c.execute(
+            "SELECT 1 FROM positions WHERE market=? AND strategy!=? AND qty!=0 LIMIT 1",
+            (market, strategy),
+        ).fetchone()
+        return row is not None
 
 
 def open_positions() -> list[sqlite3.Row]:

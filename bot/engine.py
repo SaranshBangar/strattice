@@ -9,13 +9,21 @@ import logging
 import sys
 import time
 
-from . import audit, config, notify
+from . import audit, config, notify, sizing
 from .client import Client
 from .executor import Executor
 from .risk import RiskManager
 from .strategies import build
+from .strategies.base import atr
 
 log = logging.getLogger("engine")
+
+# Candle interval -> milliseconds, for the bars-held time-stop.
+_INTERVAL_MS = {
+    "1m": 60_000, "5m": 300_000, "15m": 900_000, "30m": 1_800_000,
+    "1h": 3_600_000, "2h": 7_200_000, "4h": 14_400_000, "6h": 21_600_000,
+    "8h": 28_800_000, "1d": 86_400_000, "1w": 604_800_000,
+}
 
 
 def _setup_logging() -> None:
@@ -49,38 +57,44 @@ class Engine:
             # protective exits are config, not strategy logic -> attach to the instance
             strat.stop_loss_pct = float(s.get("stop_loss_pct", 0) or 0)
             strat.take_profit_pct = float(s.get("take_profit_pct", 0) or 0)
+            strat.chandelier_k = float(s.get("chandelier_k", 0) or 0)
+            strat.exit_atr_period = int(s.get("atr_period", s.get("params", {}).get("atr_period", 14)) or 14)
+            strat.max_hold_bars = int(s.get("max_hold_bars", 0) or 0)
             self.strategies.append(strat)
 
-    @staticmethod
-    def _protective_exit(strat, price: float, avg: float) -> str | None:
-        """Return 'STOP_LOSS'/'TAKE_PROFIT' if a long position should be force-closed, else None."""
+    def _exit_signal(self, strat, candles, price, avg, peak, bars_held) -> str | None:
+        """Force-close reasons for an open long (same precedence as the backtest):
+        stop-loss, take-profit (target), time-stop, then ATR chandelier trailing stop."""
         if avg <= 0:
             return None
         if strat.stop_loss_pct and price <= avg * (1 - strat.stop_loss_pct):
             return "STOP_LOSS"
         if strat.take_profit_pct and price >= avg * (1 + strat.take_profit_pct):
             return "TAKE_PROFIT"
+        if strat.max_hold_bars and bars_held >= strat.max_hold_bars:
+            return "TIME_STOP"
+        if strat.chandelier_k:
+            a = atr(candles, strat.exit_atr_period)
+            if a and price <= peak - strat.chandelier_k * a:
+                return "CHANDELIER"
         return None
 
     def _sanity_check(self) -> None:
-        """Warn loudly if capital can't clear exchange minimums or breaches risk ceilings."""
-        ceiling = self.risk.max_total_capital_at_risk
-        deployable = sum(s.capital for s in self.strategies)
-        if deployable > ceiling:
-            log.warning("config: summed strategy capital %.2f > max_total_capital_at_risk %.2f "
-                        "-> later strategies will be risk-blocked", deployable, ceiling)
+        """Warn loudly if the wallet can't clear exchange minimums. Sizing is wallet-scaled now,
+        so per-trade notional is allocation_frac*equity, not a fixed per-strategy capital."""
+        try:
+            eq = sizing.equity(self.client)
+            target = sizing.allocation_frac() * eq
+            log.info("config: equity=%.2f -> target notional/trade ~%.2f (alloc_frac=%.2f)",
+                     eq, target, sizing.allocation_frac())
+        except Exception:  # noqa: BLE001 - sanity check must never stop startup
+            log.debug("equity sanity check skipped (balance/market data unavailable)")
         for strat in self.strategies:
             try:
-                min_q = self.client.min_quantity(strat.market)
-                last = self.client.candles(strat.market, self.interval, 2)[-1]["close"]
-                if min_q and strat.capital < min_q * last:
-                    log.warning("config: %s capital %.2f < min order %.2f for %s "
-                                "-> trades will be skipped below_min_qty",
-                                strat.name, strat.capital, min_q * last, strat.market)
-                if strat.capital > self.risk.max_position_size:
-                    log.warning("config: %s capital %.2f > max_position_size %.2f -> risk-blocked",
-                                strat.name, strat.capital, self.risk.max_position_size)
-            except Exception:  # noqa: BLE001 - sanity check must never stop startup
+                min_n = self.client.min_notional(strat.market)
+                if min_n:
+                    log.info("config: %s min_notional=%.2f for %s", strat.name, min_n, strat.market)
+            except Exception:  # noqa: BLE001
                 log.debug("sanity check skipped for %s (market data unavailable)", strat.name)
 
     def run_once(self) -> None:
@@ -100,7 +114,12 @@ class Engine:
 
                 # 1) protective exit overrides the strategy signal (safety first)
                 if pos_qty > 0:
-                    hit = self._protective_exit(strat, price, avg)
+                    audit.update_peak(strat.name, strat.market, price)
+                    peak, entry_ts = audit.get_meta(strat.name, strat.market)
+                    peak = max(peak, price)
+                    interval_ms = _INTERVAL_MS.get(self.interval, 3_600_000)
+                    bars_held = int((ts - entry_ts) // interval_ms) if entry_ts else 0
+                    hit = self._exit_signal(strat, closed, price, avg, peak, bars_held)
                     if hit:
                         log.info("%s %s %s @ %s (avg %s) -> force SELL",
                                  hit, strat.name, strat.market, price, avg)
@@ -118,7 +137,11 @@ class Engine:
 
                 # 2) strategy signal
                 if action == "BUY" and pos_qty <= 0:
-                    qty = strat.capital / price
+                    qty = sizing.target_qty(strat.market, price, self.client)
+                    if qty <= 0:
+                        log.info("%s %s BUY skipped: sizing returned 0 (min-notional/balance)",
+                                 strat.name, strat.market)
+                        continue
                     self.executor.place(strategy=strat.name, market=strat.market,
                                         side="buy", qty=qty, price=price, candle_ts=ts)
                 elif action == "SELL" and pos_qty > 0:

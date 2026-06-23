@@ -12,13 +12,11 @@ import datetime
 import hashlib
 import logging
 
-from . import audit, config, notify
+from . import audit, config, costs, notify
 from .client import Client, CoinDCXError
 from .risk import RiskManager
 
 log = logging.getLogger("executor")
-
-FEE_RATE = 0.001  # 0.1% CoinDCX trading fee (TDS modeled in backtest; see backtest.py)
 
 
 def _coid(strategy: str, market: str, candle_ts: int, side: str) -> str:
@@ -27,9 +25,13 @@ def _coid(strategy: str, market: str, candle_ts: int, side: str) -> str:
 
 
 def _apply_fill(old_qty: float, old_avg: float, side: str, qty: float, price: float):
-    """Return (new_qty, new_avg, realized_pnl_net_of_fee) for a fill. Signed qty: +long/-short."""
+    """Return (new_qty, new_avg, realized_pnl_net_of_fee) for a fill. Signed qty: +long/-short.
+
+    Fee+GST comes from costs.py so DRY_RUN P&L matches live. TDS is NOT folded in here
+    (it's a withholding, not P&L) — the executor records it as a separate cash drag.
+    """
     signed = qty if side == "buy" else -qty
-    fee = qty * price * FEE_RATE
+    fee = costs.trading_fee(qty * price)
 
     if old_qty == 0 or (old_qty > 0) == (signed > 0):
         # opening or adding in the same direction -> no realized P&L
@@ -68,7 +70,8 @@ class Executor:
         increasing = old_qty == 0 or (old_qty > 0) == (signed > 0)
         new_exposure = notional if increasing else 0.0
 
-        decision = self.risk.check(notional, new_exposure)
+        decision = self.risk.check(notional, new_exposure, strategy=strategy,
+                                   market=market, increasing=increasing)
         if not decision.ok:
             audit.log_order({
                 "client_order_id": coid, "strategy": strategy, "market": market,
@@ -87,6 +90,12 @@ class Executor:
         if qty <= 0 or (min_q and qty < min_q):
             log.warning("qty %s below min %s for %s, skipping", qty, min_q, market)
             return {"status": "skipped", "reason": "below_min_qty", "client_order_id": coid}
+
+        min_n = self.client.min_notional(market)
+        if min_n and notional < min_n:
+            # Skip WITHOUT touching position state (no fill happened, no desync).
+            log.warning("notional %.2f below min %s for %s, skipping", notional, min_n, market)
+            return {"status": "skipped", "reason": "below_min_notional", "client_order_id": coid}
 
         exchange_order_id = None
         response: dict = {}
@@ -116,14 +125,23 @@ class Executor:
 
         # simulate/record fill at `price` (market order assumption) and update position
         new_qty, new_avg, realized = _apply_fill(old_qty, old_avg, side, qty, price)
+        tds_paid = costs.tds(side, notional)  # cash drag, tracked separately from P&L
         audit.log_order({
             "client_order_id": coid, "strategy": strategy, "market": market,
             "side": side, "qty": qty, "price": price, "notional": notional,
             "status": status, "dry_run": not config.LIVE,
             "exchange_order_id": exchange_order_id, "realized_pnl": realized,
-            "response": response,
+            "tds": tds_paid, "response": response,
         })
-        audit.set_position(strategy, market, new_qty, new_avg)
+        # Carry chandelier/time-stop state: fresh on a new entry, preserved while adding, cleared on close.
+        if old_qty == 0 and new_qty > 0:
+            peak, entry_ts_val = price, candle_ts
+        elif new_qty == 0:
+            peak, entry_ts_val = 0.0, 0
+        else:
+            old_peak, old_entry = audit.get_meta(strategy, market)
+            peak, entry_ts_val = max(old_peak, price), old_entry
+        audit.set_position(strategy, market, new_qty, new_avg, peak, entry_ts_val)
 
         tag = "LIVE" if config.LIVE else "DRY_RUN"
         log.info("%s %s %s %s qty=%s @%s notional=%.2f pnl=%.2f",

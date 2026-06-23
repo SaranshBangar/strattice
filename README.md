@@ -27,6 +27,7 @@ Secrets live only in `.env` (gitignored) — never in config or code.
 **Filling in `.env`:** step-by-step (CoinDCX keys, live switches, Twilio) → [ENV.md](ENV.md).
 
 ### Starting small: the ₹5,000 profile
+
 `config.yaml` ships tuned for **~₹5,000 (~$58 USDT)**: 1h candles, 2 strategies at $25
 each, a 6-trade/day cap, and per-strategy **stop-losses**. The reasoning matters more
 than the numbers — see "Cost drag" below.
@@ -46,14 +47,16 @@ python -m bot.backtest --module ma_crossover --market B-BTC_USDT \
        --stop-loss 0.04 --take-profit 0 --slippage 0.001
 python -m bot.backtest --selftest      # verifies the cost math
 ```
+
 Reports (all after fee + TDS): net P&L, return %, trades, win rate, **profit factor,
 expectancy, avg win/loss, max drawdown, annualized Sharpe, total fees+TDS paid,
 fees as % of capital, and exposure %**. `--stop-loss/--take-profit/--slippage` model
 the same protective exits the live engine runs.
 
 ### Cost drag (read this before going live at ₹5k)
+
 Every round trip costs **~1.2%**: 0.1% buy fee + 0.1% sell fee + 1% TDS on the sell.
-A strategy must clear that *before* it makes a rupee. At small capital with frequent
+A strategy must clear that _before_ it makes a rupee. At small capital with frequent
 trades, `fees_tds_paid` in the backtest often dwarfs net P&L — that's why this profile
 uses 1h candles, a daily trade cap, and take-profits set well above breakeven. **Always
 check `fees_pct_of_capital` and `profit_factor` (>1) before enabling a strategy live.**
@@ -74,6 +77,7 @@ set tiny `risk:` limits and `capital:` → go live → scale up only after revie
 `data/bot.db` and logs.
 
 ### Risk controls (enforced in the executor before every order)
+
 `max_position_size`, `daily_loss_limit` (halts the day), `max_trades_per_day`,
 `max_total_capital_at_risk`. Set in `config.yaml`. Per-strategy `stop_loss_pct` /
 `take_profit_pct` add protective exits, checked every poll on the close price and
@@ -82,7 +86,9 @@ sanity check that warns if a strategy's capital can't clear the exchange min-ord
 breaches a risk ceiling.
 
 ### Kill switch
+
 Create a file named `KILL` in the project root (name from `config.yaml`):
+
 ```bash
 touch KILL      # cancels open orders, halts trading; delete it to resume
 ```
@@ -90,6 +96,7 @@ touch KILL      # cancels open orders, halts trading; delete it to resume
 ## Run as a long-lived process (VPS)
 
 **systemd** (`/etc/systemd/system/coindcx-bot.service`):
+
 ```ini
 [Unit]
 Description=CoinDCX trading bot
@@ -105,14 +112,17 @@ EnvironmentFile=/opt/coindcx/.env
 [Install]
 WantedBy=multi-user.target
 ```
+
 ```bash
 sudo systemctl enable --now coindcx-bot
 journalctl -u coindcx-bot -f
 ```
+
 Restart-safe: risk accounting and positions are rebuilt from `data/bot.db`, and
 idempotent order IDs prevent double-submits after a restart.
 
 ### First-time deploy (Ubuntu/Debian)
+
 ```bash
 # 1. Base packages
 apt update && apt install -y git python3-venv
@@ -134,6 +144,7 @@ systemctl restart coindcx-bot
 ```
 
 ### Operating the bot
+
 ```bash
 systemctl status coindcx-bot        # is it running?
 systemctl stop coindcx-bot          # stop  (NOT Ctrl-C — it's a background service)
@@ -142,15 +153,19 @@ systemctl restart coindcx-bot       # restart (apply .env or config changes)
 journalctl -u coindcx-bot -f        # tail live logs; exit with q or Ctrl-C
 journalctl -u coindcx-bot -n 100    # last 100 log lines
 ```
+
 `.env` changes only take effect after `systemctl restart coindcx-bot` — the service
 reads `EnvironmentFile` at start. `Ctrl-C` does nothing to the service; it only exits
 `journalctl`. To disable on boot: `systemctl disable coindcx-bot`.
 
 ### Updating after a push
+
 ```bash
 cd /opt/coindcx && git pull && systemctl restart coindcx-bot
 ```
+
 Or install a one-liner `coindcx-update`:
+
 ```bash
 cat > /usr/local/bin/coindcx-update <<'EOF'
 #!/usr/bin/env bash
@@ -163,12 +178,15 @@ systemctl status coindcx-bot --no-pager
 EOF
 chmod +x /usr/local/bin/coindcx-update
 ```
+
 Then routine updates are just `coindcx-update`.
 
 ### Cloudflare Workers + Cron alternative
+
 Workers can't host a persistent Python process or local SQLite, so the model is
 different: a **Cron Trigger** fires a stateless worker that runs **one poll cycle**
 per invocation.
+
 - Port the per-cycle logic (`Engine.run_once`) to a Worker (TypeScript, or Python
   via Workers Python beta).
 - Replace `data/bot.db` with **D1** (SQLite-compatible) for orders/positions and
@@ -180,6 +198,7 @@ per invocation.
   want a single always-on process.
 
 ## Layout
+
 ```
 bot/
   config.py     YAML tunables + env secrets, live-mode double-lock
@@ -196,6 +215,7 @@ config.yaml  .env.example  requirements.txt
 ```
 
 ## Notes / deliberate simplifications
+
 - Long-only, flat↔long, full-capital allocation per strategy. Stop-loss/take-profit
   provide the downside cap; add shorting/fractional sizing in `engine.py` if needed.
 - Market orders, filled at the signal candle's close for accounting. Add limit/slippage

@@ -1,61 +1,96 @@
 # All tunables live here. Secrets do NOT — those come from .env only.
 #
-# PROFILE: ₹5,000 starting capital (~$58 USDT at ₹85/USD — adjust to live FX).
-# Quote currency is USDT. Sizing below assumes ~$55 deployable, ~$3 fee buffer.
-# Why small + few trades: every round trip costs ~1.2% (0.1% buy + 0.1% sell + 1% TDS).
-# At ₹5k, over-trading is the #1 way to lose. Fewer, higher-conviction trades win.
+# Sizing is WALLET-SCALED now: each entry deploys allocation_frac of live equity, so the
+# same config works at ₹5k or ₹50k. No-leverage by construction: total deployed across open
+# positions can never exceed free USDT, so max loss == wallet balance.
+# Why few trades: every round trip costs ~0.47% fee+GST + 1% TDS on the sell. Over-trading,
+# not under-sizing, is the #1 way to bleed at small capital. Aggression lives in SIZE, not count.
 
 engine:
   poll_seconds: 300         # how often the loop fetches candles + runs strategies
-  candle_interval: "1h"     # 1h (not 5m): cuts churn so trades can clear the ~1.2% cost
-  candle_limit: 200         # candles fetched per poll (enough for slow MA / lookbacks)
+  candle_interval: "1h"     # 1h (not 5m): cuts churn so trades can clear the round-trip cost
+  candle_limit: 300         # > regime_period(200)+slow MA+1, so the 200-bar gate can warm up
 
-# Hard risk ceilings — enforced in the executor BEFORE any order. Quote currency (USDT).
-# Tuned for ~$58 capital. Loss limits are absolute USDT; see comments for the ₹/% intent.
+# --- wallet sizing (constraint B/D) ---
+starting_equity: 1000.0     # DRY_RUN simulated wallet (USDT). Live ignores this, reads exchange.
+allocation_frac: 0.97       # fraction of equity to deploy per entry (aggressive, near-full wallet)
+
+# --- friction: single source of truth (bot/costs.py) ---
+costs:
+  fee_rate: 0.002           # 0.2% per side (CoinDCX maker == taker)
+  gst_on_fee: 0.18          # 18% GST on the fee
+  tds_rate: 0.01            # 1% TDS on SELL consideration (India VDA)
+  slippage_bps: 5.0         # modelled in BACKTEST only (5 bps = 0.05% per fill)
+  edge_margin_pct: 0.002    # extra move a signal must clear beyond round-trip fee+gst
+
+# Hard risk ceilings — FRACTIONS of live equity, computed at check-time (constraint C).
 risk:
-  max_position_size: 30.0           # max notional (quote) per single trade (~₹2,550)
-  daily_loss_limit: 6.0             # halt ALL trading for the day at this realized loss (~₹510, ~10%)
-  max_trades_per_day: 6             # across all strategies — cost-aware churn cap
-  max_total_capital_at_risk: 52.0   # hard ceiling on summed open exposure (all strategies)
-  kill_switch_file: "KILL"          # presence of this file => cancel open orders + halt
+  max_position_frac: 1.0              # max single-trade notional as a fraction of equity
+  max_total_capital_at_risk_frac: 1.0 # max summed open exposure as a fraction of equity
+  daily_loss_frac: 0.5                # RUNAWAY-BUG circuit breaker (NOT a market-risk cap):
+                                      #   halt the day if realized loss > 50% of start-of-day equity
+  max_trades_per_day: 2               # cost-aware churn cap (aggression is in SIZE, not frequency)
+  kill_switch_file: "KILL"            # presence of this file => cancel open orders + halt
 
-# Each strategy: its own market, capital, params, position tracking.
-# capital = quote currency this strategy may deploy per trade (still subject to risk ceilings).
-# stop_loss_pct / take_profit_pct: protective exits checked every poll on the close price.
-#   Set to 0 to disable. These OVERRIDE the strategy signal (safety first).
+# Each strategy: its own market + params + position tracking. Sizing is wallet-scaled (above),
+# so there is no per-strategy fixed `capital` anymore.
+# Exits are config-driven protective layers (strategies are entry-only):
+#   stop_loss_pct / take_profit_pct / max_hold_bars (time-stop) / chandelier_k (ATR trailing).
+# regime_period / regime_rule gate every long entry to an uptrend (shared).
 strategies:
   - name: "ma_btc"
     module: "ma_crossover"
     enabled: true
     market: "B-BTC_USDT"      # CoinDCX pair format
-    capital: 25.0             # ~₹2,125 per trade
-    stop_loss_pct: 0.04       # 4% hard stop (safety net; crossover SELL is the normal exit)
-    take_profit_pct: 0.0      # disabled — let trend winners run to the crossover
+    stop_loss_pct: 0.04       # 4% hard stop (safety net)
+    take_profit_pct: 0.0      # disabled — let the chandelier trail trend winners
+    chandelier_k: 3.0         # exit at peak - 3*ATR
+    atr_period: 14
+    max_hold_bars: 0          # no time-stop for the trend follower
     params:
-      fast: 10
-      slow: 30
+      fast: 20
+      slow: 50
+      atr_period: 14
+      k_atr: 0.5              # require fast-slow gap >= 0.5*ATR before entry
+      regime_period: 200
+      regime_rule: "ma"
+      expected_move_pct: 0.05
 
   - name: "rsi_eth"
     module: "rsi"
     enabled: true
     market: "B-ETH_USDT"
-    capital: 25.0             # ~₹2,125 per trade
-    stop_loss_pct: 0.03       # 3% stop — mean-reversion: cut quickly if the dip keeps dipping
-    take_profit_pct: 0.06     # 6% target (clears the ~1.2% cost with margin)
+    stop_loss_pct: 0.03       # 3% stop — cut quickly if the dip keeps dipping
+    take_profit_pct: 0.03     # target ~3x round-trip cost (≈0.47%*2 + margin)
+    chandelier_k: 0.0
+    atr_period: 14
+    max_hold_bars: 24         # time-stop: bail a stalled mean-reversion after 24 bars
     params:
       period: 14
-      oversold: 30
-      overbought: 70
+      oversold: 22
+      regime_period: 200
+      regime_rule: "ma"
+      expected_move_pct: 0.05
 
-  # Disabled by default — at ₹5k, run 2 strategies max to clear exchange min-notionals
-  # and stay under the capital-at-risk ceiling. Enable only after reviewing backtests.
-  - name: "momentum_btc"
+  # Disabled by default — run 2 strategies max to respect exchange min-notionals
+  # and the no-dup-asset rule. Enable only after reviewing backtests.
+  - name: "breakout_btc"
     module: "momentum"
     enabled: false
     market: "B-BTC_USDT"
-    capital: 25.0
     stop_loss_pct: 0.04
-    take_profit_pct: 0.08
+    take_profit_pct: 0.0
+    chandelier_k: 3.0
+    atr_period: 14
+    max_hold_bars: 0
     params:
       lookback: 20
-      threshold: 0.03         # 3% breakout over lookback high/low
+      atr_period: 14
+      vol_period: 20
+      min_atr_frac: 0.01      # volatility floor: ATR >= 1% of price
+      vol_mult: 1.2           # volume >= 1.2x its 20-bar average
+      buffer: 0.002           # 0.2% entry buffer over the lookback high
+      max_chase: 0.02         # skip if price already >2% past the level
+      regime_period: 200
+      regime_rule: "ma"
+      expected_move_pct: 0.05

@@ -56,6 +56,14 @@ class Client:
         m = self.markets().get(pair)
         return float(m["min_quantity"]) if m else 0.0
 
+    def min_notional(self, pair: str) -> float:
+        """Exchange min order value in quote currency. markets_details exposes this as
+        'min_notional' (quote min); 0.0 if the pair/field is absent."""
+        m = self.markets().get(pair)
+        if not m:
+            return 0.0
+        return float(m.get("min_notional", 0.0) or 0.0)
+
     # ---------- private (signed) ----------
     def _signed(self, path: str, payload: dict) -> dict:
         if not self.key or not self.secret:
@@ -91,3 +99,10 @@ class Client:
 
     def balances(self) -> dict:
         return self._signed("/exchange/v1/users/balances", {})
+
+    def free_balance(self, currency: str = "USDT") -> float:
+        """Available (non-locked) balance for a currency. 0.0 if not held."""
+        for b in self.balances():
+            if b.get("currency") == currency:
+                return float(b.get("balance", 0.0) or 0.0)
+        return 0.0

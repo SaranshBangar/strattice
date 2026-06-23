@@ -15,12 +15,10 @@ import argparse
 import json
 import math
 
+from . import config, costs
 from .client import Client
 from .strategies import REGISTRY
-
-FEE = 0.001   # 0.1%
-TDS = 0.01    # 1%
-TDS_ON_BUY = False
+from .strategies.base import atr
 
 # Candle interval -> periods per year, for annualizing the Sharpe ratio.
 _PERIODS_PER_YEAR = {
@@ -32,19 +30,33 @@ _PERIODS_PER_YEAR = {
 
 def run(strategy, candles: list[dict], capital: float,
         stop_loss_pct: float = 0.0, take_profit_pct: float = 0.0,
-        slippage: float = 0.0, interval: str = "1h") -> dict:
+        slippage: float | None = None, interval: str = "1h",
+        chandelier_k: float = 0.0, atr_period: int = 14, max_hold_bars: int = 0) -> dict:
+    """All friction (fee+GST per side, TDS per sell, slippage on fills) comes from costs.py
+    so the backtest, DRY_RUN, and live accounting can never diverge. slippage=None uses the
+    configured slippage_bps; pass an explicit fraction to override.
+
+    Exits (same precedence as the live engine): stop-loss, take-profit (target), time-stop
+    (max_hold_bars), then an ATR chandelier trailing stop (peak - chandelier_k*ATR)."""
+    slip = costs.slippage() if slippage is None else slippage
     cash, qty, entry_spend, entry_price = capital, 0.0, 0.0, 0.0
-    trades: list[float] = []          # realized P&L per round trip
+    entry_i, peak = -1, 0.0
+    trades: list[float] = []          # realized P&L per round trip (NET of all costs)
     equity_curve: list[float] = []
-    fees_paid = 0.0                   # total fee + TDS in quote currency
+    fees_paid = 0.0                   # total fee+GST AND TDS in quote currency
+    total_tds = 0.0                   # TDS only (separate cash drag)
+    sell_notional = 0.0               # gross sell consideration (TDS base)
     bars_in_market = 0
 
     def _sell(q: float, px: float) -> float:
-        nonlocal fees_paid
-        gross = q * px * (1 - slippage)   # sell slips down
-        cost = gross * (FEE + TDS)
-        fees_paid += cost
-        return gross - cost
+        nonlocal fees_paid, total_tds, sell_notional
+        gross = q * px * (1 - slip)        # sell slips down
+        fee = costs.trading_fee(gross)
+        t = costs.tds("sell", gross)
+        fees_paid += fee + t
+        total_tds += t
+        sell_notional += gross
+        return gross - fee - t
 
     start = max(strategy.min_candles, 2)
     for i in range(start, len(candles)):
@@ -54,27 +66,34 @@ def run(strategy, candles: list[dict], capital: float,
         # 1) protective exit (close-based, same as the live engine) overrides the signal
         exited = False
         if qty > 0 and entry_price > 0:
+            peak = max(peak, price)
+            chandelier = (peak - chandelier_k * (atr(window, atr_period) or 0.0)) \
+                if chandelier_k else 0.0
             hit = None
             if stop_loss_pct and price <= entry_price * (1 - stop_loss_pct):
-                hit = True
+                hit = "STOP_LOSS"
             elif take_profit_pct and price >= entry_price * (1 + take_profit_pct):
-                hit = True
+                hit = "TAKE_PROFIT"
+            elif max_hold_bars and entry_i >= 0 and (i - entry_i) >= max_hold_bars:
+                hit = "TIME_STOP"
+            elif chandelier_k and chandelier and price <= chandelier:
+                hit = "CHANDELIER"
             if hit:
                 proceeds = _sell(qty, price)
                 trades.append(proceeds - entry_spend)
-                cash, qty, entry_price = proceeds, 0.0, 0.0
+                cash, qty, entry_price, entry_i, peak = proceeds, 0.0, 0.0, -1, 0.0
                 exited = True
 
         action = strategy.decide(window)
 
         if not exited and action == "BUY" and qty == 0:
-            buy_tds = TDS if TDS_ON_BUY else 0.0
-            fill = price * (1 + slippage)         # buy slips up
+            fill = price * (1 + slip)         # buy slips up
             spend = cash
-            cost = spend * (FEE + buy_tds)
-            fees_paid += cost
-            qty = (spend - cost) / fill
+            fee = costs.trading_fee(spend)    # fee+GST on buy notional (no TDS on buys)
+            fees_paid += fee
+            qty = (spend - fee) / fill
             entry_spend, entry_price, cash = spend, fill, 0.0
+            entry_i, peak = i, price
         elif not exited and action == "SELL" and qty > 0:
             proceeds = _sell(qty, price)
             trades.append(proceeds - entry_spend)
@@ -123,6 +142,8 @@ def run(strategy, candles: list[dict], capital: float,
         "max_drawdown_pct": round(max_dd * 100, 2),
         "sharpe_annualized": round(sharpe, 2),
         "fees_tds_paid": round(fees_paid, 2),
+        "total_tds": round(total_tds, 4),
+        "sell_notional": round(sell_notional, 4),
         "fees_pct_of_capital": round(fees_paid / capital * 100, 2) if capital else 0.0,
         "exposure_pct": round(bars_in_market / max(len(equity_curve), 1) * 100, 1),
     }
@@ -132,34 +153,236 @@ def _build(module: str, market: str, capital: float, params: dict):
     return REGISTRY[module]("backtest", market, capital, params)
 
 
-def demo() -> None:
-    # Forced single round trip on a 100->110 rise; assert P&L matches hand calc incl fee+TDS.
+def walk_forward(strategy, candles: list[dict], capital: float,
+                 train: int, test: int, **run_kw) -> list[dict]:
+    """Item 9: rolling walk-forward. Slide non-overlapping `test` windows forward; each fold
+    is fed `train` preceding bars as out-of-sample indicator warmup/context, then evaluated.
+    Strategies are non-parametric (no fit step), so 'train' is warmup context, not a fit.
+    Reports net expectancy per test window. ponytail: plain loop, no param search."""
+    n = len(candles)
+    folds = []
+    start = train
+    while start + test <= n:
+        seg = candles[start - train: start + test]
+        res = run(strategy, seg, capital, **run_kw)
+        folds.append({"test_start": start, "test_end": start + test,
+                      "trades": res["trades"], "expectancy": res["expectancy"],
+                      "net_pnl": res["net_pnl"], "total_tds": res["total_tds"]})
+        start += test
+    print(f"\nwalk-forward {strategy.name} train={train} test={test} -> {len(folds)} folds")
+    for f in folds:
+        print(f"  bars[{f['test_start']:>5}:{f['test_end']:<5}] "
+              f"trades={f['trades']:>3} expectancy={f['expectancy']:>10} net={f['net_pnl']:>10} "
+              f"tds={f['total_tds']}")
+    if folds:
+        avg_exp = sum(f["expectancy"] for f in folds) / len(folds)
+        print(f"  mean net expectancy across folds: {round(avg_exp, 4)}")
+    return folds
+
+
+def _candles(closes: list[float], highs=None, lows=None, vols=None) -> list[dict]:
+    """Deterministic synthetic candles from a close series (no network)."""
+    return [{"open": c, "high": (highs[i] if highs else c), "low": (lows[i] if lows else c),
+             "close": c, "volume": (vols[i] if vols else 1.0), "time": i * 3_600_000}
+            for i, c in enumerate(closes)]
+
+
+def _selftest_costs() -> None:
+    """Item 1+2: friction routed through costs.py; TDS totals correctly."""
     from .strategies.base import Strategy
 
+    # Hand-calc single round trip (no slippage) — fee+GST per side, TDS on sell.
     class _Stub(Strategy):
         min_candles = 2
 
         def decide(self, candles):
             c = candles[-1]["close"]
-            if c <= 101:
-                return "BUY"
-            if c >= 109:
-                return "SELL"
-            return "HOLD"
+            return "BUY" if c <= 101 else "SELL" if c >= 109 else "HOLD"
 
-    # run() skips warmup bars (starts at index = min_candles=2), so put the BUY trigger at index 2.
-    closes = [100, 100, 100.5, 103, 106, 109, 110]
-    candles = [{"open": c, "high": c, "low": c, "close": c, "volume": 1, "time": i}
-               for i, c in enumerate(closes)]
-    res = run(_Stub("s", "X", 1000, {}), candles, 1000)
-
-    qty = 1000 * (1 - FEE) / 100.5          # buy at index 2 (100.5)
-    proceeds = qty * 109 * (1 - FEE - TDS)  # first SELL trigger is at 109
-    expect = round(proceeds - 1000, 2)
+    res = run(_Stub("s", "X", 1000, {}), _candles([100, 100, 100.5, 103, 106, 109, 110]),
+              1000, slippage=0.0)
+    qty = (1000 - costs.trading_fee(1000)) / 100.5
+    gross = qty * 109
+    proceeds = gross - costs.trading_fee(gross) - costs.tds("sell", gross)
     assert res["trades"] == 1, res
-    assert res["net_pnl"] == expect, (res["net_pnl"], expect)
-    assert res["win_rate"] == 100.0, res
-    print("backtest self-check OK:", res)
+    assert res["net_pnl"] == round(proceeds - 1000, 2), (res["net_pnl"], proceeds - 1000)
+
+    # (a) break-even-GROSS strategy (buy/sell at the same flat price) is net-NEGATIVE after costs.
+    class _Flat(Strategy):
+        min_candles = 2
+
+        def decide(self, candles):
+            return "BUY" if len(candles) % 2 == 0 else "SELL"
+
+    flat = run(_Flat("s", "X", 1000, {}), _candles([100] * 12), 1000, slippage=0.0)
+    assert flat["net_pnl"] < 0, ("break-even gross must lose after costs", flat)
+
+    # (b) a real-edge strategy (big up-move) stays net-POSITIVE after costs.
+    class _Edge(Strategy):
+        min_candles = 2
+
+        def decide(self, candles):
+            c = candles[-1]["close"]
+            return "BUY" if c <= 101 else "SELL" if c >= 120 else "HOLD"
+
+    edge = run(_Edge("s", "X", 1000, {}), _candles([100, 100, 100.5, 105, 110, 115, 120, 121]),
+               1000, slippage=0.0)
+    assert edge["net_pnl"] > 0, ("known-edge strategy must stay net-positive", edge)
+
+    # (c) total TDS == tds_rate * sum of sell notionals.
+    tds_rate = costs.params()["tds_rate"]
+    assert abs(edge["total_tds"] - tds_rate * edge["sell_notional"]) < 1e-3, edge
+    print("backtest cost self-check OK:", {k: res[k] for k in
+          ("trades", "net_pnl", "profit_factor", "expectancy", "total_tds")})
+
+
+def _selftest_regime() -> None:
+    """Item 3: regime gate works and CUTS trade count."""
+    from .strategies.regime import uptrend
+    from .strategies.rsi import RSIMeanReversion
+
+    rising = _candles([100 + i for i in range(60)])
+    falling = _candles([200 - i for i in range(60)])
+    for rule in ("ma", "ema_slope"):
+        assert uptrend(rising, 50, rule), ("uptrend should be True rising", rule)
+        assert not uptrend(falling, 50, rule), ("uptrend should be False falling", rule)
+
+    # Downtrend with a deep-oversold confirmation bounce: gated = no entry, ungated = entry.
+    closes = [100 - i * 0.5 for i in range(40)]      # long decline -> RSI deeply oversold, below MA
+    closes[-1] = closes[-2] + 1.0                    # one up bar: closes above prior high (confirm)
+    candles = _candles(closes)
+    params = {"period": 14, "oversold": 40, "regime_period": 20, "expected_move_pct": 0.05}
+    strat = RSIMeanReversion("rsi", "X", 1000, params)
+
+    def _buys(s):
+        return sum(1 for i in range(s.min_candles, len(candles) + 1)
+                   if s.decide(candles[:i]) == "BUY")
+
+    gated = _buys(strat)
+    strat._uptrend = lambda c: True  # bypass the gate to count what it suppressed
+    ungated = _buys(strat)
+    assert gated == 0 and ungated >= 1, ("regime gate must cut entries", gated, ungated)
+
+
+def _selftest_exits() -> None:
+    """Items 4/5: time-stop and ATR chandelier trailing stop force-close a long."""
+    from .strategies.base import Strategy
+
+    class _BuyOnce(Strategy):
+        min_candles = 2
+
+        def decide(self, candles):
+            return "BUY"  # run() only buys when flat, so this opens once then holds
+
+    # Chandelier: rise to a peak then fall back > k*ATR -> CHANDELIER exit (round trip closes).
+    rise_fall = _candles([100, 100, 101, 105, 110, 115, 120, 110, 100, 95])
+    r = run(_BuyOnce("s", "X", 1000, {}), rise_fall, 1000, slippage=0.0,
+            chandelier_k=1.0, atr_period=3)
+    assert r["trades"] == 1, ("chandelier should close the position", r)
+
+    # Time-stop: flat prices, force-exit after max_hold_bars.
+    r2 = run(_BuyOnce("s", "X", 1000, {}), _candles([100] * 12), 1000, slippage=0.0,
+             max_hold_bars=3)
+    assert r2["trades"] >= 1, ("time-stop should close the position", r2)
+
+
+def _selftest_risk() -> None:
+    """Item 8 + constraint C/A: fractional ceilings, no-dup-asset, no-leverage invariant."""
+    from . import audit, sizing
+    from .risk import RiskManager
+
+    audit.init()
+    eq_o, free_o, dup_o = sizing.equity, sizing.free_balance, audit.position_held_by_other
+    try:
+        sizing.equity = lambda *a, **k: 1000.0
+        sizing.free_balance = lambda *a, **k: 1000.0
+        audit.position_held_by_other = lambda s, m: False
+        rm = RiskManager({"risk": {
+            "max_position_frac": 1.0, "max_total_capital_at_risk_frac": 1.0,
+            "daily_loss_frac": 0.5, "max_trades_per_day": 20, "kill_switch_file": "KILL",
+        }})
+        assert rm.check(900, 900, strategy="a", market="X").ok
+        assert not rm.check(1500, 1500, strategy="a", market="X").ok, "block notional > frac*eq"
+        # no-leverage invariant: can't deploy more than free cash.
+        sizing.free_balance = lambda *a, **k: 100.0
+        d = rm.check(500, 500, strategy="a", market="X")
+        assert not d.ok and "INSUFFICIENT_BALANCE" in d.reason, ("no-leverage invariant", d.reason)
+        # no-dup-asset.
+        sizing.free_balance = lambda *a, **k: 1000.0
+        audit.position_held_by_other = lambda s, m: True
+        d = rm.check(100, 100, strategy="a", market="X")
+        assert not d.ok and d.reason == "DUP_ASSET", ("dup asset", d.reason)
+    finally:
+        sizing.equity, sizing.free_balance = eq_o, free_o
+        audit.position_held_by_other = dup_o
+
+
+def _selftest_sizing() -> None:
+    """Constraint B: positions scale with equity; notional never exceeds free balance."""
+    from . import sizing
+
+    class _FakeClient:
+        def markets(self):
+            return {"X": {"target_currency_precision": 6}}
+
+        def min_notional(self, m):
+            return 1.0
+
+    fc = _FakeClient()
+    eq_o, free_o = sizing.equity, sizing.free_balance
+    try:
+        def size_at(wallet):
+            sizing.equity = lambda *a, **k: float(wallet)
+            sizing.free_balance = lambda *a, **k: float(wallet)
+            q = sizing.target_qty("X", 100.0, fc)
+            return q, q * 100.0
+
+        q1, n1 = size_at(1000)
+        q5, n5 = size_at(5000)
+        assert n1 <= 1000 + 1e-9, ("exposure must not exceed free balance", n1)
+        assert n5 <= 5000 + 1e-9, ("exposure must not exceed free balance", n5)
+        assert abs(n5 / n1 - 5.0) < 0.01, ("sizing must scale with equity", n1, n5)
+        # below-min-notional -> 0
+        sizing.equity = lambda *a, **k: 0.5
+        sizing.free_balance = lambda *a, **k: 0.5
+        assert sizing.target_qty("X", 100.0, fc) == 0.0, "too-small wallet must skip"
+    finally:
+        sizing.equity, sizing.free_balance = eq_o, free_o
+
+
+def _selftest_static_invariants() -> None:
+    """Constraint A: the bot never moves funds, never uses leverage/margin/futures."""
+    import pathlib
+    import re
+
+    botdir = pathlib.Path(__file__).resolve().parent
+    money_move = re.compile(r"\.(deposit|withdraw|withdrawal|transfer)\s*\(|"
+                            r"/(transfer|withdraw|deposit)[a-z_]*|leverage\s*=|"
+                            r"create_(margin|futures|leverage)")
+    bad_order = re.compile(r'order_type\s*=\s*["\'](?!market_order)')
+    for f in botdir.rglob("*.py"):
+        src = f.read_text(encoding="utf-8")
+        # strip comments so prose like "no-leverage" can't trip the scan
+        code = "\n".join(line.split("#", 1)[0] for line in src.splitlines())
+        assert not money_move.search(code), f"fund-movement / leverage call in {f.name}"
+        assert not bad_order.search(code), f"non-market order_type in {f.name}"
+
+    # config markets are CoinDCX SPOT pairs (B- prefix), never futures/margin identifiers.
+    cfg = config.load()
+    spot = re.compile(r"^B-[A-Z0-9]+_[A-Z0-9]+$")
+    for s in cfg["strategies"]:
+        assert spot.match(s["market"]), f"non-spot market in config: {s['market']}"
+
+
+def demo() -> None:
+    costs.demo()
+    _selftest_costs()
+    _selftest_regime()
+    _selftest_exits()
+    _selftest_risk()
+    _selftest_sizing()
+    _selftest_static_invariants()
+    print("ALL backtest self-checks OK")
 
 
 def main() -> None:
@@ -172,7 +395,14 @@ def main() -> None:
     p.add_argument("--params", default="{}", help="JSON strategy params")
     p.add_argument("--stop-loss", type=float, default=0.0, help="stop-loss fraction, e.g. 0.04 = 4%")
     p.add_argument("--take-profit", type=float, default=0.0, help="take-profit fraction, e.g. 0.06 = 6%")
-    p.add_argument("--slippage", type=float, default=0.0, help="per-fill slippage fraction, e.g. 0.001 = 0.1%")
+    p.add_argument("--slippage", type=float, default=None,
+                   help="per-fill slippage fraction (default: config costs.slippage_bps)")
+    p.add_argument("--chandelier-k", type=float, default=0.0, help="ATR multiple for chandelier trailing stop")
+    p.add_argument("--atr-period", type=int, default=14, help="ATR lookback for the chandelier stop")
+    p.add_argument("--max-hold-bars", type=int, default=0, help="time-stop: force-exit after N bars (0=off)")
+    p.add_argument("--walkforward", action="store_true", help="rolling train/test walk-forward report")
+    p.add_argument("--train", type=int, default=400, help="walk-forward train window (bars)")
+    p.add_argument("--test", type=int, default=100, help="walk-forward test window (bars)")
     p.add_argument("--selftest", action="store_true")
     a = p.parse_args()
 
@@ -182,8 +412,13 @@ def main() -> None:
 
     candles = Client().candles(a.market, a.interval, a.limit)
     strat = _build(a.module, a.market, a.capital, json.loads(a.params))
-    res = run(strat, candles, a.capital, stop_loss_pct=a.stop_loss,
-              take_profit_pct=a.take_profit, slippage=a.slippage, interval=a.interval)
+    kw = dict(stop_loss_pct=a.stop_loss, take_profit_pct=a.take_profit, slippage=a.slippage,
+              interval=a.interval, chandelier_k=a.chandelier_k, atr_period=a.atr_period,
+              max_hold_bars=a.max_hold_bars)
+    if a.walkforward:
+        walk_forward(strat, candles, a.capital, a.train, a.test, **kw)
+        return
+    res = run(strat, candles, a.capital, **kw)
     print(f"\n{a.module} on {a.market} {a.interval} ({len(candles)} candles) "
           f"sl={a.stop_loss} tp={a.take_profit} slip={a.slippage}")
     for k, v in res.items():
