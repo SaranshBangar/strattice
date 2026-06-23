@@ -112,6 +112,59 @@ journalctl -u coindcx-bot -f
 Restart-safe: risk accounting and positions are rebuilt from `data/bot.db`, and
 idempotent order IDs prevent double-submits after a restart.
 
+### First-time deploy (Ubuntu/Debian)
+```bash
+# 1. Base packages
+apt update && apt install -y git python3-venv
+
+# 2. Deploy key (read-only) so the VPS can pull the private repo
+ssh-keygen -t ed25519 -f ~/.ssh/id_deploy -N "" -C "coindcx-vps"
+cat ~/.ssh/id_deploy.pub          # add this to GitHub → repo → Settings → Deploy keys
+printf 'Host github.com\n  IdentityFile ~/.ssh/id_deploy\n  IdentitiesOnly yes\n' >> ~/.ssh/config
+ssh -T git@github.com             # expect: "Hi <user>/coindcx! You've successfully authenticated"
+
+# 3. Clone + install (builds venv, writes systemd unit, enables + starts)
+git clone git@github.com:<user>/coindcx.git /opt/coindcx
+DIR=/opt/coindcx /opt/coindcx/scripts/deploy.sh
+
+# 4. Secrets — boots in safe DRY_RUN until filled (see ENV.md)
+nano /opt/coindcx/.env
+chmod 600 /opt/coindcx/.env
+systemctl restart coindcx-bot
+```
+
+### Operating the bot
+```bash
+systemctl status coindcx-bot        # is it running?
+systemctl stop coindcx-bot          # stop  (NOT Ctrl-C — it's a background service)
+systemctl start coindcx-bot         # start
+systemctl restart coindcx-bot       # restart (apply .env or config changes)
+journalctl -u coindcx-bot -f        # tail live logs; exit with q or Ctrl-C
+journalctl -u coindcx-bot -n 100    # last 100 log lines
+```
+`.env` changes only take effect after `systemctl restart coindcx-bot` — the service
+reads `EnvironmentFile` at start. `Ctrl-C` does nothing to the service; it only exits
+`journalctl`. To disable on boot: `systemctl disable coindcx-bot`.
+
+### Updating after a push
+```bash
+cd /opt/coindcx && git pull && systemctl restart coindcx-bot
+```
+Or install a one-liner `coindcx-update`:
+```bash
+cat > /usr/local/bin/coindcx-update <<'EOF'
+#!/usr/bin/env bash
+set -e
+cd /opt/coindcx
+git pull
+.venv/bin/pip install -q -r requirements.txt
+systemctl restart coindcx-bot
+systemctl status coindcx-bot --no-pager
+EOF
+chmod +x /usr/local/bin/coindcx-update
+```
+Then routine updates are just `coindcx-update`.
+
 ### Cloudflare Workers + Cron alternative
 Workers can't host a persistent Python process or local SQLite, so the model is
 different: a **Cron Trigger** fires a stateless worker that runs **one poll cycle**
