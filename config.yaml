@@ -1,0 +1,61 @@
+# All tunables live here. Secrets do NOT — those come from .env only.
+#
+# PROFILE: ₹5,000 starting capital (~$58 USDT at ₹85/USD — adjust to live FX).
+# Quote currency is USDT. Sizing below assumes ~$55 deployable, ~$3 fee buffer.
+# Why small + few trades: every round trip costs ~1.2% (0.1% buy + 0.1% sell + 1% TDS).
+# At ₹5k, over-trading is the #1 way to lose. Fewer, higher-conviction trades win.
+
+engine:
+  poll_seconds: 300         # how often the loop fetches candles + runs strategies
+  candle_interval: "1h"     # 1h (not 5m): cuts churn so trades can clear the ~1.2% cost
+  candle_limit: 200         # candles fetched per poll (enough for slow MA / lookbacks)
+
+# Hard risk ceilings — enforced in the executor BEFORE any order. Quote currency (USDT).
+# Tuned for ~$58 capital. Loss limits are absolute USDT; see comments for the ₹/% intent.
+risk:
+  max_position_size: 30.0           # max notional (quote) per single trade (~₹2,550)
+  daily_loss_limit: 6.0             # halt ALL trading for the day at this realized loss (~₹510, ~10%)
+  max_trades_per_day: 6             # across all strategies — cost-aware churn cap
+  max_total_capital_at_risk: 52.0   # hard ceiling on summed open exposure (all strategies)
+  kill_switch_file: "KILL"          # presence of this file => cancel open orders + halt
+
+# Each strategy: its own market, capital, params, position tracking.
+# capital = quote currency this strategy may deploy per trade (still subject to risk ceilings).
+# stop_loss_pct / take_profit_pct: protective exits checked every poll on the close price.
+#   Set to 0 to disable. These OVERRIDE the strategy signal (safety first).
+strategies:
+  - name: "ma_btc"
+    module: "ma_crossover"
+    enabled: true
+    market: "B-BTC_USDT"      # CoinDCX pair format
+    capital: 25.0             # ~₹2,125 per trade
+    stop_loss_pct: 0.04       # 4% hard stop (safety net; crossover SELL is the normal exit)
+    take_profit_pct: 0.0      # disabled — let trend winners run to the crossover
+    params:
+      fast: 10
+      slow: 30
+
+  - name: "rsi_eth"
+    module: "rsi"
+    enabled: true
+    market: "B-ETH_USDT"
+    capital: 25.0             # ~₹2,125 per trade
+    stop_loss_pct: 0.03       # 3% stop — mean-reversion: cut quickly if the dip keeps dipping
+    take_profit_pct: 0.06     # 6% target (clears the ~1.2% cost with margin)
+    params:
+      period: 14
+      oversold: 30
+      overbought: 70
+
+  # Disabled by default — at ₹5k, run 2 strategies max to clear exchange min-notionals
+  # and stay under the capital-at-risk ceiling. Enable only after reviewing backtests.
+  - name: "momentum_btc"
+    module: "momentum"
+    enabled: false
+    market: "B-BTC_USDT"
+    capital: 25.0
+    stop_loss_pct: 0.04
+    take_profit_pct: 0.08
+    params:
+      lookback: 20
+      threshold: 0.03         # 3% breakout over lookback high/low
