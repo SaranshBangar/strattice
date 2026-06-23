@@ -116,7 +116,6 @@ class Engine:
                 if pos_qty > 0:
                     audit.update_peak(strat.name, strat.market, price)
                     peak, entry_ts = audit.get_meta(strat.name, strat.market)
-                    peak = max(peak, price)
                     interval_ms = _INTERVAL_MS.get(self.interval, 3_600_000)
                     bars_held = int((ts - entry_ts) // interval_ms) if entry_ts else 0
                     hit = self._exit_signal(strat, closed, price, avg, peak, bars_held)

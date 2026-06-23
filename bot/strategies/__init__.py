@@ -12,5 +12,4 @@ REGISTRY = {
 
 def build(spec: dict):
     cls = REGISTRY[spec["module"]]
-    # capital is legacy: sizing is wallet-scaled now (bot/sizing.py). Kept for the base ctor.
-    return cls(spec["name"], spec["market"], spec.get("capital", 0.0), spec.get("params", {}))
+    return cls(spec["name"], spec["market"], spec.get("params", {}))

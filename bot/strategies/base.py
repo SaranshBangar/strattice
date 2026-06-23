@@ -10,16 +10,6 @@ def sma(values: list[float], n: int) -> float | None:
     return sum(values[-n:]) / n if len(values) >= n else None
 
 
-def ema(values: list[float], n: int) -> float | None:
-    if len(values) < n:
-        return None
-    k = 2 / (n + 1)
-    e = sum(values[:n]) / n  # seed with SMA of first n
-    for v in values[n:]:
-        e = v * k + e * (1 - k)
-    return e
-
-
 def atr(candles: list[dict], n: int) -> float | None:
     """Average True Range over the last n bars (Wilder's TR, simple mean)."""
     if len(candles) < n + 1:
@@ -54,18 +44,20 @@ def rsi(closes: list[float], n: int) -> float | None:
 class Strategy:
     min_candles = 2  # guard: engine skips until enough history
 
-    def __init__(self, name: str, market: str, capital: float, params: dict):
+    def __init__(self, name: str, market: str, params: dict):
         self.name = name
         self.market = market
-        self.capital = float(capital)
         self.params = params
         # Shared regime gate (item 3): long entries only fire in an uptrend.
         self.regime_period = int(params.get("regime_period", 200))
-        self.regime_rule = params.get("regime_rule", "ma")
 
     def _uptrend(self, candles: list[dict]) -> bool:
-        from .regime import uptrend
-        return uptrend(candles, self.regime_period, self.regime_rule)
+        """Item 3 regime gate: price above its regime-period SMA. Too little history -> flat."""
+        closes = [c["close"] for c in candles]
+        if len(closes) < self.regime_period + 1:
+            return False
+        ma = sma(closes, self.regime_period)
+        return ma is not None and closes[-1] > ma
 
     def _clears(self, expected_move_pct: float) -> bool:
         """Item 7 pre-trade edge gate: skip entries that don't clear modeled friction."""

@@ -149,10 +149,6 @@ def run(strategy, candles: list[dict], capital: float,
     }
 
 
-def _build(module: str, market: str, capital: float, params: dict):
-    return REGISTRY[module]("backtest", market, capital, params)
-
-
 def walk_forward(strategy, candles: list[dict], capital: float,
                  train: int, test: int, **run_kw) -> list[dict]:
     """Item 9: rolling walk-forward. Slide non-overlapping `test` windows forward; each fold
@@ -199,7 +195,7 @@ def _selftest_costs() -> None:
             c = candles[-1]["close"]
             return "BUY" if c <= 101 else "SELL" if c >= 109 else "HOLD"
 
-    res = run(_Stub("s", "X", 1000, {}), _candles([100, 100, 100.5, 103, 106, 109, 110]),
+    res = run(_Stub("s", "X", {}), _candles([100, 100, 100.5, 103, 106, 109, 110]),
               1000, slippage=0.0)
     qty = (1000 - costs.trading_fee(1000)) / 100.5
     gross = qty * 109
@@ -214,7 +210,7 @@ def _selftest_costs() -> None:
         def decide(self, candles):
             return "BUY" if len(candles) % 2 == 0 else "SELL"
 
-    flat = run(_Flat("s", "X", 1000, {}), _candles([100] * 12), 1000, slippage=0.0)
+    flat = run(_Flat("s", "X", {}), _candles([100] * 12), 1000, slippage=0.0)
     assert flat["net_pnl"] < 0, ("break-even gross must lose after costs", flat)
 
     # (b) a real-edge strategy (big up-move) stays net-POSITIVE after costs.
@@ -225,7 +221,7 @@ def _selftest_costs() -> None:
             c = candles[-1]["close"]
             return "BUY" if c <= 101 else "SELL" if c >= 120 else "HOLD"
 
-    edge = run(_Edge("s", "X", 1000, {}), _candles([100, 100, 100.5, 105, 110, 115, 120, 121]),
+    edge = run(_Edge("s", "X", {}), _candles([100, 100, 100.5, 105, 110, 115, 120, 121]),
                1000, slippage=0.0)
     assert edge["net_pnl"] > 0, ("known-edge strategy must stay net-positive", edge)
 
@@ -238,21 +234,20 @@ def _selftest_costs() -> None:
 
 def _selftest_regime() -> None:
     """Item 3: regime gate works and CUTS trade count."""
-    from .strategies.regime import uptrend
     from .strategies.rsi import RSIMeanReversion
 
     rising = _candles([100 + i for i in range(60)])
     falling = _candles([200 - i for i in range(60)])
-    for rule in ("ma", "ema_slope"):
-        assert uptrend(rising, 50, rule), ("uptrend should be True rising", rule)
-        assert not uptrend(falling, 50, rule), ("uptrend should be False falling", rule)
+    gate = RSIMeanReversion("g", "X", {"regime_period": 50})
+    assert gate._uptrend(rising), "regime gate should be True in an uptrend"
+    assert not gate._uptrend(falling), "regime gate should be False in a downtrend"
 
     # Downtrend with a deep-oversold confirmation bounce: gated = no entry, ungated = entry.
     closes = [100 - i * 0.5 for i in range(40)]      # long decline -> RSI deeply oversold, below MA
     closes[-1] = closes[-2] + 1.0                    # one up bar: closes above prior high (confirm)
     candles = _candles(closes)
     params = {"period": 14, "oversold": 40, "regime_period": 20, "expected_move_pct": 0.05}
-    strat = RSIMeanReversion("rsi", "X", 1000, params)
+    strat = RSIMeanReversion("rsi", "X", params)
 
     def _buys(s):
         return sum(1 for i in range(s.min_candles, len(candles) + 1)
@@ -276,12 +271,12 @@ def _selftest_exits() -> None:
 
     # Chandelier: rise to a peak then fall back > k*ATR -> CHANDELIER exit (round trip closes).
     rise_fall = _candles([100, 100, 101, 105, 110, 115, 120, 110, 100, 95])
-    r = run(_BuyOnce("s", "X", 1000, {}), rise_fall, 1000, slippage=0.0,
+    r = run(_BuyOnce("s", "X", {}), rise_fall, 1000, slippage=0.0,
             chandelier_k=1.0, atr_period=3)
     assert r["trades"] == 1, ("chandelier should close the position", r)
 
     # Time-stop: flat prices, force-exit after max_hold_bars.
-    r2 = run(_BuyOnce("s", "X", 1000, {}), _candles([100] * 12), 1000, slippage=0.0,
+    r2 = run(_BuyOnce("s", "X", {}), _candles([100] * 12), 1000, slippage=0.0,
              max_hold_bars=3)
     assert r2["trades"] >= 1, ("time-stop should close the position", r2)
 
@@ -411,7 +406,7 @@ def main() -> None:
         return
 
     candles = Client().candles(a.market, a.interval, a.limit)
-    strat = _build(a.module, a.market, a.capital, json.loads(a.params))
+    strat = REGISTRY[a.module]("backtest", a.market, json.loads(a.params))
     kw = dict(stop_loss_pct=a.stop_loss, take_profit_pct=a.take_profit, slippage=a.slippage,
               interval=a.interval, chandelier_k=a.chandelier_k, atr_period=a.atr_period,
               max_hold_bars=a.max_hold_bars)

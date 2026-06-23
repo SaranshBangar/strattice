@@ -166,8 +166,7 @@ class Executor:
         log.critical("KILL SWITCH engaged")
         notify.send("KILL SWITCH engaged - cancelling open orders, halting.")
         if config.LIVE:
-            for pos in audit.open_positions():
-                try:
-                    self.client.cancel_all(pos["market"])
-                except CoinDCXError as e:
-                    log.error("cancel_all failed for %s: %s", pos["market"], e)
+            try:
+                self.client.cancel_all()  # no market => cancel every open order
+            except CoinDCXError as e:
+                log.error("cancel_all failed: %s", e)

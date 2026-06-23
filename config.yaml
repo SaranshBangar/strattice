@@ -36,7 +36,7 @@ risk:
 # so there is no per-strategy fixed `capital` anymore.
 # Exits are config-driven protective layers (strategies are entry-only):
 #   stop_loss_pct / take_profit_pct / max_hold_bars (time-stop) / chandelier_k (ATR trailing).
-# regime_period / regime_rule gate every long entry to an uptrend (shared).
+# regime_period gates every long entry to an uptrend (price above its N-bar SMA, shared).
 strategies:
   - name: "ma_btc"
     module: "ma_crossover"
@@ -53,7 +53,6 @@ strategies:
       atr_period: 14
       k_atr: 0.5              # require fast-slow gap >= 0.5*ATR before entry
       regime_period: 200
-      regime_rule: "ma"
       expected_move_pct: 0.05
 
   - name: "rsi_eth"
@@ -69,7 +68,6 @@ strategies:
       period: 14
       oversold: 22
       regime_period: 200
-      regime_rule: "ma"
       expected_move_pct: 0.05
 
   # Disabled by default — run 2 strategies max to respect exchange min-notionals
@@ -92,5 +90,4 @@ strategies:
       buffer: 0.002           # 0.2% entry buffer over the lookback high
       max_chase: 0.02         # skip if price already >2% past the level
       regime_period: 200
-      regime_rule: "ma"
       expected_move_pct: 0.05
