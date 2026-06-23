@@ -8,6 +8,7 @@ Guarantees:
   a crash/restart (DB UNIQUE constraint is the backstop).
 - Risk-gated: RiskManager.check() runs before any live or simulated fill.
 """
+import datetime
 import hashlib
 import logging
 
@@ -76,7 +77,10 @@ class Executor:
                 "response": {"reason": decision.reason},
             })
             log.warning("RISK BLOCK %s %s %s: %s", strategy, market, side, decision.reason)
-            notify.send(f"⛔ Trade blocked [{strategy} {market} {side}]: {decision.reason}")
+            notify.send(notify.table("TRADE BLOCKED", [
+                ("Strategy", strategy), ("Market", market),
+                ("Side", side.upper()), ("Reason", decision.reason),
+            ]))
             return {"status": "rejected", "reason": decision.reason, "client_order_id": coid}
 
         min_q = self.client.min_quantity(market)
@@ -104,7 +108,10 @@ class Executor:
                     "status": "error", "dry_run": False, "response": {"error": str(e)},
                 })
                 log.error("ORDER FAILED %s %s %s: %s", strategy, market, side, e)
-                notify.send(f"🚨 Order FAILED [{strategy} {market} {side}]: {e}")
+                notify.send(notify.table("ORDER FAILED", [
+                    ("Strategy", strategy), ("Market", market),
+                    ("Side", side.upper()), ("Error", str(e)),
+                ]))
                 return {"status": "error", "reason": str(e), "client_order_id": coid}
 
         # simulate/record fill at `price` (market order assumption) and update position
@@ -121,14 +128,25 @@ class Executor:
         tag = "LIVE" if config.LIVE else "DRY_RUN"
         log.info("%s %s %s %s qty=%s @%s notional=%.2f pnl=%.2f",
                  tag, strategy, market, side, qty, price, notional, realized)
-        notify.send(f"✅ {tag} {side.upper()} {qty} {market} @ {price} "
-                    f"[{strategy}] notional={notional:.2f}")
+        pnl_pct = (realized / notional * 100) if notional else 0.0
+        ts_str = datetime.datetime.utcfromtimestamp(candle_ts).strftime("%Y-%m-%d %H:%M:%S UTC")
+        notify.send(notify.table(f"{tag} TRADE FILLED", [
+            ("Side", side.upper()),
+            ("Market", market),
+            ("Quantity", f"{qty}"),
+            ("Price", f"{price}"),
+            ("Notional", f"{notional:.2f}"),
+            ("Fee", f"{realized:.2f}") if increasing
+            else ("P&L", f"{realized:+.2f} ({pnl_pct:+.2f}%)"),
+            ("Strategy", strategy),
+            ("Time", ts_str),
+        ]))
         return {"status": status, "client_order_id": coid, "realized_pnl": realized}
 
     def kill(self) -> None:
         """Kill switch action: cancel open orders (live) and halt. Idempotent to call."""
         log.critical("KILL SWITCH engaged")
-        notify.send("🛑 KILL SWITCH engaged — cancelling open orders, halting.")
+        notify.send("KILL SWITCH engaged - cancelling open orders, halting.")
         if config.LIVE:
             for pos in audit.open_positions():
                 try:

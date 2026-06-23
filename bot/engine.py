@@ -104,7 +104,11 @@ class Engine:
                     if hit:
                         log.info("%s %s %s @ %s (avg %s) -> force SELL",
                                  hit, strat.name, strat.market, price, avg)
-                        notify.send(f"🛡️ {hit} {strat.market} [{strat.name}] @ {price} (avg {avg})")
+                        notify.send(notify.table("PROTECTIVE EXIT", [
+                            ("Trigger", hit), ("Market", strat.market),
+                            ("Strategy", strat.name), ("Price", f"{price}"),
+                            ("Avg Cost", f"{avg}"),
+                        ]))
                         self.executor.place(strategy=strat.name, market=strat.market,
                                             side="sell", qty=pos_qty, price=price, candle_ts=ts)
                         continue
@@ -122,7 +126,9 @@ class Engine:
                                         side="sell", qty=pos_qty, price=price, candle_ts=ts)
             except Exception as e:  # noqa: BLE001 - one strategy failing must not kill the loop
                 log.exception("strategy %s failed", strat.name)
-                notify.send(f"🚨 Strategy {strat.name} error: {e}")
+                notify.send(notify.table("STRATEGY ERROR", [
+                    ("Strategy", strat.name), ("Error", str(e)),
+                ]))
 
     def run(self) -> None:
         _setup_logging()
@@ -130,7 +136,10 @@ class Engine:
         log.info("Engine start | mode=%s | strategies=%s | interval=%s poll=%ss",
                  config.mode_str(), [s.name for s in self.strategies], self.interval, self.poll)
         self._sanity_check()
-        notify.send(f"🤖 Bot started [{config.mode_str()}] strategies={[s.name for s in self.strategies]}")
+        notify.send(notify.table("BOT STARTED", [
+            ("Mode", config.mode_str()),
+            ("Strategies", ", ".join(s.name for s in self.strategies)),
+        ]))
         while True:
             if self.risk.kill_switch_active():
                 self.executor.kill()

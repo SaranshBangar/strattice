@@ -9,6 +9,13 @@ from . import config
 log = logging.getLogger("notify")
 
 
+def table(title: str, rows: list[tuple[str, str]]) -> str:
+    """Render an aligned key/value block wrapped in ``` so WhatsApp shows it monospace."""
+    w = max(len(k) for k, _ in rows)
+    body = "\n".join(f"{k.ljust(w)} : {v}" for k, v in rows)
+    return f"```\n{title}\n{body}\n```"
+
+
 def send(msg: str) -> None:
     log.info("ALERT: %s", msg)
     if not (config.TWILIO_SID and config.TWILIO_TOKEN and config.TWILIO_FROM and config.TWILIO_TO):
