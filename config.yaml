@@ -1,19 +1,25 @@
 # All tunables live here. Secrets do NOT — those come from .env only.
 #
-# Sizing is WALLET-SCALED now: each entry deploys allocation_frac of live equity, so the
-# same config works at ₹5k or ₹50k. No-leverage by construction: total deployed across open
-# positions can never exceed free USDT, so max loss == wallet balance.
+# Sizing is WALLET-SCALED and now SLEEVED: each enabled strategy gets its own capital sleeve
+# (a fraction of equity), so multiple strategies can hold positions CONCURRENTLY. Sleeves are
+# normalized to allocation_frac, so sum(sleeves) == allocation_frac <= 1.0 by construction =>
+# no-leverage holds even with a config typo (see bot/sizing.py:sleeve_fracs). The same config
+# works at ₹1k or ₹50k.
 # Why few trades: every round trip costs ~0.47% fee+GST + 1% TDS on the sell. Over-trading,
-# not under-sizing, is the #1 way to bleed at small capital. Aggression lives in SIZE, not count.
+# not under-sizing, is the #1 way to bleed at small capital. Aggression lives in SIZE + looser
+# gating, NOT in raw trade count.
 
 engine:
-  poll_seconds: 300         # how often the loop fetches candles + runs strategies
-  candle_interval: "1h"     # 1h (not 5m): cuts churn so trades can clear the round-trip cost
-  candle_limit: 300         # > regime_period(200)+slow MA+1, so the 200-bar gate can warm up
+  poll_seconds: 180         # fetch candles + run strategies every 3 min (< the 15m bar)
+  candle_interval: "15m"    # 15m (was 1h): faster cadence. NOTE CoinDCX candles only support
+                            #   [1m,15m,1h,1d] — 5m/10m do not exist; 15m is the supported faster
+                            #   band, and avoids 1m's TDS-churn deathtrap (1% TDS per sell).
+  candle_limit: 400         # > regime_period(192)+slow MA(96)+1, so the longest gate warms up
+                            #   at 15m. 400 bars = ~4.2 days of history.
 
 # --- wallet sizing (constraint B/D) ---
 starting_equity: 1000.0     # DRY_RUN simulated wallet. Live ignores this, reads exchange.
-allocation_frac: 0.97       # fraction of equity to deploy per entry (aggressive, near-full wallet)
+allocation_frac: 0.97       # TOTAL fraction of equity deployable across ALL sleeves (the cap).
 quote_currency: "INR"       # wallet currency the bot sizes/trades in; must match every market's quote side
 
 # --- friction: single source of truth (bot/costs.py) ---
@@ -26,69 +32,121 @@ costs:
 
 # Hard risk ceilings — FRACTIONS of live equity, computed at check-time (constraint C).
 risk:
-  max_position_frac: 1.0              # max single-trade notional as a fraction of equity
-  max_total_capital_at_risk_frac: 1.0 # max summed open exposure as a fraction of equity
+  max_position_frac: 1.0              # max single-trade notional as a fraction of equity.
+                                      #   Sleeves (<=0.97 each) are tighter, so this is a backstop.
+  max_total_capital_at_risk_frac: 1.0 # max summed open exposure as a fraction of equity.
+                                      #   Sleeves sum to allocation_frac(0.97) < 1.0, so no breach.
   daily_loss_frac: 0.5                # RUNAWAY-BUG circuit breaker (NOT a market-risk cap):
                                       #   halt the day if realized loss > 50% of start-of-day equity
-  max_trades_per_day: 2               # cost-aware churn cap (aggression is in SIZE, not frequency)
+  max_trades_per_day: 10              # churn cap, re-tuned for 15m (96 bars/day, was 2 at 1h).
+                                      #   Counts BUYs+SELLs => ~5 round trips/day total across all
+                                      #   sleeves. The cost gate + selective entries keep the actual
+                                      #   count far below this; it's a hard ceiling, not a target.
   kill_switch_file: "KILL"            # presence of this file => cancel open orders + halt
 
-# Each strategy: its own market + params + position tracking. Sizing is wallet-scaled (above),
-# so there is no per-strategy fixed `capital` anymore.
+# Each strategy: its own market + params + position tracking + capital sleeve `weight`.
+# `weight` is RELATIVE (default 1.0 => equal split). sleeve_frac = allocation_frac*weight/sum(weights).
+# Sizing is wallet-scaled, so there is no per-strategy fixed `capital`.
 # Exits are config-driven protective layers (strategies are entry-only):
 #   stop_loss_pct / take_profit_pct / max_hold_bars (time-stop) / chandelier_k (ATR trailing).
 # regime_period gates every long entry to an uptrend (price above its N-bar SMA, shared).
+#
+# Period params below are RE-EXPRESSED for 15m (4 bars/hour). The conservative trend/MR pair use
+# a 2-day regime (192 bars; was 200h≈8.3d at 1h — deliberately shortened for the faster cadence);
+# the aggressive 15m strategies use a looser 1-day regime (96 bars) and lower edge thresholds.
 strategies:
   - name: "ma_btc"
     module: "ma_crossover"
     enabled: true
-    market: "I-BTC_INR"       # CoinDCX INR pair format (verify against markets_details)
+    weight: 1.0               # sleeve weight (equal split among enabled strategies)
+    market: "I-BTC_INR"
     stop_loss_pct: 0.04       # 4% hard stop (safety net)
     take_profit_pct: 0.0      # disabled — let the chandelier trail trend winners
     chandelier_k: 3.0         # exit at peak - 3*ATR
-    atr_period: 14
+    atr_period: 16            # 16 bars = 4h (was 14h at 1h)
     max_hold_bars: 0          # no time-stop for the trend follower
     params:
-      fast: 20
-      slow: 50
-      atr_period: 14
-      k_atr: 0.5              # require fast-slow gap >= 0.5*ATR before entry
-      regime_period: 200
+      fast: 32               # 32 bars = 8h (was 20h)
+      slow: 96               # 96 bars = 24h (was 50h)
+      atr_period: 16         # 4h
+      k_atr: 0.5             # require fast-slow gap >= 0.5*ATR before entry
+      confirm_bars: 4        # cross must be within last 4 bars = 1h (was 3h)
+      regime_period: 192     # 2 days (was 8.3 days at 1h)
       expected_move_pct: 0.05
 
   - name: "rsi_eth"
     module: "rsi"
     enabled: true
+    weight: 1.0
     market: "I-ETH_INR"
     stop_loss_pct: 0.03       # 3% stop — cut quickly if the dip keeps dipping
     take_profit_pct: 0.03     # target ~3x round-trip cost (≈0.47%*2 + margin)
     chandelier_k: 0.0
-    atr_period: 14
-    max_hold_bars: 24         # time-stop: bail a stalled mean-reversion after 24 bars
+    atr_period: 16
+    max_hold_bars: 64         # time-stop: bail a stalled mean-reversion after 64 bars = 16h (was 24h)
     params:
-      period: 14
+      period: 14             # 14 bars = 3.5h
       oversold: 22
-      regime_period: 200
+      regime_period: 192     # 2 days
       expected_move_pct: 0.05
 
-  # Disabled by default — run 2 strategies max to respect exchange min-notionals
-  # and the no-dup-asset rule. Enable only after reviewing backtests.
-  - name: "breakout_btc"
+  # --- aggressive 15m strategies (Phase 3). Disabled by default — enable after reviewing the
+  #     backtest (looser gating + lower thresholds, but every entry still clears clears_costs()).
+  #     Each is on its OWN market so they can hold concurrently (no-dup-asset rule). On a ₹1000
+  #     wallet, enabling all 5 splits the sleeve ~5 ways (~₹194 each) which still clears the
+  #     ₹100 min-notional; enabling more will trip the SLEEVE TOO SMALL startup warning.
+
+  - name: "breakout_btc"            # existing Donchian breakout, re-expressed for 15m
     module: "momentum"
     enabled: false
-    market: "I-BTC_INR"
+    weight: 1.0
+    market: "I-BTC_INR"             # shares BTC with ma_btc -> only one of the two can hold (dup-asset)
     stop_loss_pct: 0.04
     take_profit_pct: 0.0
     chandelier_k: 3.0
-    atr_period: 14
+    atr_period: 16
     max_hold_bars: 0
     params:
-      lookback: 20
-      atr_period: 14
-      vol_period: 20
-      min_atr_frac: 0.01      # volatility floor: ATR >= 1% of price
-      vol_mult: 1.2           # volume >= 1.2x its 20-bar average
-      buffer: 0.002           # 0.2% entry buffer over the lookback high
-      max_chase: 0.02         # skip if price already >2% past the level
-      regime_period: 200
-      expected_move_pct: 0.05
+      lookback: 32                  # 8h Donchian high (was 20h)
+      atr_period: 16                # 4h
+      vol_period: 32                # 8h volume average
+      min_atr_frac: 0.005           # vol floor: ATR >= 0.5% of price (looser than 1% for 15m)
+      vol_mult: 1.2                 # volume >= 1.2x its average
+      buffer: 0.002                 # 0.2% entry buffer over the lookback high
+      max_chase: 0.02               # skip if price already >2% past the level
+      regime_period: 96             # 1 day (looser, aggressive)
+      expected_move_pct: 0.03       # lower edge threshold (still > cost gate ~0.67%)
+
+  - name: "volexp_xrp"
+    module: "vol_expansion"
+    enabled: false
+    weight: 1.0
+    market: "I-XRP_INR"
+    stop_loss_pct: 0.025
+    take_profit_pct: 0.0
+    chandelier_k: 2.5               # trail vol-expansion winners
+    atr_period: 16
+    max_hold_bars: 0
+    params:
+      short_atr: 8                  # 2h ATR
+      long_atr: 32                  # 8h ATR
+      expansion_mult: 1.6           # short ATR >= 1.6x long ATR (tuned up: fewer, cleaner vol pops)
+      breakout_lookback: 24         # close must be the 6h high (tuned up: stronger breakout)
+      regime_period: 96             # 1 day (looser)
+      expected_move_pct: 0.03
+
+  - name: "fastrsi_bnb"
+    module: "fast_rsi"
+    enabled: false
+    weight: 1.0
+    market: "I-BNB_INR"
+    stop_loss_pct: 0.02
+    take_profit_pct: 0.025
+    chandelier_k: 0.0
+    atr_period: 16
+    max_hold_bars: 12               # 3h time-stop
+    params:
+      period: 7                     # fast RSI (1.75h)
+      oversold: 25                  # tuned tighter than 32 (still looser than conservative rsi's 22)
+      regime_period: 96             # 1 day (looser)
+      expected_move_pct: 0.03

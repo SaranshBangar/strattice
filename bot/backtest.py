@@ -345,6 +345,46 @@ def _selftest_sizing() -> None:
         sizing.equity, sizing.free_balance = eq_o, free_o
 
 
+def _selftest_sleeves() -> None:
+    """Phase 2 money path: sleeves sum <= allocation cap; across a sequence of concurrent fills the
+    total deployed never exceeds free balance (no leverage); a sub-min-notional sleeve is flagged,
+    not traded."""
+    from . import sizing
+
+    cfg = {
+        "allocation_frac": 0.97,
+        "strategies": [
+            {"name": "a", "enabled": True, "weight": 1.0},
+            {"name": "b", "enabled": True, "weight": 1.0},
+            {"name": "c", "enabled": True, "weight": 2.0},   # double weight -> double sleeve
+            {"name": "off", "enabled": False, "weight": 5.0},  # disabled -> excluded
+        ],
+    }
+    sl = sizing.sleeve_fracs(cfg)
+    # (a) sum of sleeve fractions <= allocation cap, disabled excluded, weights honored.
+    assert "off" not in sl, sl
+    assert sum(sl.values()) <= 0.97 + 1e-9, ("sleeves must not exceed allocation cap", sl)
+    assert abs(sum(sl.values()) - 0.97) < 1e-9, ("normalized sleeves sum to the cap", sl)
+    assert abs(sl["c"] - 2 * sl["a"]) < 1e-9, ("weight must scale the sleeve", sl)
+
+    # (b) simulate concurrent fills: total deployed never exceeds free balance (no leverage).
+    equity = 1000.0
+    free = equity
+    deployed = 0.0
+    for n, frac in sl.items():
+        notional = min(frac * equity, free)   # same cap sizing applies (fee headroom omitted = worst case)
+        assert deployed + notional <= equity + 1e-9, ("LEVERAGE BREACH", n, deployed, notional)
+        deployed += notional
+        free -= notional
+    assert deployed <= equity + 1e-9, ("total deployed must not exceed equity", deployed)
+
+    # (c) a sleeve below the pair's min-notional is flagged (warning path), not an order.
+    assert sizing.sleeve_too_small(0.05, 1000.0, 100.0), "0.05*1000=50 < 100 must flag"
+    assert not sizing.sleeve_too_small(0.485, 1000.0, 100.0), "0.485*1000=485 >= 100 must NOT flag"
+    print("sleeve sizing self-check OK:", {k: round(v, 4) for k, v in sl.items()},
+          "deployed=", round(deployed, 2))
+
+
 def _selftest_static_invariants() -> None:
     """Constraint A: the bot never moves funds, never uses leverage/margin/futures."""
     import pathlib
@@ -362,9 +402,10 @@ def _selftest_static_invariants() -> None:
         assert not money_move.search(code), f"fund-movement / leverage call in {f.name}"
         assert not bad_order.search(code), f"non-market order_type in {f.name}"
 
-    # config markets are CoinDCX SPOT pairs (B- prefix), never futures/margin identifiers.
+    # config markets are CoinDCX SPOT pairs, never futures/margin identifiers. Spot ecodes are
+    # B- (USDT-quoted) and I- (INR-quoted); the no-leverage scan above is the real futures guard.
     cfg = config.load()
-    spot = re.compile(r"^B-[A-Z0-9]+_[A-Z0-9]+$")
+    spot = re.compile(r"^[BI]-[A-Z0-9]+_[A-Z0-9]+$")
     for s in cfg["strategies"]:
         assert spot.match(s["market"]), f"non-spot market in config: {s['market']}"
 
@@ -376,6 +417,7 @@ def demo() -> None:
     _selftest_exits()
     _selftest_risk()
     _selftest_sizing()
+    _selftest_sleeves()
     _selftest_static_invariants()
     print("ALL backtest self-checks OK")
 

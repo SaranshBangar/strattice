@@ -50,6 +50,7 @@ class Engine:
         self.risk = RiskManager(cfg)
         self.executor = Executor(cfg, self.client, self.risk)
         self.strategies = []
+        sleeves = sizing.sleeve_fracs(cfg)  # per-strategy capital sleeve for concurrent positions
         for s in cfg["strategies"]:
             if not s.get("enabled", True):
                 continue
@@ -60,6 +61,7 @@ class Engine:
             strat.chandelier_k = float(s.get("chandelier_k", 0) or 0)
             strat.exit_atr_period = int(s.get("atr_period", s.get("params", {}).get("atr_period", 14)) or 14)
             strat.max_hold_bars = int(s.get("max_hold_bars", 0) or 0)
+            strat.sleeve_frac = sleeves.get(strat.name, 0.0)  # fraction of equity this strategy may deploy
             self.strategies.append(strat)
 
     def _exit_signal(self, strat, candles, price, avg, peak, bars_held) -> str | None:
@@ -80,22 +82,28 @@ class Engine:
         return None
 
     def _sanity_check(self) -> None:
-        """Warn loudly if the wallet can't clear exchange minimums. Sizing is wallet-scaled now,
-        so per-trade notional is allocation_frac*equity, not a fixed per-strategy capital."""
+        """Warn loudly if a SLEEVE can't clear exchange minimums. Each strategy now sizes to its
+        own capital sleeve (sleeve_frac*equity), not the whole wallet, so a small wallet split
+        across many strategies can fall below a pair's min-notional. Warn at startup; the executor
+        independently refuses sub-min orders, so this never emits one — it just surfaces it early."""
         try:
             eq = sizing.equity(self.client)
-            target = sizing.allocation_frac() * eq
-            log.info("config: equity=%.2f -> target notional/trade ~%.2f (alloc_frac=%.2f)",
-                     eq, target, sizing.allocation_frac())
         except Exception:  # noqa: BLE001 - sanity check must never stop startup
             log.debug("equity sanity check skipped (balance/market data unavailable)")
+            eq = 0.0
         for strat in self.strategies:
             try:
                 min_n = self.client.min_notional(strat.market)
-                if min_n:
-                    log.info("config: %s min_notional=%.2f for %s", strat.name, min_n, strat.market)
             except Exception:  # noqa: BLE001
                 log.debug("sanity check skipped for %s (market data unavailable)", strat.name)
+                continue
+            sleeve_notional = strat.sleeve_frac * eq
+            log.info("config: %s sleeve_frac=%.3f -> notional ~%.2f (min_notional=%.2f) on %s",
+                     strat.name, strat.sleeve_frac, sleeve_notional, min_n, strat.market)
+            if eq and sizing.sleeve_too_small(strat.sleeve_frac, eq, min_n):
+                log.warning("SLEEVE TOO SMALL: %s sleeve ~%.2f < min_notional %.2f on %s -> it will "
+                            "never trade. Raise its weight, cut strategies, or fund the wallet.",
+                            strat.name, sleeve_notional, min_n, strat.market)
 
     def run_once(self) -> None:
         for strat in self.strategies:
@@ -136,7 +144,7 @@ class Engine:
 
                 # 2) strategy signal
                 if action == "BUY" and pos_qty <= 0:
-                    qty = sizing.target_qty(strat.market, price, self.client)
+                    qty = sizing.target_qty(strat.market, price, self.client, strat.sleeve_frac)
                     if qty <= 0:
                         log.info("%s %s BUY skipped: sizing returned 0 (min-notional/balance)",
                                  strat.name, strat.market)
