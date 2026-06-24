@@ -12,8 +12,9 @@ engine:
   candle_limit: 300         # > regime_period(200)+slow MA+1, so the 200-bar gate can warm up
 
 # --- wallet sizing (constraint B/D) ---
-starting_equity: 1000.0     # DRY_RUN simulated wallet (USDT). Live ignores this, reads exchange.
+starting_equity: 1000.0     # DRY_RUN simulated wallet. Live ignores this, reads exchange.
 allocation_frac: 0.97       # fraction of equity to deploy per entry (aggressive, near-full wallet)
+quote_currency: "INR"       # wallet currency the bot sizes/trades in; must match every market's quote side
 
 # --- friction: single source of truth (bot/costs.py) ---
 costs:
@@ -41,7 +42,7 @@ strategies:
   - name: "ma_btc"
     module: "ma_crossover"
     enabled: true
-    market: "B-BTC_USDT"      # CoinDCX pair format
+    market: "I-BTC_INR"       # CoinDCX INR pair format (verify against markets_details)
     stop_loss_pct: 0.04       # 4% hard stop (safety net)
     take_profit_pct: 0.0      # disabled — let the chandelier trail trend winners
     chandelier_k: 3.0         # exit at peak - 3*ATR
@@ -58,7 +59,7 @@ strategies:
   - name: "rsi_eth"
     module: "rsi"
     enabled: true
-    market: "B-ETH_USDT"
+    market: "I-ETH_INR"
     stop_loss_pct: 0.03       # 3% stop — cut quickly if the dip keeps dipping
     take_profit_pct: 0.03     # target ~3x round-trip cost (≈0.47%*2 + margin)
     chandelier_k: 0.0
@@ -75,7 +76,7 @@ strategies:
   - name: "breakout_btc"
     module: "momentum"
     enabled: false
-    market: "B-BTC_USDT"
+    market: "I-BTC_INR"
     stop_loss_pct: 0.04
     take_profit_pct: 0.0
     chandelier_k: 3.0

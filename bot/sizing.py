@@ -38,18 +38,24 @@ def allocation_frac() -> float:
     return float(_cfg().get("allocation_frac", 0.97))
 
 
+def quote_currency() -> str:
+    """Wallet currency the bot sizes/trades in. Must match the quote side of every
+    strategy's market (e.g. USDT for *_USDT pairs, INR for *_INR pairs)."""
+    return str(_cfg().get("quote_currency", "USDT"))
+
+
 def equity(client: Client | None = None) -> float:
-    """Total net worth in quote (USDT). Open positions marked at cost (avg)."""
+    """Total net worth in the quote currency. Open positions marked at cost (avg)."""
     if config.LIVE:
         c = _live_client(client)
-        return c.free_balance("USDT") + audit.today_stats()["capital_at_risk"]
+        return c.free_balance(quote_currency()) + audit.today_stats()["capital_at_risk"]
     return float(_cfg().get("starting_equity", 1000.0)) + audit.total_realized()
 
 
 def free_balance(client: Client | None = None) -> float:
-    """Uninvested cash available to deploy (quote/USDT)."""
+    """Uninvested cash available to deploy (quote currency)."""
     if config.LIVE:
-        return _live_client(client).free_balance("USDT")
+        return _live_client(client).free_balance(quote_currency())
     return equity() - audit.today_stats()["capital_at_risk"]
 
 
