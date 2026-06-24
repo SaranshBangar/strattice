@@ -158,6 +158,44 @@ journalctl -u coindcx-bot -n 100    # last 100 log lines
 reads `EnvironmentFile` at start. `Ctrl-C` does nothing to the service; it only exits
 `journalctl`. To disable on boot: `systemctl disable coindcx-bot`.
 
+### Inspecting the database
+
+The bot's full state lives in `data/bot.db` (SQLite). `python -m bot.status` is the
+quick summary; these queries dig deeper. Add `-header -column` for readable output.
+
+```bash
+cd /opt/coindcx                       # all queries assume the project root
+
+# Quick health: counts of orders / positions / signals
+sqlite3 data/bot.db "SELECT (SELECT COUNT(*) FROM orders) o, (SELECT COUNT(*) FROM positions) p, (SELECT COUNT(*) FROM signals) s;"
+
+# Latest decisions — is it alive and what is it deciding? (HOLD/BUY/SELL)
+sqlite3 -header -column data/bot.db "SELECT ts,strategy,action,price FROM signals ORDER BY id DESC LIMIT 10;"
+
+# Every trade placed (live + dry-run), newest first
+sqlite3 -header -column data/bot.db "SELECT ts,strategy,market,side,qty,price,notional,status,realized_pnl,tds FROM orders ORDER BY id DESC LIMIT 20;"
+
+# LIVE fills only (exclude dry-run + rejected)
+sqlite3 -header -column data/bot.db "SELECT ts,strategy,market,side,notional,realized_pnl FROM orders WHERE dry_run=0 AND status='placed' ORDER BY id DESC;"
+
+# Open positions right now (what the bot is holding)
+sqlite3 -header -column data/bot.db "SELECT strategy,market,qty,avg_price,peak_price FROM positions WHERE qty!=0;"
+
+# Rejected/failed orders + the reason (debug blocks)
+sqlite3 -header -column data/bot.db "SELECT ts,strategy,market,side,status,response FROM orders WHERE status IN ('rejected','error') ORDER BY id DESC LIMIT 20;"
+
+# Realized P&L and TDS to date (placed + dry_run)
+sqlite3 -header -column data/bot.db "SELECT ROUND(SUM(realized_pnl),2) pnl, ROUND(SUM(tds),2) tds_paid, COUNT(*) fills FROM orders WHERE status IN ('placed','dry_run');"
+
+# Trades today (UTC) — counts toward max_trades_per_day
+sqlite3 data/bot.db "SELECT COUNT(*) FROM orders WHERE status IN ('placed','dry_run') AND substr(ts,1,10)=strftime('%Y-%m-%d','now');"
+```
+
+`signals` grows every poll (one row per strategy per cycle) and is just a decision log —
+it never affects money or the trade cap; only `orders` and `positions` do. To start fresh
+(e.g. after dry-run testing, before going live): stop the bot, then
+`sqlite3 data/bot.db "DELETE FROM orders WHERE dry_run=1; DELETE FROM signals; DELETE FROM positions;"`.
+
 ### Updating after a push
 
 ```bash
