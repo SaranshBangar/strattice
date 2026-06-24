@@ -81,11 +81,18 @@ class Client:
             raise CoinDCXError(f"{r.status_code} {path}: {r.text}")
         return r.json()
 
+    def _order_market(self, pair: str) -> str:
+        """orders/create + cancel want CoinDCX's `coindcx_name` (e.g. BTCINR), NOT the
+        `pair` (I-BTC_INR) used everywhere else. Translate via markets_details; fall back
+        to the pair unchanged if it's not found (already a coindcx_name, or markets down)."""
+        m = self.markets().get(pair)
+        return m.get("coindcx_name", pair) if m else pair
+
     def create_order(self, *, market: str, side: str, qty: float,
                      order_type: str = "market_order", price: float | None = None,
                      client_order_id: str | None = None) -> dict:
         payload = {
-            "market": market, "side": side, "order_type": order_type,
+            "market": self._order_market(market), "side": side, "order_type": order_type,
             "total_quantity": qty,
         }
         if price is not None:
@@ -95,7 +102,10 @@ class Client:
         return self._signed("/exchange/v1/orders/create", payload)
 
     def cancel_all(self, market: str | None = None) -> dict:
-        return self._signed("/exchange/v1/orders/cancel_all", {"market": market} if market else {})
+        return self._signed(
+            "/exchange/v1/orders/cancel_all",
+            {"market": self._order_market(market)} if market else {},
+        )
 
     def balances(self) -> dict:
         return self._signed("/exchange/v1/users/balances", {})
