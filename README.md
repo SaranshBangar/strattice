@@ -39,6 +39,21 @@ python -m bot.engine     # logs intended trades, executes nothing
 python -m bot.status     # quick summary: mode, limits, positions, P&L today
 ```
 
+## Manual buy/sell test (LIVE — places real orders)
+
+Smoke-tests `Client.create_order` directly, bypassing the bot/executor — **DRY_RUN is
+NOT honored, real money.** Needs `COINDCX_API_KEY`/`COINDCX_SECRET_KEY` in `.env`.
+
+```bash
+python -m scripts.test_trade --asset BTC --inr 200 --side both   # buy then sell same qty
+python -m scripts.test_trade --asset ETH --inr 200 --side buy
+python -m scripts.test_trade --asset BTC --qty 0.0005 --side sell
+```
+
+`--inr` converts to base qty at the live ticker price; `--qty` sets base amount directly
+(overrides `--inr`). Rounds to pair precision, checks `min_quantity`, prompts `YES` before
+sending. Run from project root with `-m` (the `bot` import needs it).
+
 ## Backtest
 
 ```bash
