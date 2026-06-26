@@ -9,6 +9,8 @@ import json
 import time
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from . import config
 
@@ -20,16 +22,30 @@ class CoinDCXError(Exception):
     pass
 
 
+def _retrying_session() -> requests.Session:
+    """Session that retries transient upstream failures with backoff. Retry's default
+    allowed_methods excludes POST, so signed order calls are never double-fired."""
+    s = requests.Session()
+    retry = Retry(
+        total=4, backoff_factor=0.5,  # 0.5,1,2,4s between tries
+        status_forcelist=(429, 502, 503, 504), raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    s.mount("https://", adapter)
+    return s
+
+
 class Client:
     def __init__(self, key: str = config.API_KEY, secret: str = config.SECRET_KEY):
         self.key = key
         self.secret = secret.encode()
         self._markets: dict | None = None
+        self._http = _retrying_session()
 
     # ---------- public ----------
     def candles(self, pair: str, interval: str, limit: int = 200) -> list[dict]:
         """Newest-first list of {open,high,low,close,volume,time(ms)}. Returned oldest-first."""
-        r = requests.get(
+        r = self._http.get(
             f"{PUBLIC}/market_data/candles",
             params={"pair": pair, "interval": interval, "limit": limit},
             timeout=20,
@@ -40,7 +56,7 @@ class Client:
 
     def markets(self) -> dict:
         if self._markets is None:
-            r = requests.get(f"{API}/exchange/v1/markets_details", timeout=20)
+            r = self._http.get(f"{API}/exchange/v1/markets_details", timeout=20)
             r.raise_for_status()
             self._markets = {m["pair"]: m for m in r.json()}
         return self._markets
@@ -76,7 +92,7 @@ class Client:
             "X-AUTH-APIKEY": self.key,
             "X-AUTH-SIGNATURE": sig,
         }
-        r = requests.post(f"{API}{path}", data=body, headers=headers, timeout=20)
+        r = self._http.post(f"{API}{path}", data=body, headers=headers, timeout=20)
         if r.status_code >= 400:
             raise CoinDCXError(f"{r.status_code} {path}: {r.text}")
         return r.json()
