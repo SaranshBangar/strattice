@@ -1,0 +1,44 @@
+:root {
+  --bg: #0b0e14;
+  --card: #151a24;
+  --line: #232a38;
+  --text: #e6e9ef;
+  --muted: #8b93a7;
+  --green: #2ecc71;
+  --red: #ff5d5d;
+  --accent: #4c8dff;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.wrap { max-width: 560px; margin: 0 auto; padding: 16px 14px 40px; }
+h1 { font-size: 18px; margin: 4px 0 14px; display: flex; align-items: center; gap: 8px; }
+h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 22px 0 8px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.kv { display: flex; flex-direction: column; gap: 2px; }
+.kv .l { color: var(--muted); font-size: 12px; }
+.kv .v { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+.pill.on { background: rgba(46,204,113,.15); color: var(--green); }
+.pill.off { background: rgba(255,93,93,.15); color: var(--red); }
+.pill.live { background: rgba(76,141,255,.15); color: var(--accent); }
+.green { color: var(--green); } .red { color: var(--red); }
+.row { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.row:last-child { border-bottom: 0; }
+.row .sub { color: var(--muted); font-size: 12px; }
+.mono { font-variant-numeric: tabular-nums; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.tab { background: var(--card); border: 1px solid var(--line); color: var(--muted); border-radius: 999px; padding: 6px 12px; font-size: 13px; cursor: pointer; }
+.tab.active { color: var(--text); border-color: var(--accent); }
+.muted { color: var(--muted); }
+.center { text-align: center; padding: 30px 0; }
+button.primary { width: 100%; padding: 13px; border: 0; border-radius: 12px; background: var(--accent); color: #fff; font-size: 16px; font-weight: 600; }
+input.pass { width: 100%; padding: 13px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); color: var(--text); font-size: 16px; margin-bottom: 10px; }
+.refresh { margin-left: auto; background: none; border: 0; color: var(--muted); font-size: 12px; }
