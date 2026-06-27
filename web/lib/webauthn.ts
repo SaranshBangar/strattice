@@ -1,11 +1,15 @@
+import { kv } from "@vercel/kv";
 import { promises as fs } from "fs";
 import path from "path";
 
 // One device-bound credential per registration. The biometric (platform
 // authenticator) proves possession of the device; verifying its signature
 // server-side authorizes setting the existing `auth` cookie. The passphrase
-// itself never travels through this flow. ponytail: flat JSON file, single
-// user — swap for the bot.db SQLite only if we ever need multi-user.
+// itself never travels through this flow.
+//
+// Storage: Vercel KV when the store is bound (KV_REST_API_URL present), since
+// the serverless filesystem is read-only/ephemeral. Falls back to a flat JSON
+// file for local dev. One human, many devices — all creds live under one key.
 
 export type StoredCredential = {
   id: string; // base64url credential id
@@ -17,8 +21,13 @@ export type StoredCredential = {
 const FILE =
   process.env.WEBAUTHN_STORE ||
   path.join(process.cwd(), "data", "webauthn.json");
+const KV_KEY = "webauthn:credentials";
+const useKV = !!process.env.KV_REST_API_URL; // Vercel KV is bound
 
 export async function loadCredentials(): Promise<StoredCredential[]> {
+  if (useKV) {
+    return (await kv.get<StoredCredential[]>(KV_KEY)) ?? [];
+  }
   try {
     return JSON.parse(await fs.readFile(FILE, "utf8"));
   } catch {
@@ -27,6 +36,10 @@ export async function loadCredentials(): Promise<StoredCredential[]> {
 }
 
 export async function saveCredentials(creds: StoredCredential[]): Promise<void> {
+  if (useKV) {
+    await kv.set(KV_KEY, creds);
+    return;
+  }
   await fs.mkdir(path.dirname(FILE), { recursive: true });
   await fs.writeFile(FILE, JSON.stringify(creds, null, 2));
 }

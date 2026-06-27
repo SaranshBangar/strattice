@@ -84,7 +84,7 @@ export default function Dashboard() {
           style={{ marginLeft: 0, marginBottom: 10 }}
           onClick={enroll}
         >
-          {enrolled ? "✓ fingerprint enabled" : "🔒 enable fingerprint unlock"}
+          {enrolled ? "fingerprint enabled" : "enable fingerprint unlock"}
         </button>
       )}
 

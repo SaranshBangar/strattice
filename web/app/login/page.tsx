@@ -56,7 +56,7 @@ export default function Login() {
             style={{ marginTop: 10, background: "var(--card)", border: "1px solid var(--line)" }}
             onClick={fingerprint}
           >
-            🔒 Unlock with fingerprint
+            Unlock with fingerprint
           </button>
         )}
         {err && <p className="red" style={{ marginBottom: 0 }}>{err}</p>}
