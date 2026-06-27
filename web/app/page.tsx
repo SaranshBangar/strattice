@@ -110,25 +110,7 @@ export default function Dashboard() {
           <Trades s={s} />
 
           <h2>Signals ({s.signals?.length ?? 0})</h2>
-          <div className="card">
-            {(!s.signals || s.signals.length === 0) && (
-              <p className="center muted" style={{ padding: 14 }}>No signals yet</p>
-            )}
-            {s.signals?.map((g, i) => (
-              <div className="row" key={i}>
-                <div>
-                  <div>
-                    <span className={g.action === "buy" ? "green" : g.action === "sell" ? "red" : "muted"}>
-                      {g.action.toUpperCase()}
-                    </span>{" "}
-                    {mkt(g.market)}
-                  </div>
-                  <div className="sub">{g.strategy} · {ts(g.ts)}</div>
-                </div>
-                <div className="mono" style={{ textAlign: "right" }}>{inr(g.price)}</div>
-              </div>
-            ))}
-          </div>
+          <Signals s={s} />
 
           {/* Risk & limits — secondary, tucked at the bottom */}
           <h2>Risk &amp; limits</h2>
@@ -207,6 +189,47 @@ function Trades({ s }: { s: Status }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+const PAGE = 10;
+
+function Signals({ s }: { s: Status }) {
+  const [page, setPage] = useState(0);
+  const rows = s.signals ?? [];
+  if (rows.length === 0)
+    return <div className="card"><p className="center muted" style={{ padding: 14 }}>No signals yet</p></div>;
+
+  const pages = Math.ceil(rows.length / PAGE);
+  const p = Math.min(page, pages - 1); // clamp if list shrank since last render
+  const slice = rows.slice(p * PAGE, p * PAGE + PAGE);
+  const cls = (a: string) => (a === "buy" ? "green" : a === "sell" ? "red" : "muted");
+
+  return (
+    <div className="card">
+      <table className="tbl">
+        <thead>
+          <tr><th>Date / Time</th><th>Coin</th><th style={{ textAlign: "right" }}>Price</th><th style={{ textAlign: "right" }}>Decision</th></tr>
+        </thead>
+        <tbody>
+          {slice.map((g, i) => (
+            <tr key={i}>
+              <td>{ts(g.ts)}<div className="sub">{g.strategy}</div></td>
+              <td>{mkt(g.market)}</td>
+              <td className="mono" style={{ textAlign: "right" }}>{inr(g.price)}</td>
+              <td style={{ textAlign: "right" }}><span className={cls(g.action)}>{g.action.toUpperCase()}</span></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {pages > 1 && (
+        <div className="pager">
+          <button onClick={() => setPage(p - 1)} disabled={p === 0}>‹ Prev</button>
+          <span className="sub">Page {p + 1} / {pages}</span>
+          <button onClick={() => setPage(p + 1)} disabled={p >= pages - 1}>Next ›</button>
+        </div>
+      )}
     </div>
   );
 }
