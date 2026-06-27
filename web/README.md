@@ -31,17 +31,19 @@ sudo cp deploy/coindcx-status.service /etc/systemd/system/
 sudo systemctl enable --now coindcx-status
 ```
 
-**Expose it over HTTPS.** Vercel can't reach a bare VPS port. Use a **named**
-Cloudflare Tunnel (free, no open inbound port) so the URL is **permanent** — full
-one-time setup in [`deploy/TUNNEL.md`](../deploy/TUNNEL.md):
+**Expose it over HTTPS.** Vercel can't reach a bare VPS port. Use an **ngrok free
+static domain** (free, no open inbound port, no domain to buy) so the URL is
+**permanent** — full one-time setup in [`deploy/TUNNEL.md`](../deploy/TUNNEL.md):
 
 ```bash
 # after the one-time setup in deploy/TUNNEL.md, the tunnel runs as a service:
-sudo systemctl enable --now coindcx-tunnel    # serves https://bot.yourdomain.com forever
+sudo systemctl enable --now coindcx-tunnel    # serves https://you.ngrok-free.app forever
 ```
 
-> Don't use `cloudflared tunnel --url ...` — that's a *quick* tunnel: the
+> Don't use a Cloudflare *quick* tunnel (`cloudflared tunnel --url ...`): its
 > `*.trycloudflare.com` URL is random every run and dies when the terminal closes.
+> A *named* Cloudflare tunnel would need a domain you own — a `*.vercel.app` address
+> isn't registrable, so ngrok's free static domain is the no-domain path here.
 
 …or put it behind your existing nginx/Caddy with a TLS cert.
 
