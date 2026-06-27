@@ -9,6 +9,7 @@ export function middleware(req: NextRequest) {
   const open =
     pathname.startsWith("/login") ||
     pathname.startsWith("/api/login") ||
+    pathname.startsWith("/api/webauthn/auth") || // fingerprint unlock (pre-login)
     pathname === "/manifest.json" ||
     pathname === "/sw.js" ||
     pathname.startsWith("/icons");

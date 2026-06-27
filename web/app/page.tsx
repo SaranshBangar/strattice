@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import MarketChart from "../components/MarketChart";
+import { biometricAvailable, enrollFingerprint } from "@/lib/webauthn-client";
 
 type Pos = { strategy: string; market: string; qty: number; avg_price: number };
 type Trade = { ts: string; market: string; side: string; qty: number; price: number; status: string; dry_run: number; realized_pnl: number };
@@ -26,6 +27,21 @@ export default function Dashboard() {
   const [err, setErr] = useState("");
   const [prices, setPrices] = useState<Record<string, number>>({});
   const [tab, setTab] = useState<Tab>("Overview");
+  const [bio, setBio] = useState(false);
+  const [enrolled, setEnrolled] = useState(false);
+
+  useEffect(() => {
+    biometricAvailable().then(setBio);
+  }, []);
+
+  async function enroll() {
+    try {
+      await enrollFingerprint();
+      setEnrolled(true);
+    } catch (e: any) {
+      setErr(String(e.message ?? e));
+    }
+  }
 
   async function load() {
     try {
@@ -61,6 +77,16 @@ export default function Dashboard() {
         {s && <span className={`pill ${s.mode.toLowerCase().includes("live") ? "live" : "off"}`}>{s.mode}</span>}
         <button className="refresh" onClick={load}>refresh</button>
       </h1>
+
+      {bio && (
+        <button
+          className="refresh"
+          style={{ marginLeft: 0, marginBottom: 10 }}
+          onClick={enroll}
+        >
+          {enrolled ? "✓ fingerprint enabled" : "🔒 enable fingerprint unlock"}
+        </button>
+      )}
 
       {err && <div className="card red">{err}</div>}
       {!s && !err && <p className="center muted">loading…</p>}

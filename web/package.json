@@ -8,6 +8,8 @@
     "start": "next start"
   },
   "dependencies": {
+    "@simplewebauthn/browser": "^13.3.0",
+    "@simplewebauthn/server": "^13.3.2",
     "chart.js": "4.4.9",
     "next": "15.3.9",
     "react": "19.1.0",
