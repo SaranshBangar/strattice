@@ -67,3 +67,19 @@ class Strategy:
     def decide(self, candles: list[dict]) -> str:
         """Return 'BUY', 'SELL', or 'HOLD'. Must be deterministic and side-effect free."""
         raise NotImplementedError
+
+
+def stdev(values: list[float], n: int) -> float | None:
+    """Population standard deviation of the last n values."""
+    if len(values) < n:
+        return None
+    w = values[-n:]
+    m = sum(w) / n
+    return (sum((x - m) ** 2 for x in w) / n) ** 0.5
+
+
+if __name__ == "__main__":  # base helper self-checks
+    assert stdev([1, 2, 3], 5) is None                            # too few values
+    assert stdev([5, 5, 5, 5], 4) == 0.0                          # zero variance
+    assert abs(stdev([2, 4, 4, 4, 5, 5, 7, 9], 8) - 2.0) < 1e-9   # textbook pop. stdev == 2.0
+    print("base helper self-checks OK")

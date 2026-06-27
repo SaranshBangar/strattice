@@ -150,3 +150,68 @@ strategies:
       oversold: 25                  # tuned tighter than 32 (still looser than conservative rsi's 22)
       regime_period: 96             # 1 day (looser)
       expected_move_pct: 0.03
+
+  # --- Phase 4: researched aggressive entries (entry-only, engine-owned exits). ALL disabled
+  #     until the backtest is reviewed. Each is on its OWN market for concurrent holding. On a
+  #     ₹1000 wallet the sleeve already splits ~5 ways (~₹194 each); enabling more will trip the
+  #     SLEEVE TOO SMALL startup warning, so enable a new one by DISABLING an overlapping old one.
+  #     Reminder: clears_costs() gates 0.67% (fee+GST+margin) but the REAL round-trip breakeven is
+  #     ~1.5-1.7% because of 1% TDS on every SELL — targets below are sized for the real breakeven.
+
+  - name: "bbrev_sol"               # Bollinger %B / z-score mean reversion (aggressive `rsi` sibling)
+    module: "bb_reversion"
+    enabled: false
+    weight: 1.0
+    market: "I-SOL_INR"             # CONFIRM this symbol is listed on CoinDCX (format I-<BASE>_INR)
+    stop_loss_pct: 0.03             # 3% stop — cut fast if the dip keeps dipping
+    take_profit_pct: 0.04           # TP(4%) > SL(3%) is DELIBERATE: needs backtest win-rate >~64%
+    chandelier_k: 0.0               #   to beat 1% TDS at this win/loss geometry (see research)
+    atr_period: 16
+    max_hold_bars: 32               # 8h time-stop: a mean-reversion should revert fast or be cut
+    params:
+      period: 20                    # Bollinger lookback = 5h
+      k: 2.0                        # band width in sigmas
+      z_entry: 2.0                  # prior bar must be >= 2 sigma below the band (deep dislocation)
+      regime_period: 96             # 1 day (looser, aggressive)
+      expected_move_pct: 0.03       # > cost gate; real edge comes from the 4% TP
+
+  - name: "squeeze_doge"            # TTM-style volatility-squeeze breakout (aggressive trend entry)
+    module: "squeeze_breakout"
+    enabled: false
+    weight: 1.0
+    market: "I-DOGE_INR"            # CONFIRM this symbol is listed on CoinDCX (format I-<BASE>_INR)
+    stop_loss_pct: 0.04             # 4% hard stop (safety net)
+    take_profit_pct: 0.0            # disabled — let the chandelier trail the trend's fat right tail
+    chandelier_k: 3.0               # exit at peak - 3*ATR
+    atr_period: 16                  # 4h ATR (also reused for the Keltner width in the squeeze test)
+    max_hold_bars: 0                # no time-stop for the trend follower
+    params:
+      bb_period: 20                 # Bollinger lookback for squeeze detection (5h)
+      k_bb: 2.0                     # Bollinger half-width in sigmas
+      k_kc: 1.5                     # Keltner half-width in ATRs (squeeze ON when k_bb*sd < k_kc*atr)
+      atr_period: 16                # 4h
+      lookback: 20                  # Donchian high lookback = 5h
+      squeeze_lookback: 6           # squeeze must have fired within the last 6 bars (1.5h)
+      vol_period: 32                # 8h volume average
+      vol_mult: 1.2                 # volume >= 1.2x its average
+      buffer: 0.002                 # 0.2% entry buffer over the lookback high
+      max_chase: 0.02               # skip if price already >2% past the level
+      min_atr_frac: 0.005           # vol floor: ATR >= 0.5% of price
+      regime_period: 96             # 1 day (looser)
+      expected_move_pct: 0.03       # lower edge threshold (still > cost gate ~0.67%)
+
+  - name: "connors_ada"             # Connors RSI(2): NO new module — the existing `rsi` with period 2
+    module: "rsi"
+    enabled: false
+    weight: 1.0
+    market: "I-ADA_INR"             # CONFIRM this symbol is listed on CoinDCX (format I-<BASE>_INR)
+    stop_loss_pct: 0.03
+    take_profit_pct: 0.03
+    chandelier_k: 0.0
+    atr_period: 16
+    max_hold_bars: 24               # 6h time-stop (Connors trades resolve fast)
+    params:
+      period: 2                     # 2-bar RSI (hypersensitive)
+      oversold: 10                  # buy deep panic (Connors used <5; 10 is a looser, tested band)
+      regime_period: 96             # 1 day (looser)
+      expected_move_pct: 0.03       # NOTE: experimental, the vanilla edge has decayed — run small

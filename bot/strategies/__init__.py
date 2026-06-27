@@ -1,8 +1,10 @@
 """Strategy registry. Maps config `module` name -> Strategy subclass."""
+from .bb_reversion import BBReversion
 from .fast_rsi import FastRSIReversion
 from .ma_crossover import MACrossover
 from .momentum import Momentum
 from .rsi import RSIMeanReversion
+from .squeeze_breakout import SqueezeBreakout
 from .vol_expansion import VolExpansion
 
 REGISTRY = {
@@ -11,6 +13,8 @@ REGISTRY = {
     "momentum": Momentum,
     "vol_expansion": VolExpansion,
     "fast_rsi": FastRSIReversion,
+    "bb_reversion": BBReversion,
+    "squeeze_breakout": SqueezeBreakout,
 }
 
 

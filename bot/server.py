@@ -27,10 +27,11 @@ def _payload() -> dict:
     s = audit.today_stats()
     q = sizing.quote_currency()
     fx = config.inr_per_usdt() if q != "INR" else None
-    # Book equity: never hits the exchange (no signed/paid balance call). Exact in
-    # DRY_RUN; in LIVE it's starting_equity + realized P&L, ignoring deposits/withdrawals.
-    eq = float(cfg.get("starting_equity", 1000.0)) + audit.total_realized()
-    free = eq - s["capital_at_risk"]
+    # Equity: in LIVE this reads the real wallet (signed balance call) — free quote
+    # balance + cost basis of open positions. In DRY_RUN it falls back to book
+    # (starting_equity + realized P&L). See sizing.equity()/free_balance().
+    free = sizing.free_balance()              # one signed balance call in LIVE
+    eq = free + s["capital_at_risk"]          # mirrors sizing.equity(); book in DRY_RUN
     sod = eq - s["realized_today"]
     return {
         "mode": config.mode_str(),
@@ -38,7 +39,7 @@ def _payload() -> dict:
         "inr_per_usdt": fx,                       # null when wallet already INR
         "kill_switch": rm.kill_switch_active(),
         "equity": eq,
-        "equity_basis": "book",       # never a live wallet read; see _payload()
+        "equity_basis": "live" if config.LIVE else "book",  # see _payload()
         "free": free,
         "trades_today": s["trades_today"],
         "max_trades_per_day": rm.max_trades_per_day,
