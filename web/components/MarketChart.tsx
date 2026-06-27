@@ -21,14 +21,15 @@ const INTERVALS = ["15m", "1h", "1d"];
 
 // CoinDCX candle ts may be seconds or ms — normalize, then format for axis/tooltip.
 const asDate = (t: number) => new Date(t < 1e12 ? t * 1000 : t);
+const IST = "Asia/Kolkata";
 const axisLabel = (t: number, interval: string) => {
   const d = asDate(t);
   return interval === "1d"
-    ? d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" })
-    : d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+    ? d.toLocaleDateString("en-IN", { timeZone: IST, day: "2-digit", month: "short" })
+    : d.toLocaleTimeString("en-IN", { timeZone: IST, hour: "2-digit", minute: "2-digit" });
 };
 const fullLabel = (t: number) =>
-  asDate(t).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  asDate(t).toLocaleString("en-IN", { timeZone: IST, day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 
 export default function MarketChart() {
   const [pair, setPair] = useState(PAIRS[0]);
@@ -101,7 +102,7 @@ export default function MarketChart() {
           {chgPct >= 0 ? "+" : ""}{chgPct.toFixed(2)}%
         </span>
       </div>
-      <div style={{ height: "min(45vh, 280px)" }}>
+      <div style={{ height: "min(50vh, 320px)" }}>
         {loading ? (
           <p className="center muted">loading…</p>
         ) : data.length === 0 ? (
@@ -112,7 +113,7 @@ export default function MarketChart() {
             options={{
               responsive: true,
               maintainAspectRatio: false,
-              animation: false,
+              animation: { duration: 350, easing: "easeOutQuart" },
               // index + intersect:false => hover OR tap anywhere on x shows the point
               interaction: { mode: "index", intersect: false },
               plugins: {

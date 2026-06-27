@@ -14,19 +14,21 @@ type Status = {
   positions: Pos[]; trades: Trade[]; signals: Signal[];
 };
 
-type Tab = "Overview" | "Positions" | "Trades" | "Signals" | "Chart";
-const TABS: Tab[] = ["Overview", "Positions", "Trades", "Signals", "Chart"];
-
 const inr = (n: number) =>
   "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 2 });
 const mkt = (m: string) => m.replace("I-", "").replace("_INR", "");
-const ts = (t: string) => t.replace("T", " ").slice(0, 16);
+// Bot stores ts as UTC ISO (+00:00), so Date parses it right — render in IST.
+const ts = (t: string) =>
+  new Date(t).toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit", month: "short",
+    hour: "2-digit", minute: "2-digit", hour12: true,
+  });
 
 export default function Dashboard() {
   const [s, setS] = useState<Status | null>(null);
   const [err, setErr] = useState("");
   const [prices, setPrices] = useState<Record<string, number>>({});
-  const [tab, setTab] = useState<Tab>("Overview");
   const [bio, setBio] = useState(false);
   const [enrolled, setEnrolled] = useState(false);
 
@@ -72,112 +74,78 @@ export default function Dashboard() {
 
   return (
     <div className="wrap">
-      <h1>
-        Bot Dashboard
+      <header className="topbar">
+        <h1>Dashboard</h1>
         {s && <span className={`pill ${s.mode.toLowerCase().includes("live") ? "live" : "off"}`}>{s.mode}</span>}
-        <button className="refresh" onClick={load}>refresh</button>
-      </h1>
+        {s?.kill_switch && <span className="pill off">KILL</span>}
+        <button className="refresh" onClick={load}>↻</button>
+      </header>
 
       {bio && (
-        <button
-          className="refresh"
-          style={{ marginLeft: 0, marginBottom: 10 }}
-          onClick={enroll}
-        >
-          {enrolled ? "fingerprint enabled" : "enable fingerprint unlock"}
+        <button className="ghost" onClick={enroll}>
+          {enrolled ? "✓ fingerprint enabled" : "enable fingerprint unlock"}
         </button>
       )}
 
-      {err && <div className="card red">{err}</div>}
+      {err && <div className="card red" style={{ marginTop: 10 }}>{err}</div>}
       {!s && !err && <p className="center muted">loading…</p>}
 
       {s && (
         <>
-          <div className="tabs">
-            {TABS.map((t) => (
-              <button key={t} className={`tab ${tab === t ? "active" : ""}`} onClick={() => setTab(t)}>
-                {t}
-              </button>
+          {/* P&L hero — the at-a-glance numbers */}
+          <div className="hero">
+            <Stat l="Equity" v={inr(s.equity)} />
+            <Stat l="Free" v={inr(s.free)} />
+            <Stat l="Today" v={inr(s.realized_today)} cls={s.realized_today >= 0 ? "green" : "red"} />
+            <Stat l="Total P&L" v={inr(s.total_realized)} cls={s.total_realized >= 0 ? "green" : "red"} />
+          </div>
+
+          {/* Chart — centerpiece */}
+          <MarketChart />
+
+          <h2>Positions ({s.positions.length})</h2>
+          <Positions s={s} prices={prices} />
+
+          <h2>Trades ({s.trades.length})</h2>
+          <Trades s={s} />
+
+          <h2>Signals ({s.signals?.length ?? 0})</h2>
+          <div className="card">
+            {(!s.signals || s.signals.length === 0) && (
+              <p className="center muted" style={{ padding: 14 }}>No signals yet</p>
+            )}
+            {s.signals?.map((g, i) => (
+              <div className="row" key={i}>
+                <div>
+                  <div>
+                    <span className={g.action === "buy" ? "green" : g.action === "sell" ? "red" : "muted"}>
+                      {g.action.toUpperCase()}
+                    </span>{" "}
+                    {mkt(g.market)}
+                  </div>
+                  <div className="sub">{g.strategy} · {ts(g.ts)}</div>
+                </div>
+                <div className="mono" style={{ textAlign: "right" }}>{inr(g.price)}</div>
+              </div>
             ))}
           </div>
 
-          {tab === "Overview" && (
-            <>
-              <div className="card">
-                <div className="grid">
-                  <KV l="Equity (book)" v={inr(s.equity)} />
-                  <KV l="Free" v={inr(s.free)} />
-                  <KV l="Realized today" v={inr(s.realized_today)} cls={s.realized_today >= 0 ? "green" : "red"} />
-                  <KV l="Total realized" v={inr(s.total_realized)} cls={s.total_realized >= 0 ? "green" : "red"} />
-                  <KV l="Loss limit" v={inr(s.loss_limit)} cls="red" />
-                  <KV l="TDS today" v={inr(s.tds_today)} />
-                  <KV l="Capital at risk" v={`${inr(s.capital_at_risk)} / ${inr(s.cap_ceiling)}`} />
-                  <KV l="Trades today" v={`${s.trades_today} / ${s.max_trades_per_day}`} />
-                  <KV l="Quote currency" v={s.quote} />
-                  {s.inr_per_usdt != null && <KV l="INR / USDT" v={inr(s.inr_per_usdt)} />}
-                </div>
-                <div className="row" style={{ marginTop: 10, borderTop: "1px solid var(--line)", borderBottom: 0 }}>
-                  <span className="sub">Kill switch</span>
-                  <span className={`pill ${s.kill_switch ? "off" : "on"}`}>{s.kill_switch ? "ACTIVE" : "off"}</span>
-                </div>
-                <div className="row" style={{ borderBottom: 0 }}>
-                  <span className="sub">Equity basis</span>
-                  <span className="sub">{s.equity_basis}</span>
-                </div>
-              </div>
-
-              <h2>Open positions ({s.positions.length})</h2>
-              <Positions s={s} prices={prices} />
-              <h2>Recent trades ({s.trades.length})</h2>
-              <Trades s={s} />
-            </>
-          )}
-
-          {tab === "Positions" && (
-            <>
-              <h2>Open positions ({s.positions.length})</h2>
-              <Positions s={s} prices={prices} />
-            </>
-          )}
-
-          {tab === "Trades" && (
-            <>
-              <h2>Recent trades ({s.trades.length})</h2>
-              <Trades s={s} />
-            </>
-          )}
-
-          {tab === "Signals" && (
-            <>
-              <h2>Recent signals ({s.signals?.length ?? 0})</h2>
-              <div className="card">
-                {(!s.signals || s.signals.length === 0) && (
-                  <p className="center muted" style={{ padding: 14 }}>No signals yet</p>
-                )}
-                {s.signals?.map((g, i) => (
-                  <div className="row" key={i}>
-                    <div>
-                      <div>
-                        <span className={g.action === "buy" ? "green" : g.action === "sell" ? "red" : "muted"}>
-                          {g.action.toUpperCase()}
-                        </span>{" "}
-                        {mkt(g.market)}
-                      </div>
-                      <div className="sub">{g.strategy} · {ts(g.ts)}</div>
-                    </div>
-                    <div className="mono" style={{ textAlign: "right" }}>{inr(g.price)}</div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-
-          {tab === "Chart" && (
-            <>
-              <h2>Market</h2>
-              <MarketChart />
-            </>
-          )}
+          {/* Risk & limits — secondary, tucked at the bottom */}
+          <h2>Risk &amp; limits</h2>
+          <div className="card">
+            <div className="grid">
+              <Stat l="Loss limit" v={inr(s.loss_limit)} cls="red" />
+              <Stat l="TDS today" v={inr(s.tds_today)} />
+              <Stat l="At risk" v={`${inr(s.capital_at_risk)} / ${inr(s.cap_ceiling)}`} />
+              <Stat l="Trades today" v={`${s.trades_today} / ${s.max_trades_per_day}`} />
+              <Stat l="Quote" v={s.quote} />
+              {s.inr_per_usdt != null && <Stat l="INR / USDT" v={inr(s.inr_per_usdt)} />}
+            </div>
+            <div className="row" style={{ marginTop: 8, borderBottom: 0 }}>
+              <span className="sub">Equity basis</span>
+              <span className="sub">{s.equity_basis}</span>
+            </div>
+          </div>
         </>
       )}
     </div>
@@ -243,7 +211,7 @@ function Trades({ s }: { s: Status }) {
   );
 }
 
-function KV({ l, v, cls }: { l: string; v: string; cls?: string }) {
+function Stat({ l, v, cls }: { l: string; v: string; cls?: string }) {
   return (
     <div className="kv">
       <span className="l">{l}</span>
