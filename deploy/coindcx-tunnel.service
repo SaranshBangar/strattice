@@ -1,0 +1,16 @@
+[Unit]
+# Permanent Cloudflare tunnel exposing the status server at a fixed hostname.
+# Survives reboots/sleep once `systemctl enable`d — no terminal needed.
+Description=Cloudflare Tunnel for CoinDCX bot status server
+After=network.target coindcx-status.service
+Wants=network.target
+
+[Service]
+Type=simple
+# Adjust path if cloudflared is elsewhere (`which cloudflared`).
+ExecStart=/usr/local/bin/cloudflared tunnel --config /etc/cloudflared/config.yml run
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

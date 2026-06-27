@@ -9,3 +9,4 @@ venv/
 KILL
 .ssh
 .ssh.pub
+*.stackdump

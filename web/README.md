@@ -31,12 +31,17 @@ sudo cp deploy/coindcx-status.service /etc/systemd/system/
 sudo systemctl enable --now coindcx-status
 ```
 
-**Expose it over HTTPS.** Vercel can't reach a bare VPS port. Easiest is a
-Cloudflare Tunnel (free, no open inbound port):
+**Expose it over HTTPS.** Vercel can't reach a bare VPS port. Use a **named**
+Cloudflare Tunnel (free, no open inbound port) so the URL is **permanent** — full
+one-time setup in [`deploy/TUNNEL.md`](../deploy/TUNNEL.md):
 
 ```bash
-cloudflared tunnel --url http://localhost:8787   # gives you https://xxx.trycloudflare.com
+# after the one-time setup in deploy/TUNNEL.md, the tunnel runs as a service:
+sudo systemctl enable --now coindcx-tunnel    # serves https://bot.yourdomain.com forever
 ```
+
+> Don't use `cloudflared tunnel --url ...` — that's a *quick* tunnel: the
+> `*.trycloudflare.com` URL is random every run and dies when the terminal closes.
 
 …or put it behind your existing nginx/Caddy with a TLS cert.
 

@@ -2,7 +2,7 @@
 
 Every secret the bot needs lives in `.env` (gitignored). `config.yaml` holds tunables;
 `.env` holds keys and the live-trading switches. **The bot runs fully in DRY_RUN with an
-empty `.env`** — you only need keys to place real orders or send WhatsApp alerts.
+empty `.env`** — you only need keys to place real orders or send Telegram alerts.
 
 Start by copying the template:
 
@@ -57,29 +57,24 @@ Either one alone keeps you safe in DRY_RUN. This double-lock is deliberate — s
 
 ---
 
-## 3. Twilio WhatsApp alerts (optional)
+## 3. Telegram alerts (optional)
 
-Without these, alerts just print to the log. To get WhatsApp pings on trades, blocks,
+Without these, alerts just print to the log. To get Telegram pings on trades, blocks,
 kill switch, and errors:
 
-`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM`, `TWILIO_WHATSAPP_TO`
+`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`
 
-1. Sign up at <https://www.twilio.com/try-twilio> (free trial works).
-2. On the **Twilio Console** home page, copy **Account SID** and **Auth Token**:
+1. In Telegram, message **@BotFather**, send `/newbot`, follow the prompts. It returns a
+   token like `123456789:AAExxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`:
    ```ini
-   TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-   TWILIO_AUTH_TOKEN=your_auth_token
+   TELEGRAM_BOT_TOKEN=123456789:AAExxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
    ```
-3. Enable the **WhatsApp Sandbox**: Console → **Messaging → Try it out → Send a WhatsApp
-   message**. It shows a sandbox number (usually `+1 415 523 8886`) and a join code.
-4. From your own WhatsApp, send `join <code>` to that number to opt in.
-5. Fill in (format matters — `whatsapp:` prefix + country code):
+2. Send your new bot any message (this opens the chat so it can reply to you).
+3. Message **@userinfobot** to get your numeric chat id, then:
    ```ini
-   TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
-   TWILIO_WHATSAPP_TO=whatsapp:+91XXXXXXXXXX
+   TELEGRAM_CHAT_ID=123456789
    ```
-   `FROM` = the sandbox number; `TO` = your number. For production (no sandbox / no
-   24h re-join), apply for a Twilio WhatsApp Sender — not needed to start.
+   For a group, add the bot to the group and use the group's chat id (negative number).
 
 ---
 
@@ -100,7 +95,7 @@ trading. Update to the live FX rate when it drifts.
 |---|---|---|
 | `COINDCX_API_KEY` / `COINDCX_SECRET_KEY` | live trading | stay in DRY_RUN |
 | `DRY_RUN` / `LIVE_TRADING_CONFIRM` | going live (both) | stay in DRY_RUN |
-| `TWILIO_*` | WhatsApp alerts | log-only alerts |
+| `TELEGRAM_*` | Telegram alerts | log-only alerts |
 | `INR_PER_USDT` | ₹ display | default to 85 |
 
 Verify it loaded correctly (no real orders placed):

@@ -12,7 +12,7 @@ No LLM in the execution path — every trade decision is plain algorithm code.
   mean-reversion, Momentum/breakout.
 - Every signal + order persisted to SQLite (`data/bot.db`). Idempotent orders.
 - Backtester with realistic India costs (0.1% fee + 1% TDS).
-- WhatsApp alerts (Twilio) on trades, blocks, kill switch, and errors.
+- Telegram alerts on trades, blocks, kill switch, and errors.
 
 ## Setup
 
@@ -24,7 +24,7 @@ cp .env.example .env        # fill in keys later; DRY_RUN works with no keys
 
 Tune everything in `config.yaml` (strategies, params, capital, **risk limits**).
 Secrets live only in `.env` (gitignored) — never in config or code.
-**Filling in `.env`:** step-by-step (CoinDCX keys, live switches, Twilio) → [ENV.md](ENV.md).
+**Filling in `.env`:** step-by-step (CoinDCX keys, live switches, Telegram) → [ENV.md](ENV.md).
 
 ### Starting small: the ₹5,000 profile
 
@@ -259,7 +259,7 @@ bot/
   audit.py      SQLite: signals, orders (idempotent), positions
   risk.py       global risk gate
   executor.py   single order path: DRY_RUN, idempotency, risk, P&L accounting
-  notify.py     Twilio WhatsApp alerts (log-only without creds)
+  notify.py     Telegram alerts (log-only without creds)
   engine.py     poll loop
   status.py     /status summary
   backtest.py   historical replay with fee + TDS

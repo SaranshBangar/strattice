@@ -26,11 +26,9 @@ _LIVE_CONFIRM = os.getenv("LIVE_TRADING_CONFIRM", "") == "I_UNDERSTAND_LIVE_TRAD
 # Effective mode: live ONLY if DRY_RUN explicitly off AND confirm string present.
 LIVE = (not DRY_RUN) and _LIVE_CONFIRM
 
-# Twilio (optional)
-TWILIO_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
-TWILIO_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
-TWILIO_FROM = os.getenv("TWILIO_WHATSAPP_FROM", "")
-TWILIO_TO = os.getenv("TWILIO_WHATSAPP_TO", "")
+# Telegram alerts (optional)
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
 DB_PATH = ROOT / "data" / "bot.db"
 LOG_PATH = ROOT / "data" / "bot.log"
