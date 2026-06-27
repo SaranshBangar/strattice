@@ -21,7 +21,7 @@ export default function Login() {
 
   return (
     <div className="wrap">
-      <h1>🔒 Bot Dashboard</h1>
+      <h1>Bot Dashboard</h1>
       <form onSubmit={submit} className="card">
         <input
           className="pass"

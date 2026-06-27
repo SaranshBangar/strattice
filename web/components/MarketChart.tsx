@@ -19,6 +19,17 @@ type Candle = { open: number; high: number; low: number; close: number; time: nu
 const PAIRS = ["I-BTC_INR", "I-ETH_INR", "I-XRP_INR", "I-BNB_INR"];
 const INTERVALS = ["15m", "1h", "1d"];
 
+// CoinDCX candle ts may be seconds or ms — normalize, then format for axis/tooltip.
+const asDate = (t: number) => new Date(t < 1e12 ? t * 1000 : t);
+const axisLabel = (t: number, interval: string) => {
+  const d = asDate(t);
+  return interval === "1d"
+    ? d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" })
+    : d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+};
+const fullLabel = (t: number) =>
+  asDate(t).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+
 export default function MarketChart() {
   const [pair, setPair] = useState(PAIRS[0]);
   const [interval, setInterval] = useState("1h");
@@ -47,13 +58,16 @@ export default function MarketChart() {
 
   const chart = useMemo(
     () => ({
-      labels: data.map((c) => c.time),
+      labels: data.map((c) => axisLabel(c.time, interval)),
       datasets: [
         {
           data: data.map((c) => c.close),
           borderColor: color,
           borderWidth: 2,
           pointRadius: 0,
+          pointHoverRadius: 4,
+          pointHitRadius: 24,        // big touch target for mobile taps
+          pointHoverBackgroundColor: color,
           tension: 0.25,
           fill: true,
           backgroundColor: (ctx: any) => {
@@ -67,7 +81,7 @@ export default function MarketChart() {
         },
       ],
     }),
-    [data, color, up]
+    [data, color, up, interval]
   );
 
   return (
@@ -87,9 +101,11 @@ export default function MarketChart() {
           {chgPct >= 0 ? "+" : ""}{chgPct.toFixed(2)}%
         </span>
       </div>
-      <div style={{ height: 200 }}>
+      <div style={{ height: "min(45vh, 280px)" }}>
         {loading ? (
           <p className="center muted">loading…</p>
+        ) : data.length === 0 ? (
+          <p className="center muted">no data</p>
         ) : (
           <Line
             data={chart}
@@ -97,10 +113,36 @@ export default function MarketChart() {
               responsive: true,
               maintainAspectRatio: false,
               animation: false,
-              plugins: { tooltip: { enabled: true }, legend: { display: false } },
+              // index + intersect:false => hover OR tap anywhere on x shows the point
+              interaction: { mode: "index", intersect: false },
+              plugins: {
+                legend: { display: false },
+                tooltip: {
+                  enabled: true,
+                  displayColors: false,
+                  padding: 8,
+                  callbacks: {
+                    title: (items: any) => fullLabel(data[items[0].dataIndex].time),
+                    label: (item: any) => "₹" + item.parsed.y.toLocaleString("en-IN"),
+                  },
+                },
+              },
               scales: {
-                x: { display: false, type: "category" },
-                y: { position: "right", grid: { color: "#232a38" }, ticks: { color: "#8b93a7", maxTicksLimit: 5 } },
+                x: {
+                  type: "category",
+                  grid: { display: false },
+                  ticks: { color: "#8b93a7", maxRotation: 0, autoSkip: true, maxTicksLimit: 6, font: { size: 10 } },
+                },
+                y: {
+                  position: "right",
+                  grid: { color: "#232a38" },
+                  ticks: {
+                    color: "#8b93a7",
+                    maxTicksLimit: 5,
+                    font: { size: 10 },
+                    callback: (v: any) => "₹" + Number(v).toLocaleString("en-IN"),
+                  },
+                },
               },
             }}
           />
