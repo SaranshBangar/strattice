@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { APP_PASSPHRASE } from "@/lib/auth";
 
 // Single-passphrase gate. Everything requires the `auth` cookie except the
 // login page/route and PWA static files. ponytail: cookie value == passphrase
@@ -9,14 +10,13 @@ export function middleware(req: NextRequest) {
   const open =
     pathname.startsWith("/login") ||
     pathname.startsWith("/api/login") ||
-    pathname.startsWith("/api/webauthn/auth") || // fingerprint unlock (pre-login)
     pathname === "/manifest.json" ||
     pathname === "/sw.js" ||
     pathname.startsWith("/icons");
   if (open) return NextResponse.next();
 
   const cookie = req.cookies.get("auth")?.value;
-  if (cookie && cookie === process.env.APP_PASSPHRASE) return NextResponse.next();
+  if (cookie && cookie === APP_PASSPHRASE) return NextResponse.next();
 
   if (pathname.startsWith("/api")) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
