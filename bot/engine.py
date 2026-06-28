@@ -49,20 +49,52 @@ class Engine:
         self.client = Client()
         self.risk = RiskManager(cfg)
         self.executor = Executor(cfg, self.client, self.risk)
-        self.strategies = []
+        self.strategies = self._build_strategies(cfg)
+
+    @staticmethod
+    def _build_strategy(s: dict, sleeves: dict, entries_enabled: bool):
+        strat = build(s)
+        # protective exits are config, not strategy logic -> attach to the instance
+        strat.stop_loss_pct = float(s.get("stop_loss_pct", 0) or 0)
+        strat.take_profit_pct = float(s.get("take_profit_pct", 0) or 0)
+        strat.chandelier_k = float(s.get("chandelier_k", 0) or 0)
+        strat.exit_atr_period = int(s.get("atr_period", s.get("params", {}).get("atr_period", 14)) or 14)
+        strat.max_hold_bars = int(s.get("max_hold_bars", 0) or 0)
+        strat.sleeve_frac = sleeves.get(strat.name, 0.0)  # fraction of equity this strategy may deploy
+        strat.entries_enabled = entries_enabled           # disabled-but-open -> exits only, no new BUYs
+        return strat
+
+    def _build_strategies(self, cfg: dict) -> list:
+        """Active set = every enabled strategy, PLUS any disabled strategy that still holds an
+        open position (entries_enabled=False) so the engine keeps managing its exits until flat.
+        Sleeves derive from the enabled set only; a managed-exit strategy gets sleeve 0 (it never
+        sizes a new entry anyway). Shared by __init__ and the per-loop reconcile."""
         sleeves = sizing.sleeve_fracs(cfg)  # per-strategy capital sleeve for concurrent positions
+        out = []
         for s in cfg["strategies"]:
-            if not s.get("enabled", True):
-                continue
-            strat = build(s)
-            # protective exits are config, not strategy logic -> attach to the instance
-            strat.stop_loss_pct = float(s.get("stop_loss_pct", 0) or 0)
-            strat.take_profit_pct = float(s.get("take_profit_pct", 0) or 0)
-            strat.chandelier_k = float(s.get("chandelier_k", 0) or 0)
-            strat.exit_atr_period = int(s.get("atr_period", s.get("params", {}).get("atr_period", 14)) or 14)
-            strat.max_hold_bars = int(s.get("max_hold_bars", 0) or 0)
-            strat.sleeve_frac = sleeves.get(strat.name, 0.0)  # fraction of equity this strategy may deploy
-            self.strategies.append(strat)
+            if s.get("enabled", True):
+                out.append(self._build_strategy(s, sleeves, True))
+            elif audit.get_position(s["name"], s["market"])[0] > 0:
+                out.append(self._build_strategy(s, sleeves, False))
+        return out
+
+    def _reconcile(self) -> None:
+        """Re-read config.yaml each poll and rebuild self.strategies only when the active set or
+        any entries-enabled flag actually changed (reparse is sub-ms vs the 180s loop). The portal
+        flips `enabled` in config.yaml; this is what makes the toggle live without a restart.
+        Open-position state lives in the audit DB (keyed by name+market), not the strategy object,
+        so dropping/rebuilding objects never loses a position."""
+        try:
+            new = self._build_strategies(config.load())
+        except Exception:  # noqa: BLE001 - a bad/half-written config must not kill the loop
+            log.exception("config reload failed; keeping current strategies")
+            return
+        sig = lambda xs: {(s.name, s.entries_enabled) for s in xs}
+        if sig(new) != sig(self.strategies):
+            log.info("strategy set changed: %s -> %s",
+                     sorted(f"{s.name}{'' if s.entries_enabled else '(exit-only)'}" for s in self.strategies),
+                     sorted(f"{s.name}{'' if s.entries_enabled else '(exit-only)'}" for s in new))
+            self.strategies = new
 
     def _exit_signal(self, strat, candles, price, avg, peak, bars_held) -> str | None:
         """Force-close reasons for an open long (same precedence as the backtest):
@@ -143,7 +175,7 @@ class Engine:
                     continue
 
                 # 2) strategy signal
-                if action == "BUY" and pos_qty <= 0:
+                if action == "BUY" and pos_qty <= 0 and strat.entries_enabled:
                     qty = sizing.target_qty(strat.market, price, self.client, strat.sleeve_frac)
                     if qty <= 0:
                         log.info("%s %s BUY skipped: sizing returned 0 (min-notional/balance)",
@@ -175,6 +207,7 @@ class Engine:
                 self.executor.kill()
                 log.critical("Halted by kill switch. Remove '%s' to resume.", self.risk.kill_file)
                 break
+            self._reconcile()  # pick up portal on/off toggles before this cycle's run
             self.run_once()
             time.sleep(self.poll)
 

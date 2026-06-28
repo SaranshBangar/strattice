@@ -1,8 +1,12 @@
-"""Read-only JSON status endpoint for the dashboard PWA.
+"""JSON status + strategy-toggle endpoint for the dashboard PWA.
 
 Reuses the same audit/config/sizing/risk logic as `bot.status`, but emits
 structured JSON instead of text. Runs as its own process (stdlib only, no deps)
-so it can sit next to the bot under systemd. It NEVER writes — pure read.
+so it can sit next to the bot under systemd. GET /api/status is pure read; the
+one exception is POST /api/strategy, which rewrites config.yaml to flip a single
+strategy's `enabled` flag (targeted line edit — preserves comments/formatting).
+The running engine re-reads that flag each poll cycle, so the toggle takes effect
+without a restart.
 
 Run:  BOT_API_TOKEN=secret python -m bot.server            # 0.0.0.0:8787
 Env:  BOT_API_TOKEN (required)  BOT_API_HOST  BOT_API_PORT
@@ -10,8 +14,10 @@ Test: curl "http://localhost:8787/api/status?token=secret"
 """
 import json
 import os
+import re
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from . import audit, config, sizing
@@ -49,6 +55,11 @@ def _payload() -> dict:
         "capital_at_risk": s["capital_at_risk"],
         "cap_ceiling": rm.max_total_capital_at_risk_frac * eq,
         "total_realized": audit.total_realized(),
+        "strategies": [
+            {"name": st["name"], "market": st["market"],
+             "enabled": bool(st.get("enabled", True))}
+            for st in cfg["strategies"]
+        ],
         "positions": [
             {"strategy": p["strategy"], "market": p["market"],
              "qty": p["qty"], "avg_price": p["avg_price"]}
@@ -69,6 +80,35 @@ def _recent(table: str, n: int) -> list[dict]:
         return [dict(r) for r in rows]
     finally:
         con.close()
+
+
+_NAME_RE = re.compile(r'^\s*-\s+name:\s*["\']?{}["\']?\s*(#.*)?$')
+_ITEM_RE = re.compile(r'^\s*-\s+name:\s*')
+_EN_RE = re.compile(r'^(\s*)enabled:\s*(?:true|false)(.*)$')
+
+
+def _set_enabled(name: str, enabled: bool, path: Path | None = None) -> bool:
+    """Flip one strategy's `enabled` flag in config.yaml via a targeted line edit.
+
+    No yaml round-trip — config.yaml is heavily commented and safe_load would drop
+    the comments. We find the strategy's `- name:` line, then flip the first
+    `enabled:` line before the next strategy item. Every other byte is preserved.
+    Returns False if `name` isn't a known strategy (caller -> 404)."""
+    p = path or (config.ROOT / "config.yaml")
+    lines = p.read_text(encoding="utf-8").splitlines(keepends=True)
+    name_re = re.compile(_NAME_RE.pattern.format(re.escape(name)))
+    start = next((k for k, ln in enumerate(lines) if name_re.match(ln)), None)
+    if start is None:
+        return False
+    for j in range(start + 1, len(lines)):
+        if _ITEM_RE.match(lines[j]):
+            break  # next strategy reached without an enabled: line
+        m = _EN_RE.match(lines[j])
+        if m:
+            lines[j] = f"{m.group(1)}enabled: {'true' if enabled else 'false'}{m.group(2)}\n"
+            p.write_text("".join(lines), encoding="utf-8")
+            return True
+    return False
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -94,6 +134,25 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(401, {"error": "unauthorized"})
         try:
             self._send(200, _payload())
+        except Exception as e:                    # never 500 silently — surface it
+            self._send(500, {"error": str(e)})
+
+    def do_POST(self):
+        u = urlparse(self.path)
+        if u.path != "/api/strategy":
+            return self._send(404, {"error": "not found"})
+        tok = parse_qs(u.query).get("token", [""])[0] or self.headers.get("X-Token", "")
+        if not TOKEN or tok != TOKEN:
+            return self._send(401, {"error": "unauthorized"})
+        try:
+            n = int(self.headers.get("Content-Length", 0) or 0)
+            body = json.loads(self.rfile.read(n) or b"{}")
+            name, enabled = body.get("name"), body.get("enabled")
+            if not isinstance(name, str) or not isinstance(enabled, bool):
+                return self._send(400, {"error": "need {name: str, enabled: bool}"})
+            if not _set_enabled(name, enabled):
+                return self._send(404, {"error": f"unknown strategy: {name}"})
+            self._send(200, {"name": name, "enabled": enabled})
         except Exception as e:                    # never 500 silently — surface it
             self._send(500, {"error": str(e)})
 

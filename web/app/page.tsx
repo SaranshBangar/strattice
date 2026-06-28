@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import MarketChart from "../components/MarketChart";
 
+type Strat = { name: string; market: string; enabled: boolean };
 type Pos = { strategy: string; market: string; qty: number; avg_price: number };
 type Trade = { ts: string; market: string; side: string; qty: number; price: number; status: string; dry_run: number; realized_pnl: number };
 type Signal = { ts: string; strategy: string; market: string; action: string; price: number; meta: string };
@@ -10,7 +11,7 @@ type Status = {
   equity: number; free: number; trades_today: number; max_trades_per_day: number;
   realized_today: number; loss_limit: number; tds_today: number;
   capital_at_risk: number; cap_ceiling: number; total_realized: number;
-  positions: Pos[]; trades: Trade[]; signals: Signal[];
+  strategies: Strat[]; positions: Pos[]; trades: Trade[]; signals: Signal[];
 };
 
 const inr = (n: number) =>
@@ -50,6 +51,27 @@ export default function Dashboard() {
     }
   }
 
+  // Optimistic toggle: flip locally now, POST, revert + surface error on failure.
+  // /api/status re-reads config.yaml each poll, so the next load() confirms server truth.
+  async function toggle(name: string, enabled: boolean) {
+    setS((cur) =>
+      cur ? { ...cur, strategies: cur.strategies.map((g) => (g.name === name ? { ...g, enabled } : g)) } : cur
+    );
+    try {
+      const r = await fetch("/api/strategy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, enabled }),
+      });
+      if (!r.ok) throw new Error((await r.json()).error ?? r.statusText);
+    } catch (e: any) {
+      setErr(`toggle ${name}: ${e.message ?? e}`);
+      setS((cur) =>
+        cur ? { ...cur, strategies: cur.strategies.map((g) => (g.name === name ? { ...g, enabled: !enabled } : g)) } : cur
+      );
+    }
+  }
+
   useEffect(() => {
     load();
     const id = setInterval(load, 10000);
@@ -81,6 +103,9 @@ export default function Dashboard() {
           {/* Chart — centerpiece */}
           <MarketChart />
 
+          <h2>Strategies ({s.strategies?.filter((g) => g.enabled).length ?? 0}/{s.strategies?.length ?? 0} on)</h2>
+          <Strategies s={s} toggle={toggle} />
+
           <h2>Positions ({s.positions.length})</h2>
           <Positions s={s} prices={prices} />
 
@@ -108,6 +133,36 @@ export default function Dashboard() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function Strategies({ s, toggle }: { s: Status; toggle: (name: string, enabled: boolean) => void }) {
+  const held = new Set(s.positions.map((p) => p.strategy));
+  const rows = s.strategies ?? [];
+  return (
+    <div className="card">
+      {rows.length === 0 && <p className="center muted" style={{ padding: 14 }}>No strategies</p>}
+      {rows.map((g) => {
+        const exitOnly = !g.enabled && held.has(g.name); // disabled but still managing an open position
+        return (
+          <label className="row" key={g.name} style={{ cursor: "pointer" }}>
+            <div>
+              <div>{g.name}</div>
+              <div className="sub">
+                {mkt(g.market)}
+                {exitOnly && <span className="red"> · managing exit until flat</span>}
+              </div>
+            </div>
+            <input
+              type="checkbox"
+              checked={g.enabled}
+              onChange={(e) => toggle(g.name, e.target.checked)}
+              style={{ width: 18, height: 18 }}
+            />
+          </label>
+        );
+      })}
     </div>
   );
 }
