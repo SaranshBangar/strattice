@@ -6,17 +6,27 @@ export default function Login() {
   const router = useRouter();
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr("");
-    const r = await fetch("/api/login", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ passphrase: pass }),
-    });
-    if (r.ok) router.replace("/");
-    else setErr("Wrong passphrase");
+    setLoading(true);
+    try {
+      const r = await fetch("/api/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ passphrase: pass }),
+      });
+      if (r.ok) router.replace("/"); // keep spinner up through the redirect
+      else {
+        setErr("Wrong passphrase");
+        setLoading(false);
+      }
+    } catch {
+      setErr("Network error");
+      setLoading(false);
+    }
   }
 
   return (
@@ -29,9 +39,12 @@ export default function Login() {
           placeholder="Passphrase"
           value={pass}
           onChange={(e) => setPass(e.target.value)}
+          disabled={loading}
           style={{ width: "100%", padding: 10, margin: "10px 0", boxSizing: "border-box" }}
         />
-        <button type="submit" style={{ width: "100%", padding: 10 }}>Unlock</button>
+        <button type="submit" disabled={loading} style={{ width: "100%", padding: 10 }}>
+          {loading ? <span className="spin" /> : "Unlock"}
+        </button>
       </form>
       {err && <div className="card red" style={{ marginTop: 10 }}>{err}</div>}
     </div>

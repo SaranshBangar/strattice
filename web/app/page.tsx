@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import MarketChart from "../components/MarketChart";
 
 type Strat = { name: string; market: string; enabled: boolean };
@@ -29,6 +29,15 @@ export default function Dashboard() {
   const [s, setS] = useState<Status | null>(null);
   const [err, setErr] = useState("");
   const [prices, setPrices] = useState<Record<string, number>>({});
+  const [toasts, setToasts] = useState<{ id: number; msg: string; kind: string }[]>([]);
+  // Track last-seen counts to spot new trades/positions between polls (skip first load).
+  const seen = useRef<{ trades: number; positions: number } | null>(null);
+
+  function toast(msg: string, kind = "") {
+    const id = Date.now() + Math.random();
+    setToasts((t) => [...t, { id, msg, kind }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000);
+  }
 
   async function load() {
     try {
@@ -37,6 +46,15 @@ export default function Dashboard() {
       const data: Status = await r.json();
       setS(data);
       setErr("");
+      // toast on new trade / opened position (count went up since last poll)
+      if (seen.current) {
+        if (data.trades.length > seen.current.trades) {
+          const t = data.trades[0];
+          toast(`Trade executed: ${t.side.toUpperCase()} ${mkt(t.market)}`, "good");
+        }
+        if (data.positions.length > seen.current.positions) toast("Position opened", "good");
+      }
+      seen.current = { trades: data.trades.length, positions: data.positions.length };
       // fetch last price per held market for unrealized P&L
       const held = [...new Set(data.positions.map((p) => p.market))];
       const entries = await Promise.all(
@@ -64,6 +82,7 @@ export default function Dashboard() {
         body: JSON.stringify({ name, enabled }),
       });
       if (!r.ok) throw new Error((await r.json()).error ?? r.statusText);
+      toast(`${name} turned ${enabled ? "on" : "off"}`, enabled ? "good" : "bad");
     } catch (e: any) {
       setErr(`toggle ${name}: ${e.message ?? e}`);
       setS((cur) =>
@@ -133,8 +152,26 @@ export default function Dashboard() {
           </div>
         </>
       )}
+
+      <div className="toasts">
+        {toasts.map((t) => (
+          <div key={t.id} className={`toast ${t.kind}`}>{t.msg}</div>
+        ))}
+      </div>
     </div>
   );
+}
+
+// Plain-English blurb per strategy, keyed off the name prefix (modules: ma_crossover,
+// rsi, momentum, vol_expansion). ponytail: name-prefix heuristic, not the bot's module
+// field (status API doesn't return it); add a `module` to the API if names ever drift.
+function describe(name: string): string {
+  const n = name.toLowerCase();
+  if (n.startsWith("ma")) return "Moving-average crossover. Buys when a fast SMA crosses above a slow SMA and rides the trend; a hard stop and ATR trail handle the exit.";
+  if (n.startsWith("rsi")) return "RSI mean-reversion. Buys oversold dips (RSI below threshold) inside an uptrend, expecting a bounce back toward the average; time-stop bails a stalled trade.";
+  if (n.startsWith("breakout") || n.startsWith("mom")) return "Momentum breakout. Buys when price closes above its recent N-bar high (Donchian channel) and trails the move.";
+  if (n.startsWith("vol")) return "Volatility expansion. Enters when the bar's range expands past the expected move, catching fresh bursts of momentum.";
+  return "Algorithmic, entry-only strategy. Exits are handled by the shared stop-loss / take-profit / trail layer.";
 }
 
 function Strategies({ s, toggle }: { s: Status; toggle: (name: string, enabled: boolean) => void }) {
@@ -146,21 +183,27 @@ function Strategies({ s, toggle }: { s: Status; toggle: (name: string, enabled: 
       {rows.map((g) => {
         const exitOnly = !g.enabled && held.has(g.name); // disabled but still managing an open position
         return (
-          <label className="row" key={g.name} style={{ cursor: "pointer" }}>
-            <div>
-              <div>{g.name}</div>
-              <div className="sub">
-                {mkt(g.market)}
-                {exitOnly && <span className="red"> · managing exit until flat</span>}
+          <details className="strat" key={g.name}>
+            <summary>
+              <div className="strat-main">
+                <div>{g.name}</div>
+                <div className="sub">
+                  {mkt(g.market)}
+                  {exitOnly && <span className="red"> · managing exit until flat</span>}
+                </div>
               </div>
-            </div>
-            <input
-              type="checkbox"
-              checked={g.enabled}
-              onChange={(e) => toggle(g.name, e.target.checked)}
-              style={{ width: 18, height: 18 }}
-            />
-          </label>
+              {/* stop summary toggling when the switch is clicked */}
+              <label className="sw" onClick={(e) => e.stopPropagation()}>
+                <input
+                  type="checkbox"
+                  checked={g.enabled}
+                  onChange={(e) => toggle(g.name, e.target.checked)}
+                />
+                <span className="track" />
+              </label>
+            </summary>
+            <p className="sub strat-desc">{describe(g.name)}</p>
+          </details>
         );
       })}
     </div>
@@ -237,7 +280,8 @@ function Signals({ s }: { s: Status }) {
   const pages = Math.ceil(rows.length / PAGE);
   const p = Math.min(page, pages - 1); // clamp if list shrank since last render
   const slice = rows.slice(p * PAGE, p * PAGE + PAGE);
-  const cls = (a: string) => (a === "buy" ? "green" : a === "sell" ? "red" : "muted");
+  const cls = (a: string) => (a === "buy" ? "green" : a === "sell" ? "red" : "yellow");
+  const rowCls = (a: string) => (a === "buy" ? "sig-buy" : a === "sell" ? "sig-sell" : "sig-hold");
 
   return (
     <div className="card">
@@ -247,11 +291,11 @@ function Signals({ s }: { s: Status }) {
         </thead>
         <tbody>
           {slice.map((g, i) => (
-            <tr key={i}>
-              <td>{ts(g.ts)}<div className="sub">{g.strategy}</div></td>
-              <td>{mkt(g.market)}</td>
-              <td className="mono" style={{ textAlign: "right" }}>{inr(g.price)}</td>
-              <td style={{ textAlign: "right" }}><span className={cls(g.action)}>{g.action.toUpperCase()}</span></td>
+            <tr key={i} className={rowCls(g.action)}>
+              <td className={cls(g.action)}>{ts(g.ts)}<div className="sub">{g.strategy}</div></td>
+              <td className={cls(g.action)}>{mkt(g.market)}</td>
+              <td className={`mono ${cls(g.action)}`} style={{ textAlign: "right" }}>{inr(g.price)}</td>
+              <td className={cls(g.action)} style={{ textAlign: "right", fontWeight: 600 }}>{g.action.toUpperCase()}</td>
             </tr>
           ))}
         </tbody>

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Chart as ChartJS,
   LineElement,
+  BarElement,
   PointElement,
   LinearScale,
   TimeScale,
@@ -10,14 +11,17 @@ import {
   Filler,
   Tooltip,
 } from "chart.js";
-import { Line } from "react-chartjs-2";
+import { Line, Bar } from "react-chartjs-2";
 
-ChartJS.register(LineElement, PointElement, LinearScale, TimeScale, CategoryScale, Filler, Tooltip);
+ChartJS.register(LineElement, BarElement, PointElement, LinearScale, TimeScale, CategoryScale, Filler, Tooltip);
 
 type Candle = { open: number; high: number; low: number; close: number; time: number };
 
-const PAIRS = ["I-BTC_INR", "I-ETH_INR", "I-XRP_INR", "I-BNB_INR"];
+const PAIRS = ["I-BTC_INR", "I-ETH_INR", "I-XRP_INR", "I-BNB_INR", "I-SOL_INR", "I-DOGE_INR", "I-ADA_INR"];
 const INTERVALS = ["15m", "1h", "1d"];
+const CHART_TYPES = ["Area", "Line", "Bar"] as const;
+type ChartType = (typeof CHART_TYPES)[number];
+const label = (p: string) => p.replace("I-", "").replace("_INR", "");
 
 // CoinDCX candle ts may be seconds or ms — normalize, then format for axis/tooltip.
 const asDate = (t: number) => new Date(t < 1e12 ? t * 1000 : t);
@@ -34,6 +38,7 @@ const fullLabel = (t: number) =>
 export default function MarketChart() {
   const [pair, setPair] = useState(PAIRS[0]);
   const [interval, setInterval] = useState("1h");
+  const [ctype, setCtype] = useState<ChartType>("Area");
   const [data, setData] = useState<Candle[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -70,7 +75,7 @@ export default function MarketChart() {
           pointHitRadius: 24,        // big touch target for mobile taps
           pointHoverBackgroundColor: color,
           tension: 0.25,
-          fill: true,
+          fill: ctype !== "Line",
           backgroundColor: (ctx: any) => {
             const { ctx: c, chartArea } = ctx.chart;
             if (!chartArea) return "transparent";
@@ -82,17 +87,24 @@ export default function MarketChart() {
         },
       ],
     }),
-    [data, color, up, interval]
+    [data, color, up, interval, ctype]
   );
+
+  const Plot = ctype === "Bar" ? Bar : Line;
 
   return (
     <div className="card">
-      <div className="tabs">
-        {PAIRS.map((p) => (
-          <button key={p} className={`tab ${p === pair ? "active" : ""}`} onClick={() => setPair(p)}>
-            {p.replace("I-", "").replace("_INR", "")}
-          </button>
-        ))}
+      <div className="chart-head">
+        <select className="sel" value={pair} onChange={(e) => setPair(e.target.value)}>
+          {PAIRS.map((p) => (
+            <option key={p} value={p}>{label(p)}</option>
+          ))}
+        </select>
+        <select className="sel" value={ctype} onChange={(e) => setCtype(e.target.value as ChartType)}>
+          {CHART_TYPES.map((t) => (
+            <option key={t} value={t}>{t}</option>
+          ))}
+        </select>
       </div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 6 }}>
         <span className="mono" style={{ fontSize: 22, fontWeight: 700 }}>
@@ -108,8 +120,8 @@ export default function MarketChart() {
         ) : data.length === 0 ? (
           <p className="center muted">no data</p>
         ) : (
-          <Line
-            data={chart}
+          <Plot
+            data={chart as any}
             options={{
               responsive: true,
               maintainAspectRatio: false,
