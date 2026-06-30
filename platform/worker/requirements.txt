@@ -1,0 +1,5 @@
+# Supervisor deps (the bot itself uses the repo-root requirements.txt).
+requests>=2.31      # Cloudflare D1 REST API
+cryptography>=41.0
+PyYAML>=6.0
+python-dotenv>=1.0

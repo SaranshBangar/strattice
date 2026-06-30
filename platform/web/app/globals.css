@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-bg text-fg font-sans antialiased;
+}
+
+::selection {
+  background: rgba(201, 162, 75, 0.28);
+}
+
+/* numerics read as terminal output, not prose */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* hairline eyebrow used above section headers */
+.eyebrow {
+  @apply font-mono text-[11px] uppercase tracking-[0.2em] text-faint;
+}

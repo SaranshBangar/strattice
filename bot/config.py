@@ -10,7 +10,9 @@ load_dotenv(ROOT / ".env")
 
 
 def load(path: str | None = None) -> dict:
-    cfg_path = Path(path) if path else ROOT / "config.yaml"
+    # Default honors CONFIG_PATH env so a per-user subprocess (SaaS supervisor) loads its own
+    # config.yaml without code changes — sizing/engine/_reconcile all call load() with no path.
+    cfg_path = Path(path or os.getenv("CONFIG_PATH") or (ROOT / "config.yaml"))
     with open(cfg_path) as f:
         return yaml.safe_load(f)
 
@@ -30,8 +32,10 @@ LIVE = (not DRY_RUN) and _LIVE_CONFIRM
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
-DB_PATH = ROOT / "data" / "bot.db"
-LOG_PATH = ROOT / "data" / "bot.log"
+# BOT_DB_PATH/BOT_LOG_PATH env overrides let the SaaS supervisor give each user subprocess its
+# own SQLite + log (data/users/<uid>/). Default unchanged for single-tenant use.
+DB_PATH = Path(os.getenv("BOT_DB_PATH") or (ROOT / "data" / "bot.db"))
+LOG_PATH = Path(os.getenv("BOT_LOG_PATH") or (ROOT / "data" / "bot.log"))
 
 # Display only: USDT->INR rate for /status readouts. INR_PER_USDT in .env is now just a
 # fallback used when the live fetch fails (offline, API down). Default 85.

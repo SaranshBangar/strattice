@@ -57,7 +57,7 @@ export default function MarketChart() {
   }, [pair, interval]);
 
   const up = data.length > 1 && data[data.length - 1].close >= data[0].close;
-  const color = up ? "#2ecc71" : "#ff5d5d";
+  const color = up ? "#16B97D" : "#F0584F";
   const last = data.at(-1)?.close;
   const chgPct =
     data.length > 1 ? ((data.at(-1)!.close - data[0].close) / data[0].close) * 100 : 0;
@@ -76,14 +76,8 @@ export default function MarketChart() {
           pointHoverBackgroundColor: color,
           tension: 0.25,
           fill: ctype !== "Line",
-          backgroundColor: (ctx: any) => {
-            const { ctx: c, chartArea } = ctx.chart;
-            if (!chartArea) return "transparent";
-            const g = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-            g.addColorStop(0, up ? "rgba(46,204,113,.25)" : "rgba(255,93,93,.25)");
-            g.addColorStop(1, "transparent");
-            return g;
-          },
+          // flat translucent fill — no gradient, reads like a terminal area plot
+          backgroundColor: up ? "rgba(22,185,125,.12)" : "rgba(240,88,79,.12)",
         },
       ],
     }),
@@ -144,13 +138,13 @@ export default function MarketChart() {
                 x: {
                   type: "category",
                   grid: { display: false },
-                  ticks: { color: "#8b93a7", maxRotation: 0, autoSkip: true, maxTicksLimit: 6, font: { size: 10 } },
+                  ticks: { color: "#828AA0", maxRotation: 0, autoSkip: true, maxTicksLimit: 6, font: { size: 10 } },
                 },
                 y: {
                   position: "right",
-                  grid: { color: "#232a38" },
+                  grid: { color: "#232838" },
                   ticks: {
-                    color: "#8b93a7",
+                    color: "#828AA0",
                     maxTicksLimit: 5,
                     font: { size: 10 },
                     callback: (v: any) => "₹" + Number(v).toLocaleString("en-IN"),

@@ -34,15 +34,15 @@ export default function Login() {
       <h1>Unlock</h1>
       <form onSubmit={submit}>
         <input
+          className="pass"
           type="password"
           autoFocus
           placeholder="Passphrase"
           value={pass}
           onChange={(e) => setPass(e.target.value)}
           disabled={loading}
-          style={{ width: "100%", padding: 10, margin: "10px 0", boxSizing: "border-box" }}
         />
-        <button type="submit" disabled={loading} style={{ width: "100%", padding: 10 }}>
+        <button className="primary" type="submit" disabled={loading}>
           {loading ? <span className="spin" /> : "Unlock"}
         </button>
       </form>
