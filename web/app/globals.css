@@ -66,7 +66,21 @@ input.pass { width: 100%; padding: 13px; border-radius: 12px; border: 1px solid 
 
 /* coin/chart-type dropdowns over the chart */
 .chart-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
-.sel { background: var(--bg); border: 1px solid var(--line); color: var(--text); border-radius: 999px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
+.sel {
+  appearance: none; -webkit-appearance: none;
+  background: var(--inset);
+  /* custom chevron — strips the inconsistent native arrow */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23828AA0' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  border: 1px solid var(--line); color: var(--text);
+  border-radius: 10px; padding: 8px 30px 8px 12px;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: border-color .15s, background-color .15s;
+}
+.sel:hover { border-color: var(--muted); }
+.sel:focus { outline: none; border-color: var(--accent); }
+.sel option { background: var(--card); color: var(--text); font-weight: 500; }
 
 /* strategy accordion (native <details>) */
 .strat { border-bottom: 1px solid var(--line); }

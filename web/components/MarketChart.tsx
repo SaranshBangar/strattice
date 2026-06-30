@@ -19,7 +19,7 @@ type Candle = { open: number; high: number; low: number; close: number; time: nu
 
 const PAIRS = ["I-BTC_INR", "I-ETH_INR", "I-XRP_INR", "I-BNB_INR", "I-SOL_INR", "I-DOGE_INR", "I-ADA_INR"];
 const INTERVALS = ["15m", "1h", "1d"];
-const CHART_TYPES = ["Area", "Line", "Bar"] as const;
+const CHART_TYPES = ["Area", "Bar"] as const;
 type ChartType = (typeof CHART_TYPES)[number];
 const label = (p: string) => p.replace("I-", "").replace("_INR", "");
 
@@ -75,7 +75,7 @@ export default function MarketChart() {
           pointHitRadius: 24,        // big touch target for mobile taps
           pointHoverBackgroundColor: color,
           tension: 0.25,
-          fill: ctype !== "Line",
+          fill: true,
           // flat translucent fill — no gradient, reads like a terminal area plot
           backgroundColor: up ? "rgba(22,185,125,.12)" : "rgba(240,88,79,.12)",
         },
