@@ -1,11 +1,29 @@
+export type CellTone = "default" | "good" | "bad" | "warn" | "muted" | "fg";
+
+export type Cell =
+  | string
+  | number
+  | { v: string | number; tone?: CellTone; align?: "left" | "right" };
+
 export type DataTableProps = {
   title?: string;
   head: string[];
-  rows: (string | number)[][];
+  rows: Cell[][];
   empty?: string;
+  /** Per-column default alignment, by header index. */
+  align?: ("left" | "right")[];
 };
 
-export function DataTable({ title, head, rows, empty }: DataTableProps) {
+const toneClass: Record<CellTone, string> = {
+  default: "text-dim",
+  good: "text-gain",
+  bad: "text-loss",
+  warn: "text-warn",
+  muted: "text-muted",
+  fg: "text-fg",
+};
+
+export function DataTable({ title, head, rows, empty, align }: DataTableProps) {
   return (
     <section className="rounded-lg border border-line bg-panel">
       {title && (
@@ -22,11 +40,14 @@ export function DataTable({ title, head, rows, empty }: DataTableProps) {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-line text-left">
-                {head.map((h) => (
+              <tr className="border-b border-line">
+                {head.map((h, j) => (
                   <th
                     key={h}
-                    className="whitespace-nowrap px-4 py-2.5 font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-faint"
+                    className={[
+                      "whitespace-nowrap px-4 py-2.5 font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-faint",
+                      align?.[j] === "right" ? "text-right" : "text-left",
+                    ].join(" ")}
                   >
                     {h}
                   </th>
@@ -35,21 +56,26 @@ export function DataTable({ title, head, rows, empty }: DataTableProps) {
             </thead>
             <tbody>
               {rows.map((row, i) => (
-                <tr
-                  key={i}
-                  className="border-b border-line/60 last:border-0 hover:bg-inset/60"
-                >
-                  {row.map((cell, j) => (
-                    <td
-                      key={j}
-                      className={[
-                        "whitespace-nowrap px-4 py-2.5 font-mono tnum",
-                        j === 0 ? "font-medium text-fg" : "text-dim",
-                      ].join(" ")}
-                    >
-                      {cell}
-                    </td>
-                  ))}
+                <tr key={i} className="border-b border-line/60 last:border-0 hover:bg-inset/60">
+                  {row.map((cell, j) => {
+                    const obj = typeof cell === "object" && cell !== null ? cell : null;
+                    const value: string | number = obj ? obj.v : (cell as string | number);
+                    const tone: CellTone = obj?.tone ?? (j === 0 ? "fg" : "default");
+                    const cellAlign = obj?.align ?? align?.[j] ?? "left";
+                    return (
+                      <td
+                        key={j}
+                        className={[
+                          "whitespace-nowrap px-4 py-2.5 font-mono tnum",
+                          j === 0 ? "font-medium" : "",
+                          cellAlign === "right" ? "text-right" : "text-left",
+                          toneClass[tone],
+                        ].join(" ")}
+                      >
+                        {value}
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>

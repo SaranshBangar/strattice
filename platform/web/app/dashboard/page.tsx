@@ -3,11 +3,20 @@ import Link from "next/link";
 import { getUser } from "@/lib/session";
 import * as q from "@/lib/queries";
 import { StatCard } from "@/components/StatCard";
-import { DataTable } from "@/components/DataTable";
+import { DataTable, type Cell } from "@/components/DataTable";
+import { strategyLabel } from "@/lib/strategies";
 
 export const dynamic = "force-dynamic";
 
 function fmt(n: number) { return n.toFixed(2); }
+function num(n: number): Cell { return { v: fmt(n), align: "right" }; }
+function pnl(n: number): Cell {
+  return { v: `${n > 0 ? "+" : ""}${fmt(n)}`, tone: n < 0 ? "bad" : n > 0 ? "good" : "muted", align: "right" };
+}
+function side(s: string): Cell {
+  const buy = s?.toUpperCase() === "BUY";
+  return { v: s?.toUpperCase() ?? s, tone: buy ? "good" : "bad" };
+}
 
 export default async function DashboardPage() {
   const user = await getUser();
@@ -38,7 +47,7 @@ export default async function DashboardPage() {
         />
         <StatCard
           label="Equity"
-          value={equity ? `₹${fmt(equity.equity)}` : "—"}
+          value={equity ? `₹${fmt(equity.equity)}` : "-"}
           sub={equity ? `free ₹${fmt(equity.free)}` : ""}
         />
         <StatCard
@@ -48,7 +57,7 @@ export default async function DashboardPage() {
         />
         <StatCard
           label="Realized today"
-          value={equity ? `₹${fmt(equity.realized_today)}` : "—"}
+          value={equity ? `₹${fmt(equity.realized_today)}` : "-"}
           tone={equity && equity.realized_today < 0 ? "bad" : equity && equity.realized_today > 0 ? "good" : "default"}
         />
       </div>
@@ -67,15 +76,21 @@ export default async function DashboardPage() {
       <DataTable
         title="Open positions"
         head={["Strategy", "Market", "Qty", "Avg price"]}
-        rows={positions.map((p: any) => [p.strategy, p.market, p.qty, fmt(p.avg_price)])}
+        align={["left", "left", "right", "right"]}
+        rows={positions.map((p: any): Cell[] => [
+          strategyLabel(p.strategy), p.market, num(p.qty), num(p.avg_price),
+        ])}
         empty="No open positions."
       />
 
       <DataTable
         title="Recent trades"
         head={["Time", "Strategy", "Market", "Side", "Qty", "Price", "P&L"]}
-        rows={trades.map((t: any) => [
-          t.ts?.slice(0, 19), t.strategy, t.market, t.side, t.qty, fmt(t.price), fmt(t.realized_pnl),
+        align={["left", "left", "left", "left", "right", "right", "right"]}
+        rows={trades.map((t: any): Cell[] => [
+          { v: t.ts?.slice(0, 19).replace("T", " ") ?? "", tone: "muted" },
+          strategyLabel(t.strategy), t.market, side(t.side),
+          num(t.qty), num(t.price), pnl(t.realized_pnl),
         ])}
         empty="No trades yet."
       />

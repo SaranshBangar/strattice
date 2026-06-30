@@ -2,6 +2,7 @@
 import { useState, useTransition } from "react";
 import { addStrategyAction, toggleStrategyAction, removeStrategyAction } from "@/app/actions";
 import type { StrategyRow } from "@/lib/queries";
+import { STRATEGY_META, strategyLabel } from "@/lib/strategies";
 
 const DEFAULT_MARKET: Record<string, string> = {
   ma_crossover: "I-BTC_INR", rsi: "I-ETH_INR", momentum: "I-BTC_INR",
@@ -39,7 +40,7 @@ export function StrategyManager({ allowed, maxActive, strategies }: {
               onChange={(e) => { setTpl(e.target.value); setMarket(DEFAULT_MARKET[e.target.value] ?? ""); }}
               className="w-full rounded-md border border-line bg-inset px-3 py-2 text-sm text-fg focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
-              {allowed.map((t) => <option key={t} value={t}>{t}</option>)}
+              {allowed.map((t) => <option key={t} value={t}>{strategyLabel(t)}</option>)}
             </select>
           </div>
           <div className="flex-1 space-y-1.5">
@@ -67,6 +68,12 @@ export function StrategyManager({ allowed, maxActive, strategies }: {
           </button>
         </div>
 
+        {STRATEGY_META[tpl as keyof typeof STRATEGY_META]?.blurb && (
+          <p className="mt-2 text-xs leading-relaxed text-muted">
+            {STRATEGY_META[tpl as keyof typeof STRATEGY_META].blurb}
+          </p>
+        )}
+
         <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
           <span className="text-muted">
             Active{" "}
@@ -76,7 +83,7 @@ export function StrategyManager({ allowed, maxActive, strategies }: {
           </span>
           {atCap && (
             <span className="rounded-sm border border-warn/30 bg-warn/10 px-2 py-0.5 text-xs text-warn">
-              At plan cap — disable one or upgrade to enable more.
+              At plan cap - disable one or upgrade to enable more.
             </span>
           )}
         </div>
@@ -98,7 +105,7 @@ export function StrategyManager({ allowed, maxActive, strategies }: {
               <li key={s.id} className="flex items-center justify-between gap-4 px-4 py-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-medium text-fg">{s.template}</span>
+                    <span className="text-sm font-medium text-fg">{strategyLabel(s.template)}</span>
                     <span className="rounded-sm bg-inset px-1.5 py-0.5 font-mono text-[11px] font-medium text-dim">
                       {s.market}
                     </span>
@@ -133,7 +140,10 @@ export function StrategyManager({ allowed, maxActive, strategies }: {
                   <button
                     type="button"
                     disabled={pending}
-                    onClick={() => run(() => removeStrategyAction(s.id))}
+                    onClick={() => {
+                      if (!confirm(`Remove ${strategyLabel(s.template)} on ${s.market}? This can't be undone.`)) return;
+                      run(() => removeStrategyAction(s.id));
+                    }}
                     className="rounded-md px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:text-loss focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-loss disabled:opacity-50"
                   >
                     Remove

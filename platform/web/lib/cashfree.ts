@@ -1,6 +1,6 @@
 // Cashfree Subscriptions (recurring) REST client + webhook verification. Raw fetch (no SDK dep).
 // Docs: https://www.cashfree.com/docs/api-reference/payments/latest/subscription/overview
-// Plans are created INLINE in the subscription (plan_details) — no separate plan registry.
+// Plans are created INLINE in the subscription (plan_details) - no separate plan registry.
 import { createHmac, timingSafeEqual } from "crypto";
 import { resolveTier, type TierName } from "./entitlements";
 

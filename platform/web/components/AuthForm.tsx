@@ -15,6 +15,7 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
   const [name, setName] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showPw, setShowPw] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -44,19 +45,39 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
         {mode === "sign-up" && (
           <div className="space-y-1.5">
             <label htmlFor="af-name" className={labelClass}>Name</label>
-            <input id="af-name" className={inputClass} placeholder="Your name"
+            <input id="af-name" className={inputClass} placeholder="Your name" autoComplete="name"
               value={name} onChange={(e) => setName(e.target.value)} />
           </div>
         )}
         <div className="space-y-1.5">
           <label htmlFor="af-email" className={labelClass}>Email</label>
           <input id="af-email" className={inputClass} type="email" placeholder="you@example.com"
-            value={email} onChange={(e) => setEmail(e.target.value)} required />
+            autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
         </div>
         <div className="space-y-1.5">
           <label htmlFor="af-password" className={labelClass}>Password</label>
-          <input id="af-password" className={inputClass} type="password" placeholder="••••••••"
-            value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
+          <div className="relative">
+            <input
+              id="af-password"
+              className={`${inputClass} pr-16`}
+              type={showPw ? "text" : "password"}
+              placeholder="••••••••"
+              autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={8}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPw((v) => !v)}
+              className="absolute inset-y-0 right-0 flex items-center px-3 text-xs font-medium text-muted transition-colors hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-r-md"
+              aria-label={showPw ? "Hide password" : "Show password"}
+            >
+              {showPw ? "Hide" : "Show"}
+            </button>
+          </div>
+          {mode === "sign-up" && <p className="text-xs text-faint">At least 8 characters.</p>}
         </div>
         {err && <p role="alert" className="text-sm text-loss">{err}</p>}
         <button

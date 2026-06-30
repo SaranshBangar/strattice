@@ -34,7 +34,7 @@ export default async function AccountPage() {
 
         <ol className="mt-4 list-decimal space-y-1 pl-5 text-sm text-muted marker:text-faint">
           <li><span className="text-gain">Enable trading</span> on the key.</li>
-          <li><span className="text-warn">Disable withdrawals</span> — we never need them.</li>
+          <li><span className="text-warn">Disable withdrawals</span> - we never need them.</li>
           <li>Add our server IP to the key's IP-allowlist. Keys are encrypted at rest.</li>
         </ol>
 

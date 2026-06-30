@@ -1,6 +1,7 @@
 "use client";
+import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "@/lib/auth-client";
 
 const LINKS: [string, string][] = [
@@ -13,13 +14,29 @@ const LINKS: [string, string][] = [
 export function Nav() {
   const { data } = useSession();
   const router = useRouter();
+  const pathname = usePathname();
+  const [open, setOpen] = useState(false);
   const signedIn = !!data?.user;
+
+  async function handleSignOut() {
+    setOpen(false);
+    await signOut();
+    router.push("/");
+    router.refresh();
+  }
+
+  const linkClass = (href: string) =>
+    [
+      "rounded-md px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+      pathname === href ? "bg-panel text-fg" : "text-muted hover:bg-panel hover:text-fg",
+    ].join(" ");
 
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-bg/85 backdrop-blur">
       <nav className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
         <Link
           href="/"
+          onClick={() => setOpen(false)}
           className="flex items-center gap-2.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <span className="grid h-7 w-7 place-items-center rounded-sm bg-accent font-display text-sm font-bold text-accent-ink">
@@ -31,24 +48,40 @@ export function Nav() {
         </Link>
 
         {signedIn ? (
-          <div className="flex items-center gap-1">
-            {LINKS.map(([href, label]) => (
-              <Link
-                key={href}
-                href={href}
-                className="rounded-md px-3 py-1.5 text-sm text-muted transition-colors hover:bg-panel hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          <>
+            {/* Desktop links */}
+            <div className="hidden items-center gap-1 sm:flex">
+              {LINKS.map(([href, label]) => (
+                <Link key={href} href={href} className={linkClass(href)}>
+                  {label}
+                </Link>
+              ))}
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="ml-1 rounded-md border border-line px-3 py-1.5 text-sm text-dim transition-colors hover:bg-panel hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
-                {label}
-              </Link>
-            ))}
+                Sign out
+              </button>
+            </div>
+
+            {/* Mobile menu toggle */}
             <button
               type="button"
-              onClick={async () => { await signOut(); router.push("/"); router.refresh(); }}
-              className="ml-1 rounded-md border border-line px-3 py-1.5 text-sm text-dim transition-colors hover:bg-panel hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              aria-label="Menu"
+              aria-expanded={open}
+              onClick={() => setOpen((v) => !v)}
+              className="grid h-9 w-9 place-items-center rounded-md border border-line text-dim transition-colors hover:bg-panel hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:hidden"
             >
-              Sign out
+              <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+                {open ? (
+                  <path strokeLinecap="round" d="m5 5 10 10M15 5 5 15" />
+                ) : (
+                  <path strokeLinecap="round" d="M3 6h14M3 10h14M3 14h14" />
+                )}
+              </svg>
             </button>
-          </div>
+          </>
         ) : (
           <div className="flex items-center gap-2">
             <Link
@@ -66,6 +99,34 @@ export function Nav() {
           </div>
         )}
       </nav>
+
+      {/* Mobile dropdown panel */}
+      {signedIn && open && (
+        <div className="border-t border-line bg-bg sm:hidden">
+          <div className="mx-auto flex max-w-5xl flex-col gap-1 px-4 py-3">
+            {LINKS.map(([href, label]) => (
+              <Link
+                key={href}
+                href={href}
+                onClick={() => setOpen(false)}
+                className={[
+                  "rounded-md px-3 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                  pathname === href ? "bg-panel text-fg" : "text-muted hover:bg-panel hover:text-fg",
+                ].join(" ")}
+              >
+                {label}
+              </Link>
+            ))}
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="mt-1 rounded-md border border-line px-3 py-2.5 text-left text-sm text-dim transition-colors hover:bg-panel hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
+      )}
     </header>
   );
 }

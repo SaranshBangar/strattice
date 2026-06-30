@@ -11,7 +11,7 @@ const PERKS: Record<string, string> = {
   max: "All + custom strategies + dashboard",
 };
 
-// The strategy templates that actually ship — shown as a terminal-style ledger.
+// The strategy templates that actually ship - shown as a terminal-style ledger.
 const STRATS: [string, string, string][] = [
   ["ma_crossover", "BTC/INR", "TREND"],
   ["momentum", "BTC/INR", "MOMENTUM"],
@@ -37,7 +37,7 @@ export default function Home() {
 
   return (
     <div className="space-y-24">
-      {/* Hero — left-aligned, with a strategy ledger as the signature */}
+      {/* Hero - left-aligned, with a strategy ledger as the signature */}
       <section className="grid items-center gap-10 pt-6 lg:grid-cols-[1.05fr_0.95fr] lg:gap-14">
         <div>
           <div className="eyebrow flex items-center gap-2">
@@ -48,7 +48,7 @@ export default function Home() {
             Algorithmic trading that runs on your <span className="text-accent">own</span> account.
           </h1>
           <p className="mt-5 max-w-lg text-lg text-muted">
-            Subscribe to a strategy and let bots trade for you. Your funds never leave CoinDCX —
+            Subscribe to a strategy and let bots trade for you. Your funds never leave CoinDCX -
             we hold the keys to run the strategies, nothing else.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -67,7 +67,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Signature: the strategy ledger — real templates, terminal readout */}
+        {/* Signature: the strategy ledger - real templates, terminal readout */}
         <div className="overflow-hidden rounded-lg border border-line bg-panel">
           <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
             <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-faint">
@@ -93,7 +93,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* How it works — a real three-step sequence, so the numbering earns its place */}
+      {/* How it works - a real three-step sequence, so the numbering earns its place */}
       <section>
         <h2 className="eyebrow">How it works</h2>
         <ol className="mt-5 grid gap-px overflow-hidden rounded-lg border border-line bg-line sm:grid-cols-3">
@@ -111,7 +111,7 @@ export default function Home() {
         <div className="mb-6">
           <h2 className="font-display text-2xl font-semibold tracking-tight">Simple monthly plans</h2>
           <p className="mt-1 text-sm text-muted">
-            No trading fees from us — your exchange fees apply as usual.
+            No trading fees from us - your exchange fees apply as usual.
           </p>
         </div>
         <PricingGrid tiers={tiers} ctaHref="/sign-up" />

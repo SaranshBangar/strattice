@@ -1,5 +1,5 @@
 // Drizzle definitions for Better Auth's core tables (SQLite/D1). Mirrors platform/db/schema.sql.
-// Authoritative source is `npx @better-auth/cli generate` — reconcile if a Better Auth upgrade
+// Authoritative source is `npx @better-auth/cli generate` - reconcile if a Better Auth upgrade
 // changes columns.
 import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 

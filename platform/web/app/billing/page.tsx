@@ -32,7 +32,7 @@ export default async function BillingPage() {
       <BillingCheckout tiers={tiers} currentTier={tier.name} canCancel={canCancel} />
       <p className="text-xs text-faint">
         Recurring billing via Cashfree (UPI Autopay / eMandate). Your trading capital stays in your
-        own CoinDCX account — this only charges the subscription fee.
+        own CoinDCX account - this only charges the subscription fee.
       </p>
     </div>
   );

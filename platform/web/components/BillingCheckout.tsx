@@ -13,6 +13,7 @@ export function BillingCheckout({ tiers, currentTier, canCancel }: {
   const [phone, setPhone] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const phoneValid = /^\d{10}$/.test(phone);
 
   function subscribe(tier: string) {
     setErr(null);
@@ -35,12 +36,16 @@ export function BillingCheckout({ tiers, currentTier, canCancel }: {
           <label htmlFor="bc-phone" className="block text-sm font-medium text-dim">Phone</label>
           <input
             id="bc-phone"
-            inputMode="tel"
+            inputMode="numeric"
+            maxLength={10}
+            autoComplete="tel"
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
             placeholder="10-digit phone"
+            aria-invalid={phone.length > 0 && !phoneValid}
             className="w-full rounded-md border border-line bg-inset px-3 py-2 font-mono text-sm text-fg placeholder-faint focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           />
+          <p className="text-xs text-faint">Required to authorize the mandate. Numbers only.</p>
         </div>
       </div>
 
@@ -70,11 +75,12 @@ export function BillingCheckout({ tiers, currentTier, canCancel }: {
               <p className="mt-3 flex-1 text-sm text-muted">{t.perk}</p>
               <button
                 type="button"
-                disabled={pending || current}
+                disabled={pending || current || !phoneValid}
                 onClick={() => subscribe(t.name)}
+                title={!phoneValid && !current ? "Enter a 10-digit phone number first" : undefined}
                 className="mt-5 inline-flex items-center justify-center rounded-md bg-accent px-3 py-2 text-sm font-medium text-accent-ink transition-colors hover:bg-accent-hi focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {current ? "Current plan" : "Subscribe"}
+                {current ? "Current plan" : pending ? "Starting…" : "Subscribe"}
               </button>
             </div>
           );
@@ -87,7 +93,10 @@ export function BillingCheckout({ tiers, currentTier, canCancel }: {
         <button
           type="button"
           disabled={pending}
-          onClick={() => start(() => cancelSubscriptionAction())}
+          onClick={() => {
+            if (!confirm("Cancel your subscription? You keep access until the end of the current period.")) return;
+            start(() => cancelSubscriptionAction());
+          }}
           className="rounded-md border border-loss/40 px-4 py-2 text-sm text-dim transition-colors hover:bg-loss/10 hover:text-loss focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-loss disabled:opacity-50"
         >
           Cancel subscription (keep access until period end)

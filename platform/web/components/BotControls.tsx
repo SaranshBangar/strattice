@@ -59,7 +59,7 @@ export function BotControls({
                 </span>
               </div>
               <div className="text-sm text-muted">
-                {live ? "Placing real orders on your account." : "Simulated — no real orders are sent."}
+                {live ? "Placing real orders on your account." : "Simulated - no real orders are sent."}
               </div>
             </div>
             <Toggle
