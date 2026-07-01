@@ -82,15 +82,14 @@ def _recent(table: str, n: int) -> list[dict]:
         con.close()
 
 
-def _signals_by_action(action: str, n: int = 500) -> list[dict]:
-    """Signals filtered to a single action (BUY/SELL), uncapped by the 30-row status
-    payload — most logged signals are HOLD, so filtering the status payload client-side
-    would surface almost nothing."""
+def _signals_by_action(action: str) -> list[dict]:
+    """ALL signals for a single action (BUY/SELL) — unlike /api/status's latest-30
+    payload (mostly HOLD, since a signal is logged every poll cycle regardless of
+    action), this is not capped: every matching row in the table is returned."""
     con = audit._conn()
     try:
         rows = con.execute(
-            "SELECT * FROM signals WHERE action=? ORDER BY ts DESC LIMIT ?",
-            (action.upper(), n),
+            "SELECT * FROM signals WHERE action=? ORDER BY ts DESC", (action.upper(),)
         ).fetchall()
         return [dict(r) for r in rows]
     finally:
