@@ -51,14 +51,30 @@ export function PriceChart({ markets }: { markets?: string[] }) {
   const up = change >= 0;
   const stroke = up ? "#16B97D" : "#F0584F";
 
-  const W = 1000, H = 260, padY = 12;
-  const lo = closes.length ? Math.min(...closes) : 0;
-  const hi = closes.length ? Math.max(...closes) : 1;
+  const W = 1000, H = 260, N = 4;
+  const loRaw = closes.length ? Math.min(...closes) : 0;
+  const hiRaw = closes.length ? Math.max(...closes) : 1;
+  // Pad the domain ~6% so ticks/gridlines frame the line instead of clipping it.
+  const padV = (hiRaw - loRaw) * 0.06 || Math.abs(hiRaw) * 0.06 || 1;
+  const lo = loRaw - padV;
+  const hi = hiRaw + padV;
   const span = hi - lo || 1;
   const x = (i: number) => (i / Math.max(1, closes.length - 1)) * W;
-  const y = (v: number) => H - padY - ((v - lo) / span) * (H - padY * 2);
+  const y = (v: number) => ((hi - v) / span) * H;
   const path = closes.map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ");
   const area = closes.length ? `${path} L${W} ${H} L0 ${H} Z` : "";
+  const yTicks = Array.from({ length: N + 1 }, (_, i) => hi - (i / N) * (hi - lo));
+  const tfmt = (t: number) => {
+    const d = new Date(t);
+    return interval.endsWith("d")
+      ? d.toLocaleDateString("en-IN", { month: "2-digit", day: "2-digit" })
+      : d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+  };
+  const xk = Math.min(5, candles.length);
+  const xTicks =
+    xk <= 1
+      ? candles.slice(0, 1).map((c) => tfmt(c.t))
+      : Array.from({ length: xk }, (_, j) => tfmt(candles[Math.round((j * (candles.length - 1)) / (xk - 1))].t));
 
   function onMove(e: React.MouseEvent) {
     const el = svgRef.current;
@@ -95,30 +111,54 @@ export function PriceChart({ markets }: { markets?: string[] }) {
         </div>
       </div>
 
-      <div className="relative p-3" ref={svgRef} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+      <div className="p-3">
         {status === "error" ? (
           <div className="grid h-[260px] place-items-center text-sm text-muted">Could not load market data. Retrying…</div>
         ) : closes.length < 2 ? (
           <div className="grid h-[260px] place-items-center text-sm text-faint">Loading candles…</div>
         ) : (
-          <>
-            <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" width="100%" style={{ height: 260, display: "block" }} role="img" aria-label={`${label(pair)} price`}>
-              <path d={area} fill={stroke} fillOpacity={0.07} />
-              <path d={path} fill="none" stroke={stroke} strokeWidth={2} vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
-              {hover != null && (
-                <line x1={x(hover)} x2={x(hover)} y1={0} y2={H} stroke="#5A6379" strokeWidth={1} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+          <div className="grid" style={{ gridTemplateColumns: "4.5rem 1fr" }}>
+            {/* Y (price) axis */}
+            <div className="relative" style={{ height: 260 }}>
+              {yTicks.map((v, i) => (
+                <span
+                  key={i}
+                  className="absolute right-2 -translate-y-1/2 whitespace-nowrap font-mono text-[10px] leading-none tabular-nums text-faint"
+                  style={{ top: `${(i / N) * 100}%` }}
+                >
+                  ₹{fmt(v)}
+                </span>
+              ))}
+            </div>
+            {/* Plot */}
+            <div className="relative" style={{ height: 260 }} ref={svgRef} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+              <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" width="100%" style={{ height: 260, display: "block" }} role="img" aria-label={`${label(pair)} price`}>
+                {yTicks.map((_, i) => {
+                  const gy = (i / N) * H;
+                  return <line key={i} x1={0} x2={W} y1={gy} y2={gy} stroke="#232838" strokeWidth={1} vectorEffect="non-scaling-stroke" />;
+                })}
+                <path d={area} fill={stroke} fillOpacity={0.07} />
+                <path d={path} fill="none" stroke={stroke} strokeWidth={2} vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+                {hover != null && (
+                  <line x1={x(hover)} x2={x(hover)} y1={0} y2={H} stroke="#5A6379" strokeWidth={1} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+                )}
+                {hover != null && <circle cx={x(hover)} cy={y(closes[hover])} r={3.5} fill={stroke} vectorEffect="non-scaling-stroke" />}
+              </svg>
+              {hoverCandle && (
+                <div className="pointer-events-none absolute left-2 top-2 rounded-md border border-line bg-bg/95 px-2.5 py-1.5 font-mono text-[11px] shadow-lg">
+                  <div className="tnum text-fg">₹{fmt(hoverCandle.c)}</div>
+                  <div className="mt-0.5 text-faint">{new Date(hoverCandle.t).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}</div>
+                </div>
               )}
-              {hover != null && <circle cx={x(hover)} cy={y(closes[hover])} r={3.5} fill={stroke} vectorEffect="non-scaling-stroke" />}
-            </svg>
-            <span className="pointer-events-none absolute right-4 top-3 font-mono text-[10px] text-faint">₹{fmt(hi)}</span>
-            <span className="pointer-events-none absolute bottom-3 right-4 font-mono text-[10px] text-faint">₹{fmt(lo)}</span>
-            {hoverCandle && (
-              <div className="pointer-events-none absolute left-4 top-3 rounded-md border border-line bg-bg/95 px-2.5 py-1.5 font-mono text-[11px] shadow-lg">
-                <div className="tnum text-fg">₹{fmt(hoverCandle.c)}</div>
-                <div className="mt-0.5 text-faint">{new Date(hoverCandle.t).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}</div>
-              </div>
-            )}
-          </>
+            </div>
+            {/* Corner + X (time) axis */}
+            <div />
+            <div className="flex justify-between gap-1 overflow-hidden pt-1.5 font-mono text-[10px] tabular-nums text-faint">
+              {xTicks.map((t, i) => (
+                <span key={i} className="shrink-0 whitespace-nowrap">{t}</span>
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </section>

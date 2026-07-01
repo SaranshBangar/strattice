@@ -6,7 +6,7 @@ import { StatCard } from "@/components/StatCard";
 import { DataTable, type Cell } from "@/components/DataTable";
 import { TradesTable, type Trade } from "@/components/TradesTable";
 import { PriceChart } from "@/components/PriceChart";
-import { AutoRefresh } from "@/components/AutoRefresh";
+import { ProToggle } from "@/components/ProToggle";
 import { EquityCurve, PnlBars, WinRateDonut, Sparkline } from "@/components/charts";
 import { strategyLabel } from "@/lib/strategies";
 
@@ -17,6 +17,22 @@ function inr(n: number) { return `₹${fmt(n)}`; }
 function num(n: number): Cell { return { v: fmt(n), align: "right" }; }
 function shortDay(d: string) { return d?.slice(5) ?? d; } // MM-DD
 function shortTs(ts: string) { return ts?.slice(0, 16).replace("T", " ") ?? ""; }
+
+// Evenly pick k items (endpoints included) from an array — for axis tick labels.
+function sample<T>(arr: T[], k: number): T[] {
+  if (arr.length <= k) return arr;
+  return Array.from({ length: k }, (_, j) => arr[Math.round((j * (arr.length - 1)) / (k - 1))]);
+}
+
+function Metric({ label, value, tone = "default" }: { label: string; value: string; tone?: "good" | "bad" | "default" }) {
+  const c = tone === "good" ? "text-gain" : tone === "bad" ? "text-loss" : "text-fg";
+  return (
+    <div className="rounded-lg border border-line bg-panel px-3 py-2.5">
+      <div className="font-mono text-[10px] uppercase tracking-wider text-faint">{label}</div>
+      <div className={`mt-1 font-mono text-sm font-semibold tabular-nums ${c}`}>{value}</div>
+    </div>
+  );
+}
 
 export default async function DashboardPage() {
   const user = await getUser();
@@ -37,16 +53,32 @@ export default async function DashboardPage() {
   const decided = stats.wins + stats.losses;
   const userMarkets = Array.from(new Set(strategies.map((s) => s.market)));
 
+  // --- Pro-view technical metrics (computed from data already loaded above) ---
+  const equityXTicks = sample(series.map((s) => shortTs(s.ts)), 5);
+  // Max drawdown: largest peak-to-trough drop across the equity curve.
+  let peak = -Infinity;
+  let maxDD = 0;
+  const ddSeries = equityVals.map((v) => {
+    peak = Math.max(peak, v);
+    const dd = peak > 0 ? ((peak - v) / peak) * 100 : 0;
+    maxDD = Math.max(maxDD, dd);
+    return -dd; // plotted as a non-positive line
+  });
+  const dv = daily.map((d) => d.pnl);
+  const grossWin = dv.filter((v) => v > 0).reduce((a, b) => a + b, 0);
+  const grossLoss = Math.abs(dv.filter((v) => v < 0).reduce((a, b) => a + b, 0));
+  const profitFactor = grossLoss ? grossWin / grossLoss : grossWin > 0 ? Infinity : 0;
+  const bestDay = dv.length ? Math.max(...dv) : 0;
+  const worstDay = dv.length ? Math.min(...dv) : 0;
+  const avgDay = dv.length ? dv.reduce((a, b) => a + b, 0) / dv.length : 0;
+  const vol = dv.length > 1 ? Math.sqrt(dv.reduce((a, b) => a + (b - avgDay) ** 2, 0) / (dv.length - 1)) : 0;
+  const winRate = decided ? (stats.wins / decided) * 100 : 0;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-display text-2xl font-semibold tracking-tight">Dashboard</h1>
-        <div className="flex items-center gap-2">
-          <AutoRefresh />
-          <span className="rounded-md border border-line bg-panel px-3 py-1 font-mono text-xs uppercase tracking-wider text-dim">
-            {tier.name} plan
-          </span>
-        </div>
+        <ProToggle />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -76,6 +108,21 @@ export default async function DashboardPage() {
         />
       </div>
 
+      {/* Pro-view technical strip — hidden until "Pro view" is toggled on. */}
+      <div className="hidden space-y-2 [html.pro_&]:block">
+        <h2 className="font-mono text-[11px] uppercase tracking-wider text-faint">Technical metrics · last {daily.length}d</h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
+          <Metric label="Win rate" value={decided ? `${winRate.toFixed(0)}%` : "-"} />
+          <Metric label="Max drawdown" value={`-${maxDD.toFixed(1)}%`} tone={maxDD > 0 ? "bad" : "default"} />
+          <Metric label="Profit factor" value={profitFactor === Infinity ? "∞" : profitFactor.toFixed(2)} tone={profitFactor >= 1 ? "good" : profitFactor > 0 ? "bad" : "default"} />
+          <Metric label="Avg / day" value={inr(avgDay)} tone={avgDay < 0 ? "bad" : avgDay > 0 ? "good" : "default"} />
+          <Metric label="Best day" value={inr(bestDay)} tone={bestDay > 0 ? "good" : "default"} />
+          <Metric label="Worst day" value={inr(worstDay)} tone={worstDay < 0 ? "bad" : "default"} />
+          <Metric label="σ / day" value={inr(vol)} />
+          <Metric label="Trades" value={String(stats.total)} />
+        </div>
+      </div>
+
       {bot.last_error && (
         <p className="rounded-lg border border-loss/40 bg-loss/10 px-3 py-2 text-sm text-loss">
           Engine error: {bot.last_error}
@@ -96,11 +143,7 @@ export default async function DashboardPage() {
                 <span className="font-mono text-[11px] text-faint">{series.length} snapshots</span>
               </div>
               <div className="p-4">
-                <EquityCurve
-                  points={equityVals}
-                  fmt={inr}
-                  labels={series.length > 1 ? [shortTs(series[0].ts), shortTs(series[series.length - 1].ts)] : undefined}
-                />
+                <EquityCurve points={equityVals} fmt={inr} xTicks={equityXTicks} />
               </div>
             </section>
 
@@ -113,6 +156,17 @@ export default async function DashboardPage() {
               </div>
             </section>
           </div>
+
+          {/* Drawdown curve — pro-view only. */}
+          <section className="hidden rounded-lg border border-line bg-panel [html.pro_&]:block">
+            <div className="flex items-center justify-between border-b border-line px-4 py-3">
+              <h3 className="font-display text-sm font-semibold tracking-tight text-dim">Drawdown</h3>
+              <span className="font-mono text-[11px] text-faint">peak-to-trough · max -{maxDD.toFixed(1)}%</span>
+            </div>
+            <div className="p-4">
+              <EquityCurve points={ddSeries.length > 1 ? ddSeries : []} fmt={(n) => `${n.toFixed(1)}%`} xTicks={equityXTicks} />
+            </div>
+          </section>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <section className="rounded-lg border border-line bg-panel lg:col-span-2">

@@ -43,12 +43,9 @@ export function Nav() {
           onClick={() => setOpen(false)}
           className="flex items-center gap-2.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
-          <span className="grid h-7 w-7 place-items-center rounded-sm bg-accent font-display text-sm font-bold text-accent-ink">
-            C
-          </span>
-          <span className="font-display text-sm font-semibold tracking-tight text-fg">
-            CoinDCX <span className="font-normal text-muted">Bots</span>
-          </span>
+          {/* eslint-disable-next-line @next/next/no-img-element -- static SVG, no optimization needed */}
+          <img src="/strattice-logo-transparent.svg" alt="Strattice" className="h-7 w-7" width={28} height={28} />
+          <span className="font-display text-sm font-semibold tracking-tight text-fg">strattice</span>
         </Link>
 
         {signedIn ? (

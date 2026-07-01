@@ -22,13 +22,55 @@ function ChartEmpty({ height, label }: { height: number; label: string }) {
   );
 }
 
-function Frame({ children, corners }: { children: ReactNode; corners?: ReactNode }) {
+/**
+ * Axis chrome around a stretched (preserveAspectRatio="none") SVG plot: a left
+ * Y-gutter with tick values aligned to the plot's gridlines, and a bottom X-gutter
+ * with tick labels. The plot's own gridlines must sit at the same even fractions
+ * (i / (yTicks.length - 1)) so labels line up. Y ticks run top → bottom.
+ */
+export function ChartFrame({
+  height,
+  yTicks,
+  xTicks,
+  fmtY,
+  children,
+}: {
+  height: number;
+  yTicks: number[];
+  xTicks: string[];
+  fmtY: (n: number) => string;
+  children: ReactNode;
+}) {
   return (
-    <div className="relative">
-      {children}
-      {corners}
+    <div className="grid" style={{ gridTemplateColumns: "3.75rem 1fr" }}>
+      {/* Y axis */}
+      <div className="relative" style={{ height }}>
+        {yTicks.map((v, i) => (
+          <span
+            key={i}
+            className="absolute right-2 -translate-y-1/2 whitespace-nowrap font-mono text-[10px] leading-none tabular-nums text-faint"
+            style={{ top: `${(i / (yTicks.length - 1)) * 100}%` }}
+          >
+            {fmtY(v)}
+          </span>
+        ))}
+      </div>
+      {/* Plot */}
+      <div style={{ height }}>{children}</div>
+      {/* Corner + X axis */}
+      <div />
+      <div className="flex justify-between gap-1 overflow-hidden pt-1.5 font-mono text-[10px] tabular-nums text-faint">
+        {xTicks.map((t, i) => (
+          <span key={i} className="shrink-0 whitespace-nowrap">{t}</span>
+        ))}
+      </div>
     </div>
   );
+}
+
+// Evenly spaced tick values from hi (top) down to lo (bottom), inclusive.
+function ticksDown(lo: number, hi: number, n = 4) {
+  return Array.from({ length: n + 1 }, (_, i) => hi - (i / n) * (hi - lo));
 }
 
 /** Filled line chart for a value that trends over time (e.g. account equity). */
@@ -36,54 +78,45 @@ export function EquityCurve({
   points,
   height = 200,
   fmt = (n: number) => n.toFixed(2),
-  labels,
+  xTicks = [],
 }: {
   points: number[];
   height?: number;
   fmt?: (n: number) => string;
-  labels?: [string, string]; // [firstLabel, lastLabel] shown under the plot
+  xTicks?: string[]; // time labels sampled left → right under the plot
 }) {
   if (points.length < 2) return <ChartEmpty height={height} label="Not enough history yet." />;
   const W = 1000;
   const H = 300;
-  const padY = 10;
+  const N = 4; // gridline / tick count
   const min = Math.min(...points);
   const max = Math.max(...points);
-  const span = max - min || Math.abs(max) || 1;
+  // Pad the domain ~6% so the line doesn't graze the top/bottom edges; axis ticks
+  // are computed over the padded domain so labels align with the gridlines.
+  const pad = (max - min) * 0.06 || Math.abs(max) * 0.06 || 1;
+  const lo = min - pad;
+  const hi = max + pad;
+  const span = hi - lo;
   const x = (i: number) => (i / (points.length - 1)) * W;
-  const y = (v: number) => H - padY - ((v - min) / span) * (H - padY * 2);
+  const y = (v: number) => ((hi - v) / span) * H;
   const path = points.map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ");
   const area = `${path} L${W} ${H} L0 ${H} Z`;
   const up = points[points.length - 1] >= points[0];
   const stroke = up ? C.gain : C.loss;
-  const lastX = x(points.length - 1);
-  const lastY = y(points[points.length - 1]);
-  const midV = (min + max) / 2;
+  const yTicks = ticksDown(lo, hi, N);
 
   return (
-    <Frame
-      corners={
-        <>
-          <span className="pointer-events-none absolute right-2 top-1 font-mono text-[10px] text-faint">{fmt(max)}</span>
-          <span className="pointer-events-none absolute bottom-6 right-2 font-mono text-[10px] text-faint">{fmt(min)}</span>
-        </>
-      }
-    >
+    <ChartFrame height={height} yTicks={yTicks} xTicks={xTicks} fmtY={fmt}>
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" width="100%" style={{ height, display: "block" }} role="img" aria-label="Equity over time">
-        {[min, midV, max].map((v, gi) => (
-          <line key={gi} x1={0} x2={W} y1={y(v)} y2={y(v)} stroke={C.line} strokeWidth={1} vectorEffect="non-scaling-stroke" />
-        ))}
+        {yTicks.map((_, i) => {
+          const gy = (i / N) * H;
+          return <line key={i} x1={0} x2={W} y1={gy} y2={gy} stroke={C.line} strokeWidth={1} vectorEffect="non-scaling-stroke" />;
+        })}
         <path d={area} fill={stroke} fillOpacity={0.08} />
         <path d={path} fill="none" stroke={stroke} strokeWidth={2} vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
-        <circle cx={lastX} cy={lastY} r={3.5} fill={stroke} vectorEffect="non-scaling-stroke" />
+        <circle cx={x(points.length - 1)} cy={y(points[points.length - 1])} r={3.5} fill={stroke} vectorEffect="non-scaling-stroke" />
       </svg>
-      {labels && (
-        <div className="mt-1 flex justify-between font-mono text-[10px] text-faint">
-          <span>{labels[0]}</span>
-          <span>{labels[1]}</span>
-        </div>
-      )}
-    </Frame>
+    </ChartFrame>
   );
 }
 
@@ -100,27 +133,30 @@ export function PnlBars({
   if (data.length === 0) return <ChartEmpty height={height} label="No closed trades yet." />;
   const W = 1000;
   const H = 300;
-  const padY = 8;
+  const N = 4; // gridline / tick count
   const vals = data.map((d) => d.value);
   const max = Math.max(0, ...vals);
   const min = Math.min(0, ...vals);
   const span = max - min || 1;
-  const zeroY = padY + (max / span) * (H - padY * 2);
   const n = data.length;
   const slot = W / n;
   const bw = Math.min(slot * 0.62, 46);
-  const y = (v: number) => padY + ((max - v) / span) * (H - padY * 2);
+  const y = (v: number) => ((max - v) / span) * H;
+  const zeroY = y(0);
+  const yTicks = ticksDown(min, max, N);
+  // X labels: up to 6 evenly-sampled day labels, endpoints included.
+  const k = Math.min(6, n);
+  const xTicks =
+    k <= 1 ? [data[0].label] : Array.from({ length: k }, (_, j) => data[Math.round((j * (n - 1)) / (k - 1))].label);
 
   return (
-    <Frame
-      corners={
-        <>
-          <span className="pointer-events-none absolute right-2 top-1 font-mono text-[10px] text-faint">{fmt(max)}</span>
-          {min < 0 && <span className="pointer-events-none absolute bottom-1 right-2 font-mono text-[10px] text-faint">{fmt(min)}</span>}
-        </>
-      }
-    >
+    <ChartFrame height={height} yTicks={yTicks} xTicks={xTicks} fmtY={fmt}>
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" width="100%" style={{ height, display: "block" }} role="img" aria-label="Daily profit and loss">
+        {yTicks.map((v, i) => {
+          const gy = (i / N) * H;
+          // Zero baseline drawn brighter than the other gridlines.
+          return <line key={i} x1={0} x2={W} y1={gy} y2={gy} stroke={Math.abs(v) < 1e-9 ? C.faint : C.line} strokeWidth={1} vectorEffect="non-scaling-stroke" />;
+        })}
         <line x1={0} x2={W} y1={zeroY} y2={zeroY} stroke={C.faint} strokeWidth={1} vectorEffect="non-scaling-stroke" />
         {data.map((d, i) => {
           const cx = i * slot + slot / 2;
@@ -133,7 +169,7 @@ export function PnlBars({
           );
         })}
       </svg>
-    </Frame>
+    </ChartFrame>
   );
 }
 

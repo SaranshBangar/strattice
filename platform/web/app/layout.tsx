@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Archivo, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import { Nav } from "@/components/Nav";
@@ -19,7 +19,17 @@ const mono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "Strattice",
   description: "Run algorithmic trading strategies on your own CoinDCX account.",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16.png", sizes: "16x16", type: "image/png" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
 };
+
+export const viewport: Viewport = { themeColor: "#0a0a0a" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
