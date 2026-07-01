@@ -270,21 +270,73 @@ function Trades({ s }: { s: Status }) {
 }
 
 const PAGE = 10;
+type SignalFilter = "all" | "buy" | "sell";
+
+// Action strings from the bot are uppercase ("BUY"/"SELL"/"HOLD" — see
+// bot/strategies/base.py's decide() contract), so normalize case before comparing.
+const cls = (a: string) => {
+  const v = a.toLowerCase();
+  return v === "buy" ? "green" : v === "sell" ? "red" : "yellow";
+};
+const rowCls = (a: string) => {
+  const v = a.toLowerCase();
+  return v === "buy" ? "sig-buy" : v === "sell" ? "sig-sell" : "sig-hold";
+};
 
 function Signals({ s }: { s: Status }) {
   const [page, setPage] = useState(0);
-  const rows = s.signals ?? [];
-  if (rows.length === 0)
-    return <div className="card"><p className="center muted" style={{ padding: 14 }}>No signals yet</p></div>;
+  const [filter, setFilter] = useState<SignalFilter>("all");
+  const [filtered, setFiltered] = useState<Signal[] | null>(null);
 
-  const pages = Math.ceil(rows.length / PAGE);
-  const p = Math.min(page, pages - 1); // clamp if list shrank since last render
-  const slice = rows.slice(p * PAGE, p * PAGE + PAGE);
-  const cls = (a: string) => (a === "buy" ? "green" : a === "sell" ? "red" : "yellow");
-  const rowCls = (a: string) => (a === "buy" ? "sig-buy" : a === "sell" ? "sig-sell" : "sig-hold");
+  // Most logged signals are HOLD (engine.py logs one every poll cycle regardless of
+  // action), so the latest-30 status payload has too few BUY/SELL rows to filter
+  // client-side. When a filter is active, fetch the fuller history from the bot
+  // instead, self-polling like MarketChart does for its own data.
+  useEffect(() => {
+    if (filter === "all") {
+      setFiltered(null);
+      return;
+    }
+    let live = true;
+    const load = () =>
+      fetch(`/api/signals?action=${filter}`)
+        .then((r) => r.json())
+        .then((d) => live && setFiltered(Array.isArray(d.signals) ? d.signals : []))
+        .catch(() => {});
+    load();
+    const id = setInterval(load, 10000);
+    return () => { live = false; clearInterval(id); };
+  }, [filter]);
+
+  useEffect(() => setPage(0), [filter]);
+
+  const rows = filter === "all" ? (s.signals ?? []) : (filtered ?? []);
 
   return (
     <div className="card">
+      <div className="tabs">
+        {(["all", "buy", "sell"] as SignalFilter[]).map((f) => (
+          <button key={f} className={`tab ${f === filter ? "active" : ""}`} onClick={() => setFilter(f)}>
+            {f === "all" ? "All" : f === "buy" ? "Buy" : "Sell"}
+          </button>
+        ))}
+      </div>
+      {rows.length === 0 ? (
+        <p className="center muted" style={{ padding: 14 }}>No signals yet</p>
+      ) : (
+        <SignalsTable rows={rows} page={page} setPage={setPage} />
+      )}
+    </div>
+  );
+}
+
+function SignalsTable({ rows, page, setPage }: { rows: Signal[]; page: number; setPage: (p: number) => void }) {
+  const pages = Math.ceil(rows.length / PAGE);
+  const p = Math.min(page, pages - 1); // clamp if list shrank since last render
+  const slice = rows.slice(p * PAGE, p * PAGE + PAGE);
+
+  return (
+    <>
       <table className="tbl">
         <thead>
           <tr><th>Date / Time</th><th>Coin</th><th style={{ textAlign: "right" }}>Price</th><th style={{ textAlign: "right" }}>Decision</th></tr>
@@ -307,7 +359,7 @@ function Signals({ s }: { s: Status }) {
           <button onClick={() => setPage(p + 1)} disabled={p >= pages - 1}>Next ›</button>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
