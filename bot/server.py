@@ -82,6 +82,21 @@ def _recent(table: str, n: int) -> list[dict]:
         con.close()
 
 
+def _signals_by_action(action: str, n: int = 500) -> list[dict]:
+    """Signals filtered to a single action (BUY/SELL), uncapped by the 30-row status
+    payload — most logged signals are HOLD, so filtering the status payload client-side
+    would surface almost nothing."""
+    con = audit._conn()
+    try:
+        rows = con.execute(
+            "SELECT * FROM signals WHERE action=? ORDER BY ts DESC LIMIT ?",
+            (action.upper(), n),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        con.close()
+
+
 _NAME_RE = re.compile(r'^\s*-\s+name:\s*["\']?{}["\']?\s*(#.*)?$')
 _ITEM_RE = re.compile(r'^\s*-\s+name:\s*')
 _EN_RE = re.compile(r'^(\s*)enabled:\s*(?:true|false)(.*)$')
@@ -125,7 +140,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         u = urlparse(self.path)
-        if u.path not in ("/api/status", "/health"):
+        if u.path not in ("/api/status", "/api/signals", "/health"):
             return self._send(404, {"error": "not found"})
         if u.path == "/health":
             return self._send(200, {"ok": True})
@@ -133,6 +148,11 @@ class Handler(BaseHTTPRequestHandler):
         if not TOKEN or tok != TOKEN:
             return self._send(401, {"error": "unauthorized"})
         try:
+            if u.path == "/api/signals":
+                action = parse_qs(u.query).get("action", [""])[0].lower()
+                if action not in ("buy", "sell"):
+                    return self._send(400, {"error": "action must be 'buy' or 'sell'"})
+                return self._send(200, {"signals": _signals_by_action(action)})
             self._send(200, _payload())
         except Exception as e:                    # never 500 silently — surface it
             self._send(500, {"error": str(e)})
