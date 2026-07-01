@@ -6,6 +6,7 @@ The exact byte string that is signed is the exact byte string that is POSTed.
 import hashlib
 import hmac
 import json
+import logging
 import time
 
 import requests
@@ -13,6 +14,8 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from . import config
+
+log = logging.getLogger(__name__)
 
 API = "https://api.coindcx.com"
 PUBLIC = "https://public.coindcx.com"
@@ -51,7 +54,18 @@ class Client:
             timeout=20,
         )
         r.raise_for_status()
-        data = r.json()
+        # CoinDCX public API intermittently returns 200 with an empty/non-JSON body;
+        # treat as a transient blip and skip this poll cycle rather than crashing.
+        text = r.text.strip()
+        if not text:
+            log.warning("empty candles response for %s %s; skipping cycle", pair, interval)
+            return []
+        try:
+            data = r.json()
+        except ValueError:
+            log.warning("non-JSON candles response for %s %s: %.80r; skipping cycle",
+                        pair, interval, text)
+            return []
         return list(reversed(data))  # oldest-first for strategy math
 
     def markets(self) -> dict:
