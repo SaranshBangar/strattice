@@ -110,6 +110,20 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
         </button>
       </form>
 
+      <div className="mt-4 flex items-center gap-3 text-xs text-faint">
+        <span className="h-px flex-1 bg-line" />
+        or
+        <span className="h-px flex-1 bg-line" />
+      </div>
+
+      <button
+        type="button"
+        onClick={() => signIn.social({ provider: "google", callbackURL: "/dashboard" })}
+        className="mt-4 w-full rounded-md border border-line bg-inset px-4 py-2 text-sm font-medium text-fg transition-colors hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        Continue with Google
+      </button>
+
       <p className="mt-4 text-center text-sm text-muted">
         {mode === "sign-up" ? (
           <>
