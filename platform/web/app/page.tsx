@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { TIERS } from "@/lib/entitlements";
 import { PricingGrid } from "@/components/PricingGrid";
+import { HeroCta } from "@/components/HeroCta";
 
 const ORDER = ["free", "starter", "plus", "pro", "max"] as const;
 const PERKS: Record<string, string> = {
@@ -51,20 +51,7 @@ export default function Home() {
             Subscribe to a strategy and let bots trade for you. Your funds never leave CoinDCX -
             we hold the keys to run the strategies, nothing else.
           </p>
-          <div className="mt-8 flex flex-wrap items-center gap-3">
-            <Link
-              href="/sign-up"
-              className="rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-accent-ink transition-colors hover:bg-accent-hi focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            >
-              Get started free
-            </Link>
-            <Link
-              href="#pricing"
-              className="rounded-md border border-line px-5 py-2.5 text-sm font-medium text-dim transition-colors hover:bg-panel hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            >
-              See plans
-            </Link>
-          </div>
+          <HeroCta />
         </div>
 
         {/* Signature: the strategy ledger - real templates, terminal readout */}

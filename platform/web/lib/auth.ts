@@ -15,5 +15,11 @@ export const auth = betterAuth({
   },
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL: process.env.BETTER_AUTH_URL,
+  // Origins allowed to call the auth API. baseURL is prod, so local dev must be
+  // whitelisted here or Better Auth rejects the request with "invalid origin".
+  trustedOrigins: [
+    process.env.BETTER_AUTH_URL,
+    "http://localhost:3000",
+  ].filter(Boolean) as string[],
   plugins: [dash()],
 });

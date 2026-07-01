@@ -141,7 +141,7 @@ export async function setBotState(userId: string, patch: { active?: boolean; liv
 // ---------- dashboard read model ----------
 export async function recentTrades(userId: string, n = 30) {
   return d1Query(
-    "select strategy, market, side, qty, price, notional, status, realized_pnl, tds, ts from trades where user_id = ? order by ts desc limit ?",
+    "select strategy, market, side, qty, price, notional, status, realized_pnl, tds, dry_run, ts from trades where user_id = ? order by ts desc limit ?",
     [userId, n]);
 }
 export async function openPositions(userId: string) {
@@ -151,4 +151,121 @@ export async function latestEquity(userId: string) {
   return d1First<{ equity: number; free: number; realized_today: number; trades_today: number; ts: string }>(
     "select equity, free, realized_today, trades_today, ts from equity_snapshots where user_id = ? order by ts desc limit 1",
     [userId]);
+}
+
+// ---------- analytics read model (charts) ----------
+export interface EquityPoint { ts: string; equity: number; free: number; realized_today: number }
+/** Equity snapshots in chronological order for the equity curve. */
+export async function equitySeries(userId: string, limit = 240): Promise<EquityPoint[]> {
+  const rows = await d1Query<EquityPoint>(
+    "select ts, equity, free, realized_today from equity_snapshots where user_id = ? order by ts desc limit ?",
+    [userId, limit]);
+  return rows.reverse();
+}
+
+export interface DailyPnl { day: string; pnl: number; trades: number }
+/** Realized P&L grouped by calendar day (UTC), chronological. */
+export async function dailyPnl(userId: string, days = 30): Promise<DailyPnl[]> {
+  const rows = await d1Query<DailyPnl>(
+    `select substr(ts,1,10) as day, coalesce(sum(realized_pnl),0) as pnl, count(*) as trades
+     from trades where user_id = ? group by substr(ts,1,10) order by day desc limit ?`,
+    [userId, days]);
+  return rows.reverse();
+}
+
+export interface StrategyStat { strategy: string; trades: number; pnl: number; wins: number; losses: number }
+export async function strategyBreakdown(userId: string): Promise<StrategyStat[]> {
+  return d1Query<StrategyStat>(
+    `select strategy, count(*) as trades, coalesce(sum(realized_pnl),0) as pnl,
+            sum(case when realized_pnl > 0 then 1 else 0 end) as wins,
+            sum(case when realized_pnl < 0 then 1 else 0 end) as losses
+     from trades where user_id = ? group by strategy order by pnl desc`,
+    [userId]);
+}
+
+export interface TradeStats {
+  total: number; wins: number; losses: number; pnl: number; tds: number;
+  best: number; worst: number; volume: number;
+}
+/** All-time trade aggregates for the dashboard header. */
+// ---------- admin (owner-only; every caller re-checks requireAdmin first) ----------
+export interface AdminUser {
+  id: string; email: string; name: string | null; created_at: number | null;
+  tier: string; status: string; period_end: number | null;
+  bot_active: number; bot_live: number; last_heartbeat: number | null;
+  linked: number; trades: number;
+}
+
+const NOW_S = "cast(strftime('%s','now') as integer)";
+const PAYING = `s.status in ('active','cancelled') and s.period_end is not null and s.period_end > ${NOW_S}`;
+
+export async function listUsersAdmin(search = "", page = 1, pageSize = 20): Promise<{ rows: AdminUser[]; total: number; page: number; pageSize: number }> {
+  const p = Math.max(1, page);
+  const size = Math.min(100, Math.max(5, pageSize));
+  const like = `%${search.trim().toLowerCase()}%`;
+  const countRow = await d1First<{ n: number }>(
+    "select count(*) as n from user where lower(email) like ?", [like]);
+  const rows = await d1Query<AdminUser>(
+    `select u.id, u.email, u.name, u.createdAt as created_at,
+            coalesce(s.tier,'free') as tier, coalesce(s.status,'-') as status, s.period_end,
+            coalesce(b.active,0) as bot_active, coalesce(b.live,0) as bot_live, b.last_heartbeat,
+            (case when c.user_id is not null then 1 else 0 end) as linked,
+            (select count(*) from trades t where t.user_id = u.id) as trades
+     from user u
+     left join subscriptions s on s.user_id = u.id
+     left join bot_state b on b.user_id = u.id
+     left join exchange_credentials c on c.user_id = u.id
+     where lower(u.email) like ?
+     order by u.createdAt desc
+     limit ? offset ?`,
+    [like, size, (p - 1) * size]);
+  return { rows, total: countRow?.n ?? 0, page: p, pageSize: size };
+}
+
+export interface AdminStats { users: number; paying: number; activeBots: number; liveBots: number; trades: number; byTier: Record<string, number> }
+export async function adminStats(): Promise<AdminStats> {
+  const [tot, pay, bots, trades, tiers] = await Promise.all([
+    d1First<{ n: number }>("select count(*) as n from user"),
+    d1First<{ n: number }>(`select count(*) as n from subscriptions s where ${PAYING}`),
+    d1First<{ active: number; live: number }>("select coalesce(sum(active),0) as active, coalesce(sum(case when active=1 and live=1 then 1 else 0 end),0) as live from bot_state"),
+    d1First<{ n: number }>("select count(*) as n from trades"),
+    d1Query<{ tier: string; n: number }>(`select s.tier as tier, count(*) as n from subscriptions s where ${PAYING} group by s.tier`),
+  ]);
+  const byTier: Record<string, number> = {};
+  for (const t of tiers) byTier[t.tier] = t.n;
+  return { users: tot?.n ?? 0, paying: pay?.n ?? 0, activeBots: bots?.active ?? 0, liveBots: bots?.live ?? 0, trades: trades?.n ?? 0, byTier };
+}
+
+/** Manually grant/downgrade a plan. Paid tiers get a 30-day comp window; 'free' clears it. */
+export async function adminSetTier(userId: string, tier: string) {
+  const free = tier === "free";
+  const periodEnd = free ? null : Math.floor(Date.now() / 1000) + 30 * 24 * 3600;
+  await d1Query(
+    `insert into subscriptions(user_id, tier, status, period_end, updated_at)
+     values (?,?, 'active', ?, datetime('now'))
+     on conflict(user_id) do update set tier=excluded.tier, status='active',
+       period_end=excluded.period_end, updated_at=datetime('now')`,
+    [userId, tier, periodEnd]);
+}
+
+/** Owner kill-switch: force a user's bot off (supervisor stops it within one poll). */
+export async function adminDisableBot(userId: string) {
+  await d1Query(
+    `insert into bot_state(user_id, active, live) values (?,0,0)
+     on conflict(user_id) do update set active=0, live=0, updated_at=datetime('now')`,
+    [userId]);
+}
+
+export async function tradeStats(userId: string): Promise<TradeStats> {
+  const row = await d1First<TradeStats>(
+    `select count(*) as total,
+            sum(case when realized_pnl > 0 then 1 else 0 end) as wins,
+            sum(case when realized_pnl < 0 then 1 else 0 end) as losses,
+            coalesce(sum(realized_pnl),0) as pnl,
+            coalesce(sum(tds),0) as tds,
+            coalesce(max(realized_pnl),0) as best,
+            coalesce(min(realized_pnl),0) as worst,
+            coalesce(sum(notional),0) as volume
+     from trades where user_id = ?`, [userId]);
+  return row ?? { total: 0, wins: 0, losses: 0, pnl: 0, tds: 0, best: 0, worst: 0, volume: 0 };
 }

@@ -3,8 +3,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "@/lib/auth-client";
+import { isAdmin } from "@/lib/admin";
 
-const LINKS: [string, string][] = [
+const BASE_LINKS: [string, string][] = [
   ["/dashboard", "Dashboard"],
   ["/strategies", "Strategies"],
   ["/billing", "Billing"],
@@ -17,6 +18,9 @@ export function Nav() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const signedIn = !!data?.user;
+  const LINKS: [string, string][] = isAdmin(data?.user?.email)
+    ? [...BASE_LINKS, ["/admin", "Admin"]]
+    : BASE_LINKS;
 
   async function handleSignOut() {
     setOpen(false);

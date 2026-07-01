@@ -1,10 +1,10 @@
 "use server";
 import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
-import { getUser, requireUserId } from "@/lib/session";
+import { getUser, requireUserId, requireAdmin } from "@/lib/session";
 import * as q from "@/lib/queries";
 import { createSubscription, cancelSubscription, cashfreeMode } from "@/lib/cashfree";
-import { PAID_TIERS, type TierName } from "@/lib/entitlements";
+import { PAID_TIERS, TIERS, type TierName } from "@/lib/entitlements";
 
 export async function saveCredentialsAction(formData: FormData) {
   const userId = await requireUserId();
@@ -69,4 +69,18 @@ export async function cancelSubscriptionAction() {
   // keep access until period_end (grace); webhook will also confirm.
   await q.setSubscriptionStatus(sub.cashfree_sub_id, "cancelled");
   revalidatePath("/billing");
+}
+
+// ---------- admin (owner-only) ----------
+export async function adminSetTierAction(userId: string, tier: string) {
+  await requireAdmin();
+  if (!(tier in TIERS)) throw new Error("invalid tier");
+  await q.adminSetTier(userId, tier);
+  revalidatePath("/admin");
+}
+
+export async function adminDisableBotAction(userId: string) {
+  await requireAdmin();
+  await q.adminDisableBot(userId);
+  revalidatePath("/admin");
 }
