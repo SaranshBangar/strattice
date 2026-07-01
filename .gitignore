@@ -10,3 +10,4 @@ KILL
 .ssh
 .ssh.pub
 *.stackdump
+.wrangler/
