@@ -1,4 +1,4 @@
-# CoinDCX Bots — Platform setup
+# Strattice — Platform setup
 
 Multi-tenant SaaS built on top of the single-tenant trading bot in `../bot/`. Users register,
 link their **own** CoinDCX API keys, pick strategies, subscribe to a plan, and watch bots trade
@@ -24,9 +24,9 @@ fee.
                                     └───────────┘                 (trades via their keys)
 ```
 
-**The D1 database is the only thing the two runtimes share.** The app writes *desired state*
-(tier, strategies, bot on/off); the supervisor reads it, runs the bots, and writes *observed
-state* (trades, positions, equity) back for the dashboard. They never call each other.
+**The D1 database is the only thing the two runtimes share.** The app writes _desired state_
+(tier, strategies, bot on/off); the supervisor reads it, runs the bots, and writes _observed
+state_ (trades, positions, equity) back for the dashboard. They never call each other.
 
 Why two runtimes: the bot reads its keys + LIVE/DRY_RUN flag as **process globals**, so each
 user must be its own OS process. The supervisor manages those processes; Vercel/serverless
@@ -110,6 +110,7 @@ cp ../.env.example ../.env               # fill CF_*, ENCRYPTION_MASTER_KEY
 ```
 
 `platform/.env`:
+
 ```
 CF_ACCOUNT_ID=...
 CF_D1_DATABASE_ID=...
@@ -119,16 +120,19 @@ SUPERVISOR_POLL=30
 ```
 
 Verify the logic without any infra:
+
 ```bash
 python crypto.py && python entitlements.py && python config_gen.py
 python ../../platform/worker/selfcheck.py   # generated config boots the real engine
 ```
 
 DRY_RUN proof with 2 demo users (needs D1 + internet for public candles; no real CoinDCX keys):
+
 ```bash
 python seed.py            # inserts free-demo + max-demo, DRY_RUN, dummy encrypted keys
 python supervisor.py      # spawns 2 engines; writes data/users/<uid>/{config.yaml,bot.db}
 ```
+
 Expect: free user runs 1 strategy capped at 5 trades/day; max user runs 3 at 100/day. Flipping
 `bot_state.active`, `user_strategies.enabled`, or `subscriptions.tier` in D1 restarts that user's
 engine within one poll. Trades land in the D1 `trades` table with the right `user_id`.
@@ -147,6 +151,7 @@ cp .env.example .env.local               # fill everything below
 ```
 
 `platform/web/.env.local`:
+
 ```
 BETTER_AUTH_SECRET=...                    # the node-generated secret
 BETTER_AUTH_URL=http://localhost:3000     # your app's public URL in prod
@@ -161,6 +166,7 @@ CASHFREE_API_VERSION=2025-01-01
 ```
 
 Run + verify:
+
 ```bash
 npm run typecheck
 npm run check:crypto         # AES-GCM wire format matches Python (python must be on PATH)
@@ -215,15 +221,15 @@ Plans are created **inline** per subscription (no separate plan registry to main
 
 ## 11. Troubleshooting
 
-| Symptom | Likely cause |
-|--------|--------------|
-| Supervisor: "set CF_ACCOUNT_ID..." | `platform/.env` not loaded / missing D1 vars |
-| `npm run check:crypto` fails | `ENCRYPTION_MASTER_KEY` differs between sides, or python not on PATH |
-| Engine subprocess exits immediately | bad per-user config; check `data/users/<uid>/bot.log` |
-| Dashboard shows nothing after enabling bot | supervisor not running, or user has no linked keys |
-| Webhook 401 | signature mismatch — wrong `CASHFREE_SECRET_KEY` or body parsed before verify |
-| User stuck on `free` after paying | webhook URL not configured, or event-type strings differ (see §8) |
-| Better Auth errors on login | `BETTER_AUTH_SECRET`/`BETTER_AUTH_URL` unset, or schema not applied |
+| Symptom                                    | Likely cause                                                                  |
+| ------------------------------------------ | ----------------------------------------------------------------------------- |
+| Supervisor: "set CF_ACCOUNT_ID..."         | `platform/.env` not loaded / missing D1 vars                                  |
+| `npm run check:crypto` fails               | `ENCRYPTION_MASTER_KEY` differs between sides, or python not on PATH          |
+| Engine subprocess exits immediately        | bad per-user config; check `data/users/<uid>/bot.log`                         |
+| Dashboard shows nothing after enabling bot | supervisor not running, or user has no linked keys                            |
+| Webhook 401                                | signature mismatch — wrong `CASHFREE_SECRET_KEY` or body parsed before verify |
+| User stuck on `free` after paying          | webhook URL not configured, or event-type strings differ (see §8)             |
+| Better Auth errors on login                | `BETTER_AUTH_SECRET`/`BETTER_AUTH_URL` unset, or schema not applied           |
 
 ---
 

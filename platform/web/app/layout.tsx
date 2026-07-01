@@ -17,7 +17,7 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CoinDCX Bots",
+  title: "Strattice",
   description: "Run algorithmic trading strategies on your own CoinDCX account.",
 };
 

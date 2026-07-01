@@ -9,15 +9,18 @@ const BASE = MODE === "production" ? "https://api.cashfree.com/pg" : "https://sa
 const API_VERSION = process.env.CASHFREE_API_VERSION || "2025-01-01";
 
 function headers() {
-  const id = process.env.CASHFREE_APP_ID, secret = process.env.CASHFREE_SECRET_KEY;
+  const id = process.env.CASHFREE_APP_ID,
+    secret = process.env.CASHFREE_SECRET_KEY;
   if (!id || !secret) throw new Error("set CASHFREE_APP_ID, CASHFREE_SECRET_KEY");
-  return { "Content-Type": "application/json", "x-api-version": API_VERSION,
-           "x-client-id": id, "x-client-secret": secret };
+  return { "Content-Type": "application/json", "x-api-version": API_VERSION, "x-client-id": id, "x-client-secret": secret };
 }
 
 async function call(method: string, path: string, body?: unknown) {
   const r = await fetch(BASE + path, {
-    method, headers: headers(), body: body ? JSON.stringify(body) : undefined, cache: "no-store",
+    method,
+    headers: headers(),
+    body: body ? JSON.stringify(body) : undefined,
+    cache: "no-store",
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(`cashfree ${path} ${r.status}: ${JSON.stringify(data)}`);
@@ -36,15 +39,16 @@ export async function createSubscription(a: CreateSubArgs) {
   const res = await call("POST", "/subscriptions", {
     subscription_id: a.subscriptionId,
     customer_details: {
-      customer_name: a.customer.name, customer_email: a.customer.email,
+      customer_name: a.customer.name,
+      customer_email: a.customer.email,
       customer_phone: a.customer.phone,
     },
     plan_details: {
-      plan_name: `CoinDCX Bots ${t.name}`,
+      plan_name: `Strattice ${t.name}`,
       plan_type: "PERIODIC",
       plan_amount: t.priceInr,
       plan_max_amount: t.priceInr,
-      plan_max_cycles: 120,            // 10 years; renews monthly until cancelled
+      plan_max_cycles: 120, // 10 years; renews monthly until cancelled
       plan_intervals: 1,
       plan_interval_type: "MONTH",
       plan_currency: "INR",
@@ -69,8 +73,11 @@ export async function cancelSubscription(id: string) {
 export function verifyWebhook(rawBody: string, signature: string, timestamp: string): boolean {
   const secret = process.env.CASHFREE_SECRET_KEY;
   if (!secret || !signature) return false;
-  const expected = createHmac("sha256", secret).update(timestamp + rawBody).digest("base64");
-  const a = Buffer.from(expected), b = Buffer.from(signature);
+  const expected = createHmac("sha256", secret)
+    .update(timestamp + rawBody)
+    .digest("base64");
+  const a = Buffer.from(expected),
+    b = Buffer.from(signature);
   return a.length === b.length && timingSafeEqual(a, b);
 }
 

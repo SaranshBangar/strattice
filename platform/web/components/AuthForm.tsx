@@ -21,41 +21,58 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
     e.preventDefault();
     setErr(null);
     setBusy(true);
-    const res = mode === "sign-up"
-      ? await signUp.email({ email, password, name: name || email })
-      : await signIn.email({ email, password });
+    const res = mode === "sign-up" ? await signUp.email({ email, password, name: name || email }) : await signIn.email({ email, password });
     setBusy(false);
-    if (res.error) { setErr(res.error.message ?? "Failed"); return; }
+    if (res.error) {
+      setErr(res.error.message ?? "Failed");
+      return;
+    }
     router.push("/dashboard");
     router.refresh();
   }
 
   return (
     <div className="mx-auto max-w-sm rounded-lg border border-line bg-panel p-6">
-      <h1 className="font-display text-xl font-semibold tracking-tight text-fg">
-        {mode === "sign-up" ? "Create your account" : "Sign in"}
-      </h1>
+      <h1 className="font-display text-xl font-semibold tracking-tight text-fg">{mode === "sign-up" ? "Create your account" : "Sign in"}</h1>
       <p className="mt-1 text-sm text-muted">
-        {mode === "sign-up"
-          ? "Start running strategies on your own CoinDCX account."
-          : "Welcome back to CoinDCX Bots."}
+        {mode === "sign-up" ? "Start running strategies on your own CoinDCX account." : "Welcome back to Strattice."}
       </p>
 
       <form onSubmit={submit} className="mt-5 space-y-4">
         {mode === "sign-up" && (
           <div className="space-y-1.5">
-            <label htmlFor="af-name" className={labelClass}>Name</label>
-            <input id="af-name" className={inputClass} placeholder="Your name" autoComplete="name"
-              value={name} onChange={(e) => setName(e.target.value)} />
+            <label htmlFor="af-name" className={labelClass}>
+              Name
+            </label>
+            <input
+              id="af-name"
+              className={inputClass}
+              placeholder="Your name"
+              autoComplete="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
           </div>
         )}
         <div className="space-y-1.5">
-          <label htmlFor="af-email" className={labelClass}>Email</label>
-          <input id="af-email" className={inputClass} type="email" placeholder="you@example.com"
-            autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <label htmlFor="af-email" className={labelClass}>
+            Email
+          </label>
+          <input
+            id="af-email"
+            className={inputClass}
+            type="email"
+            placeholder="you@example.com"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
         </div>
         <div className="space-y-1.5">
-          <label htmlFor="af-password" className={labelClass}>Password</label>
+          <label htmlFor="af-password" className={labelClass}>
+            Password
+          </label>
           <div className="relative">
             <input
               id="af-password"
@@ -79,7 +96,11 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
           </div>
           {mode === "sign-up" && <p className="text-xs text-faint">At least 8 characters.</p>}
         </div>
-        {err && <p role="alert" className="text-sm text-loss">{err}</p>}
+        {err && (
+          <p role="alert" className="text-sm text-loss">
+            {err}
+          </p>
+        )}
         <button
           type="submit"
           disabled={busy}
@@ -91,9 +112,19 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
 
       <p className="mt-4 text-center text-sm text-muted">
         {mode === "sign-up" ? (
-          <>Have an account? <Link href="/sign-in" className="text-accent underline-offset-2 hover:underline">Sign in</Link></>
+          <>
+            Have an account?{" "}
+            <Link href="/sign-in" className="text-accent underline-offset-2 hover:underline">
+              Sign in
+            </Link>
+          </>
         ) : (
-          <>New here? <Link href="/sign-up" className="text-accent underline-offset-2 hover:underline">Create one</Link></>
+          <>
+            New here?{" "}
+            <Link href="/sign-up" className="text-accent underline-offset-2 hover:underline">
+              Create one
+            </Link>
+          </>
         )}
       </p>
     </div>
