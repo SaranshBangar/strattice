@@ -147,7 +147,7 @@ class Executor:
         log.info("%s %s %s %s qty=%s @%s notional=%.2f pnl=%.2f",
                  tag, strategy, market, side, qty, price, notional, realized)
         pnl_pct = (realized / notional * 100) if notional else 0.0
-        ts_str = datetime.datetime.utcfromtimestamp(candle_ts).strftime("%Y-%m-%d %H:%M:%S UTC")
+        ts_str = datetime.datetime.utcfromtimestamp(candle_ts / 1000).strftime("%Y-%m-%d %H:%M:%S UTC")
         notify.send(notify.table(f"{tag} TRADE FILLED", [
             ("Side", side.upper()),
             ("Market", market),
