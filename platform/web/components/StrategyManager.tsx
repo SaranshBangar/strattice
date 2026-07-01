@@ -4,6 +4,8 @@ import { addStrategyAction, toggleStrategyAction, removeStrategyAction } from "@
 import type { StrategyRow } from "@/lib/queries";
 import { STRATEGY_META, strategyLabel } from "@/lib/strategies";
 import { Select } from "@/components/Select";
+import { useToast } from "@/components/Toast";
+import { Spinner } from "@/components/Spinner";
 
 const DEFAULT_MARKET: Record<string, string> = {
   ma_crossover: "I-BTC_INR", rsi: "I-ETH_INR", momentum: "I-BTC_INR",
@@ -18,12 +20,22 @@ export function StrategyManager({ allowed, maxActive, strategies }: {
   const [tpl, setTpl] = useState(allowed[0] ?? "");
   const [market, setMarket] = useState(DEFAULT_MARKET[allowed[0] ?? ""] ?? "");
   const [err, setErr] = useState<string | null>(null);
+  const toast = useToast();
   const enabledCount = strategies.filter((s) => s.enabled).length;
   const atCap = maxActive !== null && enabledCount >= maxActive;
 
-  function run(fn: () => Promise<void>) {
+  function run(fn: () => Promise<void>, ok?: string) {
     setErr(null);
-    start(async () => { try { await fn(); } catch (e: any) { setErr(e.message ?? "Failed"); } });
+    start(async () => {
+      try {
+        await fn();
+        if (ok) toast(ok, "success");
+      } catch (e: any) {
+        const msg = e.message ?? "Something went wrong. Please try again.";
+        setErr(msg);
+        toast(msg, "error");
+      }
+    });
   }
 
   return (
@@ -60,9 +72,10 @@ export function StrategyManager({ allowed, maxActive, strategies }: {
             onClick={() => run(async () => {
               const fd = new FormData(); fd.set("template", tpl); fd.set("market", market);
               await addStrategyAction(fd);
-            })}
-            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-ink transition-colors hover:bg-accent-hi focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
+            }, `Added ${strategyLabel(tpl)} on ${market.trim().toUpperCase()}`)}
+            className="inline-flex items-center justify-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-ink transition-colors hover:bg-accent-hi focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
           >
+            {pending && <Spinner className="h-4 w-4" />}
             Add
           </button>
         </div>
@@ -124,7 +137,7 @@ export function StrategyManager({ allowed, maxActive, strategies }: {
                   <button
                     type="button"
                     disabled={pending || blockEnable}
-                    onClick={() => run(() => toggleStrategyAction(s.id, !s.enabled))}
+                    onClick={() => run(() => toggleStrategyAction(s.id, !s.enabled), enabled ? "Strategy disabled" : "Strategy enabled")}
                     className={[
                       "rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                       enabled
@@ -141,7 +154,7 @@ export function StrategyManager({ allowed, maxActive, strategies }: {
                     disabled={pending}
                     onClick={() => {
                       if (!confirm(`Remove ${strategyLabel(s.template)} on ${s.market}? This can't be undone.`)) return;
-                      run(() => removeStrategyAction(s.id));
+                      run(() => removeStrategyAction(s.id), "Strategy removed");
                     }}
                     className="rounded-md px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:text-loss focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-loss disabled:opacity-50"
                   >

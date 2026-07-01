@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Archivo, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import { Nav } from "@/components/Nav";
+import { ToastProvider } from "@/components/Toast";
 
 const display = Archivo({
   subsets: ["latin"],
@@ -35,8 +36,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${display.variable} ${mono.variable}`}>
       <body className="min-h-screen">
-        <Nav />
-        <main className="mx-auto max-w-5xl px-4 py-10">{children}</main>
+        <ToastProvider>
+          <Nav />
+          <main className="mx-auto max-w-5xl px-4 py-10">{children}</main>
+        </ToastProvider>
       </body>
     </html>
   );

@@ -1,6 +1,7 @@
 "use client";
 import { useState, useTransition } from "react";
 import { setBotAction } from "@/app/actions";
+import { useToast } from "@/components/Toast";
 
 export function BotControls({
   initial,
@@ -12,11 +13,28 @@ export function BotControls({
   const [active, setActive] = useState(initial.active);
   const [live, setLive] = useState(initial.live);
   const [pending, start] = useTransition();
+  const toast = useToast();
 
   function update(patch: { active?: boolean; live?: boolean }) {
+    // Optimistic; revert to the prior values if the server rejects.
+    const prev = { active, live };
     if (patch.active !== undefined) setActive(patch.active);
     if (patch.live !== undefined) setLive(patch.live);
-    start(() => setBotAction(patch));
+    start(async () => {
+      try {
+        await setBotAction(patch);
+        toast(
+          patch.active !== undefined
+            ? patch.active ? "Bot turned on" : "Bot turned off"
+            : patch.live ? "Live trading enabled" : "Switched to dry run",
+          "success",
+        );
+      } catch {
+        setActive(prev.active);
+        setLive(prev.live);
+        toast("Couldn't update bot settings. Please try again.", "error");
+      }
+    });
   }
 
   return (

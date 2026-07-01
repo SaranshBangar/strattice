@@ -37,8 +37,8 @@ export function ProToggle() {
       >
         <span
           className={[
-            "absolute top-0.5 h-4 w-4 rounded-full transition-transform",
-            pro ? "translate-x-[22px] bg-accent" : "translate-x-0.5 bg-faint",
+            "absolute left-0.5 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full transition-transform",
+            pro ? "translate-x-[22px] bg-accent" : "translate-x-0 bg-faint",
           ].join(" ")}
         />
       </button>

@@ -4,6 +4,7 @@
 import { useState, useTransition } from "react";
 import { Select } from "@/components/Select";
 import { adminSetTierAction, adminDisableBotAction } from "@/app/actions";
+import { useToast } from "@/components/Toast";
 import type { AdminUser } from "@/lib/queries";
 
 const TIER_OPTS = ["free", "starter", "plus", "pro", "max"].map((t) => ({ value: t, label: t }));
@@ -23,21 +24,22 @@ export function AdminUserRow({ u }: { u: AdminUser }) {
   const [pending, start] = useTransition();
   const [tier, setTier] = useState(u.tier);
   const [err, setErr] = useState<string | null>(null);
+  const toast = useToast();
 
   function apply(next: string) {
     const prev = tier;
     setErr(null);
     setTier(next);
     start(async () => {
-      try { await adminSetTierAction(u.id, next); }
-      catch (e: any) { setErr(e?.message ?? "failed"); setTier(prev); }
+      try { await adminSetTierAction(u.id, next); toast(`${u.email} set to ${next}`, "success"); }
+      catch (e: any) { setErr(e?.message ?? "failed"); setTier(prev); toast(e?.message ?? "Couldn't update plan", "error"); }
     });
   }
   function stopBot() {
     setErr(null);
     start(async () => {
-      try { await adminDisableBotAction(u.id); }
-      catch (e: any) { setErr(e?.message ?? "failed"); }
+      try { await adminDisableBotAction(u.id); toast(`Stopped ${u.email}'s bot`, "success"); }
+      catch (e: any) { setErr(e?.message ?? "failed"); toast(e?.message ?? "Couldn't stop bot", "error"); }
     });
   }
 

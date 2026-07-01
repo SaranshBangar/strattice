@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "@/lib/auth-client";
 import { isAdmin } from "@/lib/admin";
+import { useToast } from "@/components/Toast";
 
 const BASE_LINKS: [string, string][] = [
   ["/dashboard", "Dashboard"],
@@ -16,6 +17,7 @@ export function Nav() {
   const { data } = useSession();
   const router = useRouter();
   const pathname = usePathname();
+  const toast = useToast();
   const [open, setOpen] = useState(false);
   const signedIn = !!data?.user;
   const LINKS: [string, string][] = isAdmin(data?.user?.email)
@@ -25,6 +27,7 @@ export function Nav() {
   async function handleSignOut() {
     setOpen(false);
     await signOut();
+    toast("Signed out", "success");
     router.push("/");
     router.refresh();
   }

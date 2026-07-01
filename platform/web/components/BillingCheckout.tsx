@@ -2,6 +2,8 @@
 import { useState, useTransition } from "react";
 import { load } from "@cashfreepayments/cashfree-js";
 import { startSubscriptionAction, cancelSubscriptionAction } from "@/app/actions";
+import { useToast } from "@/components/Toast";
+import { Spinner } from "@/components/Spinner";
 
 interface TierOpt { name: string; priceInr: number; perk: string }
 
@@ -13,6 +15,7 @@ export function BillingCheckout({ tiers, currentTier, canCancel }: {
   const [phone, setPhone] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const toast = useToast();
   const phoneValid = /^\d{10}$/.test(phone);
 
   function subscribe(tier: string) {
@@ -23,7 +26,11 @@ export function BillingCheckout({ tiers, currentTier, canCancel }: {
         const cashfree = await load({ mode: mode as "sandbox" | "production" });
         // subscriptionsCheckout opens the mandate authorization flow, then redirects to return_url.
         await (cashfree as any).subscriptionsCheckout({ subsSessionId: sessionId, redirectTarget: "_self" });
-      } catch (e: any) { setErr(e.message ?? "Failed"); }
+      } catch (e: any) {
+        const msg = e.message ?? "Couldn't start checkout. Please try again.";
+        setErr(msg);
+        toast(msg, "error");
+      }
     });
   }
 
@@ -78,8 +85,9 @@ export function BillingCheckout({ tiers, currentTier, canCancel }: {
                 disabled={pending || current || !phoneValid}
                 onClick={() => subscribe(t.name)}
                 title={!phoneValid && !current ? "Enter a 10-digit phone number first" : undefined}
-                className="mt-5 inline-flex items-center justify-center rounded-md bg-accent px-3 py-2 text-sm font-medium text-accent-ink transition-colors hover:bg-accent-hi focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-5 inline-flex items-center justify-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-medium text-accent-ink transition-colors hover:bg-accent-hi focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
               >
+                {pending && !current && <Spinner className="h-4 w-4" />}
                 {current ? "Current plan" : pending ? "Starting…" : "Subscribe"}
               </button>
             </div>
@@ -95,7 +103,14 @@ export function BillingCheckout({ tiers, currentTier, canCancel }: {
           disabled={pending}
           onClick={() => {
             if (!confirm("Cancel your subscription? You keep access until the end of the current period.")) return;
-            start(() => cancelSubscriptionAction());
+            start(async () => {
+              try {
+                await cancelSubscriptionAction();
+                toast("Subscription cancelled. Access stays until the period ends.", "success");
+              } catch (e: any) {
+                toast(e.message ?? "Couldn't cancel. Please try again.", "error");
+              }
+            });
           }}
           className="rounded-md border border-loss/40 px-4 py-2 text-sm text-dim transition-colors hover:bg-loss/10 hover:text-loss focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-loss disabled:opacity-50"
         >
