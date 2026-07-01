@@ -20,14 +20,15 @@ export async function POST(req: Request) {
   const userId = String(b.userId || "");
   const side = String(b.side || "");
   const market = String(b.market || "");
-  if (!userId || (side !== "buy" && side !== "sell") || !market) {
-    return NextResponse.json({ error: "need userId, side (buy|sell), market" }, { status: 400 });
+  if ((!userId && !b.email) || (side !== "buy" && side !== "sell") || !market) {
+    return NextResponse.json({ error: "need userId or email, side (buy|sell), market" }, { status: 400 });
   }
 
-  const user = await q.getUserContact(userId);
-  if (!user) return NextResponse.json({ ok: true, ignored: "unknown user" });
+  // Multi-user supervisor sends userId (look up the email); single-user bot sends email directly.
+  const email = b.email ? String(b.email) : (await q.getUserContact(userId))?.email;
+  if (!email) return NextResponse.json({ ok: true, ignored: "unknown user" });
 
-  await sendTradeEmail(user.email, {
+  await sendTradeEmail(email, {
     side,
     market,
     qty: Number(b.qty) || 0,

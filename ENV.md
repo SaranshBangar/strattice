@@ -78,7 +78,25 @@ kill switch, and errors:
 
 ---
 
-## 4. Display rate (optional)
+## 4. Trade emails (optional)
+
+Emails you on every fill (buy/sell) via the Strattice web app. Without all three, fills
+just log/Telegram as before. The bot POSTs each fill to the app, which sends the mail.
+
+`STRATTICE_URL`, `INTERNAL_API_KEY`, `NOTIFY_EMAIL`
+
+```ini
+STRATTICE_URL=https://strattice.in          # the deployed web app
+INTERNAL_API_KEY=<same value as the web app's env>   # openssl rand -hex 32
+NOTIFY_EMAIL=you@example.com                # where fill emails are sent
+```
+
+`INTERNAL_API_KEY` must match the web app's, or the app rejects the POST (401) and no
+email is sent. The web app also needs its own `SMTP_*` set, or it silently skips mail.
+
+---
+
+## 5. Display rate (optional)
 
 ```ini
 INR_PER_USDT=85

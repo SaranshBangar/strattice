@@ -32,6 +32,12 @@ LIVE = (not DRY_RUN) and _LIVE_CONFIRM
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
+# Trade emails via the web app (optional). Single-user bot has no platform account, so it
+# emails NOTIFY_EMAIL directly through the app's /api/internal/notify. All three required.
+STRATTICE_URL = os.getenv("STRATTICE_URL", "").rstrip("/")
+INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY", "")
+NOTIFY_EMAIL = os.getenv("NOTIFY_EMAIL", "")
+
 # BOT_DB_PATH/BOT_LOG_PATH env overrides let the SaaS supervisor give each user subprocess its
 # own SQLite + log (data/users/<uid>/). Default unchanged for single-tenant use.
 DB_PATH = Path(os.getenv("BOT_DB_PATH") or (ROOT / "data" / "bot.db"))

@@ -159,6 +159,8 @@ class Executor:
             ("Strategy", strategy),
             ("Time", ts_str),
         ]))
+        notify.email_trade(side=side, market=market, qty=qty, price=price, notional=notional,
+                           strategy=strategy, dry_run=not config.LIVE)
         return {"status": status, "client_order_id": coid, "realized_pnl": realized}
 
     def kill(self) -> None:

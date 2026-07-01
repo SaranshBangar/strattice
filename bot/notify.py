@@ -16,6 +16,23 @@ def table(title: str, rows: list[tuple[str, str]]) -> str:
     return f"```\n{title}\n{body}\n```"
 
 
+def email_trade(*, side: str, market: str, qty: float, price: float, notional: float,
+                strategy: str, dry_run: bool) -> None:
+    """POST a fill to the web app so it emails NOTIFY_EMAIL. Never raises."""
+    if not (config.STRATTICE_URL and config.INTERNAL_API_KEY and config.NOTIFY_EMAIL):
+        return  # ponytail: no creds => skip, like the Telegram log-only path
+    try:
+        requests.post(
+            f"{config.STRATTICE_URL}/api/internal/notify",
+            headers={"x-internal-key": config.INTERNAL_API_KEY},
+            json={"email": config.NOTIFY_EMAIL, "side": side, "market": market, "qty": qty,
+                  "price": price, "notional": notional, "strategy": strategy, "dryRun": dry_run},
+            timeout=15,
+        ).raise_for_status()
+    except Exception as e:  # noqa: BLE001 - alerting must never propagate
+        log.error("trade email failed: %s", e)
+
+
 def send(msg: str) -> None:
     log.info("ALERT: %s", msg)
     if not (config.TELEGRAM_TOKEN and config.TELEGRAM_CHAT_ID):
