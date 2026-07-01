@@ -6,6 +6,7 @@ Env: CF_ACCOUNT_ID, CF_D1_DATABASE_ID, CF_API_TOKEN (D1 Edit permission).
 """
 from __future__ import annotations
 
+import logging
 import os
 import time
 import uuid
@@ -101,19 +102,24 @@ def _chunked(seq, n):
 def publish(db: D1, user_id: str, trades: list[dict], positions: list[dict], equity: dict) -> None:
     """Upsert the read model from a user's engine SQLite projection.
     Multi-row INSERTs keep the REST round-trips bounded (D1 is one statement per call)."""
+    new_coids: set[str] = set()
     for batch in _chunked(trades, 50):
         params = []
         for t in batch:  # 14 columns id..ts
             params += [str(uuid.uuid4()), user_id, t["coid"], t["strategy"], t["market"],
                        t["side"], t["qty"], t["price"], t["notional"], t["status"],
                        int(t["dry_run"]), t["pnl"], t["tds"], t["ts"]]
-        db.query(
+        rows = db.query(
             "insert into trades(id,user_id,client_order_id,strategy,market,side,qty,price,"
             "notional,status,dry_run,realized_pnl,tds,ts) values "
             + ",".join("(?,?,?,?,?,?,?,?,?,?,?,?,?,?)" for _ in batch)
-            + " on conflict(user_id,client_order_id) do nothing",
+            + " on conflict(user_id,client_order_id) do nothing returning client_order_id",
             params,
         )
+        new_coids.update(r["client_order_id"] for r in rows or [])
+    # Email only the just-recorded fills (RETURNING skips re-published trades).
+    if new_coids:
+        _notify_trades(user_id, [t for t in trades if t["coid"] in new_coids])
 
     db.query("delete from positions where user_id = ?", [user_id])
     for batch in _chunked(positions, 50):
@@ -132,3 +138,24 @@ def publish(db: D1, user_id: str, trades: list[dict], positions: list[dict], equ
         [user_id, equity["equity"], equity["free"],
          equity["realized_today"], equity["trades_today"]],
     )
+
+
+def _notify_trades(user_id: str, trades: list[dict]) -> None:
+    """POST new fills to the web app so it emails the user (buy/sell). Never raises.
+    Skipped when STRATTICE_URL / INTERNAL_API_KEY aren't set (like notify.py log-only mode)."""
+    base = (os.getenv("STRATTICE_URL") or os.getenv("BETTER_AUTH_URL") or "").rstrip("/")
+    key = os.getenv("INTERNAL_API_KEY")
+    if not (base and key):
+        return
+    for t in trades:
+        try:
+            requests.post(
+                f"{base}/api/internal/notify",
+                headers={"x-internal-key": key},
+                json={"userId": user_id, "side": t["side"], "market": t["market"],
+                      "qty": t["qty"], "price": t["price"], "notional": t["notional"],
+                      "strategy": t.get("strategy"), "dryRun": bool(t["dry_run"])},
+                timeout=15,
+            )
+        except Exception as e:  # noqa: BLE001 - notifications must never break publish
+            logging.getLogger("store").error("trade notify failed: %s", e)
