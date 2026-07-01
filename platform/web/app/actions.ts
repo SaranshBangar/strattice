@@ -5,14 +5,17 @@ import { getUser, requireUserId, requireAdmin } from "@/lib/session";
 import * as q from "@/lib/queries";
 import { createSubscription, cancelSubscription, cashfreeMode } from "@/lib/cashfree";
 import { PAID_TIERS, TIERS, type TierName } from "@/lib/entitlements";
+import { sendApiKeyEmail } from "@/lib/email";
 
 export async function saveCredentialsAction(formData: FormData) {
-  const userId = await requireUserId();
+  const user = await getUser();
+  if (!user) throw new Error("unauthorized");
   const apiKey = String(formData.get("apiKey") || "").trim();
   const secret = String(formData.get("secret") || "").trim();
   const label = String(formData.get("label") || "default").trim();
   if (!apiKey || !secret) throw new Error("API key and secret required");
-  await q.saveCredentials(userId, apiKey, secret, label);
+  await q.saveCredentials(user.id, apiKey, secret, label);
+  await sendApiKeyEmail(user.email, label || "default");
   revalidatePath("/account");
 }
 

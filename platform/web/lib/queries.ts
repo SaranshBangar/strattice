@@ -32,6 +32,12 @@ export async function createPendingSubscription(userId: string, cashfreeSubId: s
     [userId, tier, cashfreeSubId]);
 }
 
+/** Email + name for a user, for notifications. `created_at` is unix seconds. */
+export async function getUserContact(userId: string): Promise<{ email: string; name: string | null; created_at: number | null } | null> {
+  return d1First<{ email: string; name: string | null; created_at: number | null }>(
+    "select email, name, createdAt as created_at from user where id = ?", [userId]);
+}
+
 export async function userIdByCashfreeSub(cashfreeSubId: string): Promise<string | null> {
   const row = await d1First<{ user_id: string }>(
     "select user_id from subscriptions where cashfree_sub_id = ?", [cashfreeSubId]);
