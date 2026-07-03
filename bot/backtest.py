@@ -440,6 +440,8 @@ def main() -> None:
     p.add_argument("--walkforward", action="store_true", help="rolling train/test walk-forward report")
     p.add_argument("--train", type=int, default=400, help="walk-forward train window (bars)")
     p.add_argument("--test", type=int, default=100, help="walk-forward test window (bars)")
+    p.add_argument("--data", default="", help="offline candles CSV(.gz) with time,open,high,low,close,volume "
+                                             "(e.g. research/data/*.csv.gz) instead of the live API")
     p.add_argument("--selftest", action="store_true")
     a = p.parse_args()
 
@@ -447,7 +449,16 @@ def main() -> None:
         demo()
         return
 
-    candles = Client().candles(a.market, a.interval, a.limit)
+    if a.data:
+        import csv as _csv
+        import gzip as _gzip
+        op = _gzip.open if a.data.endswith(".gz") else open
+        with op(a.data, "rt", newline="") as f:
+            candles = [{"time": int(r["time"]), "open": float(r["open"]), "high": float(r["high"]),
+                        "low": float(r["low"]), "close": float(r["close"]), "volume": float(r["volume"])}
+                       for r in _csv.DictReader(f)]
+    else:
+        candles = Client().candles(a.market, a.interval, a.limit)
     strat = REGISTRY[a.module]("backtest", a.market, json.loads(a.params))
     kw = dict(stop_loss_pct=a.stop_loss, take_profit_pct=a.take_profit, slippage=a.slippage,
               interval=a.interval, chandelier_k=a.chandelier_k, atr_period=a.atr_period,
