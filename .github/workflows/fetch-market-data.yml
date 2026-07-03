@@ -32,4 +32,5 @@ jobs:
           git add -f research/data  # repo .gitignore's `data/` matches this path too
           git commit -m "data: OHLCV history snapshot for strategy research [skip ci]" \
             || echo "nothing to commit"
+          git pull --rebase origin "${GITHUB_REF_NAME}"  # tolerate racing pushes
           git push
