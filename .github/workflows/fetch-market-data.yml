@@ -4,6 +4,12 @@ name: Fetch market data
 
 on:
   workflow_dispatch: {}
+  push:
+    branches:
+      - "claude/crypto-trader-strategy-review-35yorr"
+    paths:
+      - "scripts/fetch_history.py"
+      - ".github/workflows/fetch-market-data.yml"
 
 permissions:
   contents: write
