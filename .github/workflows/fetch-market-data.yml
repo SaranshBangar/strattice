@@ -1,0 +1,36 @@
+# Fetches deep OHLCV history for strategy research and commits it to the branch
+# that dispatched the run. CI runners have open egress; the dev sandbox does not.
+name: Fetch market data
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - "claude/crypto-trader-strategy-review-35yorr"
+    paths:
+      - "scripts/fetch_history.py"
+      - ".github/workflows/fetch-market-data.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install requests
+      - run: python scripts/fetch_history.py --out research/data
+      - name: Commit data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f research/data  # repo .gitignore's `data/` matches this path too
+          git commit -m "data: OHLCV history snapshot for strategy research [skip ci]" \
+            || echo "nothing to commit"
+          git pull --rebase origin "${GITHUB_REF_NAME}"  # tolerate racing pushes
+          git push

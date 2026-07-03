@@ -8,8 +8,10 @@ No LLM in the execution path — every trade decision is plain algorithm code.
 
 - Polls candles on a schedule, runs each enabled strategy, routes signals through one
   risk-managed executor.
-- Strategies (each its own module, own config, own position): MA Crossover, RSI
-  mean-reversion, Momentum/breakout.
+- Strategies (each its own module, own config, own position): daily Time-Series
+  Momentum, Donchian Breakout, and MA Crossover — the survivors of a full real-data
+  backtest study ([research/FINDINGS.md](research/FINDINGS.md)). Mean-reversion and
+  all intraday variants are retired: they lose net of India friction.
 - Every signal + order persisted to SQLite (`data/bot.db`). Idempotent orders.
 - Backtester with realistic India costs (0.1% fee + 1% TDS).
 - Telegram alerts on trades, blocks, kill switch, and errors.
@@ -26,11 +28,14 @@ Tune everything in `config.yaml` (strategies, params, capital, **risk limits**).
 Secrets live only in `.env` (gitignored) — never in config or code.
 **Filling in `.env`:** step-by-step (CoinDCX keys, live switches, Telegram) → [ENV.md](ENV.md).
 
-### Starting small: the ₹5,000 profile
+### The daily-trend profile (v3)
 
-`config.yaml` ships tuned for **~₹5,000 (~$58 USDT)**: 1h candles, 2 strategies at $25
-each, a 6-trade/day cap, and per-strategy **stop-losses**. The reasoning matters more
-than the numbers — see "Cost drag" below.
+`config.yaml` ships with **daily candles and 3 trend strategies** (tsmom @ ETH,
+Donchian breakout @ BTC, MA cross @ XRP), each in its own equity sleeve with a
+7% hard stop and an ATR chandelier trail. Expect a handful of trades per year per
+strategy — that is the point: at ~1.5-1.7% round-trip friction, holding winners for
+weeks is the only backtested way to stay net-positive. Evidence, methodology and
+the retirement list: [research/FINDINGS.md](research/FINDINGS.md).
 
 ## Run (DRY_RUN — safe, places nothing)
 
@@ -57,10 +62,14 @@ sending. Run from project root with `-m` (the `bot` import needs it).
 ## Backtest
 
 ```bash
-python -m bot.backtest --module ma_crossover --market B-BTC_USDT \
-       --interval 1h --limit 1000 --capital 58 --params '{"fast":10,"slow":30}' \
-       --stop-loss 0.04 --take-profit 0 --slippage 0.001
+python -m bot.backtest --module tsmom --market I-ETH_INR \
+       --interval 1d --limit 1000 --capital 1000 \
+       --params '{"lookback":30,"min_return":0.10,"regime_period":50,"expected_move_pct":0.08}' \
+       --stop-loss 0.07 --chandelier-k 3.5 --atr-period 14
+python -m bot.backtest --module tsmom --interval 1d \
+       --data research/data/I-ETH_INR_1d.csv.gz ...   # same, offline (CI-fetched snapshot)
 python -m bot.backtest --selftest      # verifies the cost math
+python -m research.run_backtests       # full research grid over research/data/
 ```
 
 Reports (all after fee + TDS): net P&L, return %, trades, win rate, **profit factor,
@@ -68,13 +77,14 @@ expectancy, avg win/loss, max drawdown, annualized Sharpe, total fees+TDS paid,
 fees as % of capital, and exposure %**. `--stop-loss/--take-profit/--slippage` model
 the same protective exits the live engine runs.
 
-### Cost drag (read this before going live at ₹5k)
+### Cost drag (read this before going live)
 
-Every round trip costs **~1.2%**: 0.1% buy fee + 0.1% sell fee + 1% TDS on the sell.
-A strategy must clear that _before_ it makes a rupee. At small capital with frequent
-trades, `fees_tds_paid` in the backtest often dwarfs net P&L — that's why this profile
-uses 1h candles, a daily trade cap, and take-profits set well above breakeven. **Always
-check `fees_pct_of_capital` and `profit_factor` (>1) before enabling a strategy live.**
+Every round trip costs **~1.5-1.7%**: 0.2% fee + 18% GST on each side, plus 1% TDS on
+the sell. A strategy must clear that _before_ it makes a rupee. The backtest study in
+[research/FINDINGS.md](research/FINDINGS.md) showed intraday configurations paying
+87-125% of starting capital in fees+TDS on multi-year windows — that is why v3 trades
+daily bars, holds winners for weeks, and never uses take-profits. **Always check
+`fees_pct_of_capital` and `profit_factor` (>1) before enabling a strategy live.**
 
 ## Going live (do this deliberately)
 
