@@ -5,6 +5,7 @@ from .ma_crossover import MACrossover
 from .momentum import Momentum
 from .rsi import RSIMeanReversion
 from .squeeze_breakout import SqueezeBreakout
+from .tsmom import TSMomentum
 from .vol_expansion import VolExpansion
 
 REGISTRY = {
@@ -15,6 +16,7 @@ REGISTRY = {
     "fast_rsi": FastRSIReversion,
     "bb_reversion": BBReversion,
     "squeeze_breakout": SqueezeBreakout,
+    "tsmom": TSMomentum,
 }
 
 
