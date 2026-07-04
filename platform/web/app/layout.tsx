@@ -39,6 +39,22 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ToastProvider>
           <Nav />
           <main className="mx-auto max-w-5xl px-4 py-10">{children}</main>
+          <footer className="mt-16 border-t border-line">
+            <div className="mx-auto max-w-5xl space-y-3 px-4 py-8">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span className="font-display text-sm font-semibold tracking-tight text-dim">strattice</span>
+                <span className="font-mono text-[11px] uppercase tracking-wider text-faint">
+                  free during early access · non-custodial
+                </span>
+              </div>
+              <p className="max-w-3xl text-[11px] leading-relaxed text-faint">
+                Crypto assets are volatile and unregulated in many jurisdictions; algorithmic strategies can and do
+                lose money. Simulated or historical performance never guarantees future results. Strattice never holds
+                your funds - trades execute on your own CoinDCX account with keys you control, and every round trip
+                pays exchange fees, GST and TDS. Start in DRY_RUN, size positions you can afford to lose.
+              </p>
+            </div>
+          </footer>
         </ToastProvider>
       </body>
     </html>

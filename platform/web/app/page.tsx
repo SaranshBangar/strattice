@@ -1,40 +1,33 @@
-import { TIERS } from "@/lib/entitlements";
-import { PricingGrid } from "@/components/PricingGrid";
 import { HeroCta } from "@/components/HeroCta";
-
-const ORDER = ["free", "starter", "plus", "pro", "max"] as const;
-const PERKS: Record<string, string> = {
-  free: "1 default strategy",
-  starter: "1 default strategy",
-  plus: "Any 3 strategies + dashboard",
-  pro: "All strategies + dashboard",
-  max: "All + custom strategies + dashboard",
-};
+import { STRATEGY_META } from "@/lib/strategies";
 
 // The strategy templates that actually ship - shown as a terminal-style ledger.
-const STRATS: [string, string, string][] = [
-  ["ma_crossover", "BTC/INR", "TREND"],
-  ["momentum", "BTC/INR", "MOMENTUM"],
-  ["rsi", "ETH/INR", "MEAN-REV"],
-  ["fast_rsi", "BNB/INR", "MEAN-REV"],
-  ["vol_expansion", "XRP/INR", "VOLATILITY"],
-  ["squeeze_breakout", "DOGE/INR", "BREAKOUT"],
+const STRATS: [keyof typeof STRATEGY_META, string][] = [
+  ["ma_crossover", "BTC/INR"],
+  ["momentum", "BTC/INR"],
+  ["rsi", "ETH/INR"],
+  ["fast_rsi", "BNB/INR"],
+  ["vol_expansion", "XRP/INR"],
+  ["bb_reversion", "SOL/INR"],
+  ["squeeze_breakout", "DOGE/INR"],
 ];
 
 const STEPS: [string, string][] = [
   ["Link your keys", "Add a CoinDCX API key with trading on and withdrawals off. Stored encrypted."],
-  ["Pick strategies", "Choose from the templates your plan unlocks, and set the markets they trade."],
+  ["Pick strategies", "Preview each template's entries and exits on live market data, then add the ones you like."],
   ["Let it run", "Bots trade on a schedule against your balance. Start in DRY_RUN, go live when ready."],
 ];
 
-export default function Home() {
-  const tiers = ORDER.map((k) => ({
-    name: TIERS[k].name,
-    priceInr: TIERS[k].priceInr,
-    tradesPerDay: TIERS[k].tradesPerDay,
-    perk: PERKS[k],
-  }));
+const FEATURES: [string, string][] = [
+  ["All 7 strategy templates", "Trend, momentum, mean-reversion, volatility and breakout systems - every template unlocked."],
+  ["Entry / exit previews", "Every strategy is simulated on real candles before you add it, with entries and exits marked on the chart."],
+  ["Full analytics dashboard", "Equity curve, drawdown, daily P&L, win rate and per-strategy breakdown - plus a pro view with technical metrics."],
+  ["Risk-managed executor", "Hard stops, take-profits, ATR trailing stops, daily loss limits and a kill switch on every strategy."],
+  ["Non-custodial by design", "Funds never leave your CoinDCX account. Keys are encrypted, withdrawals stay disabled."],
+  ["DRY_RUN first", "Paper-trade any setup with realistic fills, fees and TDS before a single rupee goes live."],
+];
 
+export default function Home() {
   return (
     <div className="space-y-24">
       {/* Hero - left-aligned, with a strategy ledger as the signature */}
@@ -42,14 +35,15 @@ export default function Home() {
         <div>
           <div className="eyebrow flex items-center gap-2">
             <span className="h-1.5 w-1.5 rounded-full bg-gain" />
-            Non-custodial · CoinDCX
+            Non-custodial · CoinDCX · Free during early access
           </div>
           <h1 className="mt-5 font-display text-4xl font-bold leading-[1.05] tracking-tight sm:text-5xl">
             Algorithmic trading that runs on your <span className="text-accent">own</span> account.
           </h1>
           <p className="mt-5 max-w-lg text-lg text-muted">
-            Subscribe to a strategy and let bots trade for you. Your funds never leave CoinDCX -
-            we hold the keys to run the strategies, nothing else.
+            Pick a strategy, see exactly where it would have entered and exited on real market
+            data, and let bots trade for you. Your funds never leave CoinDCX - we hold the keys
+            to run the strategies, nothing else.
           </p>
           <HeroCta />
         </div>
@@ -60,16 +54,16 @@ export default function Home() {
             <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-faint">
               strategy_templates
             </span>
-            <span className="font-mono text-[11px] text-muted">{STRATS.length} active</span>
+            <span className="font-mono text-[11px] text-muted">{STRATS.length} shipped</span>
           </div>
           <ul className="divide-y divide-line/70">
-            {STRATS.map(([name, market, tag]) => (
+            {STRATS.map(([name, market]) => (
               <li key={name} className="flex items-center gap-3 px-4 py-2.5 font-mono text-[13px]">
                 <span className="text-gain">▸</span>
                 <span className="text-fg">{name.replace(/_/g, " ")}</span>
                 <span className="ml-auto tnum text-muted">{market}</span>
                 <span className="w-[88px] text-right text-[10px] uppercase tracking-wider text-faint">
-                  {tag}
+                  {STRATEGY_META[name].kind}
                 </span>
               </li>
             ))}
@@ -94,17 +88,32 @@ export default function Home() {
         </ol>
       </section>
 
-      <section id="pricing">
-        <div className="mb-6">
-          <h2 className="font-display text-2xl font-semibold tracking-tight">Simple monthly plans</h2>
-          <p className="mt-1 text-sm text-muted">
-            No trading fees from us - your exchange fees apply as usual.
-          </p>
+      {/* Everything included - pricing is off, the whole platform is free */}
+      <section id="features">
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="font-display text-2xl font-semibold tracking-tight">
+              Free while we&rsquo;re in early access. Everything included.
+            </h2>
+            <p className="mt-1 text-sm text-muted">
+              No plans, no card, no trading fees from us - your exchange fees apply as usual.
+            </p>
+          </div>
+          <span className="rounded-md border border-gain/40 bg-gain/10 px-3 py-1 font-mono text-xs uppercase tracking-wider text-gain">
+            ₹0 / mo
+          </span>
         </div>
-        <PricingGrid tiers={tiers} ctaHref="/sign-up" />
-        <p className="mt-4 text-xs text-faint">
-          Recurring billing via Cashfree (UPI Autopay / eMandate).
-        </p>
+        <div className="grid gap-px overflow-hidden rounded-lg border border-line bg-line sm:grid-cols-2 lg:grid-cols-3">
+          {FEATURES.map(([title, body]) => (
+            <div key={title} className="bg-panel p-5">
+              <h3 className="flex items-center gap-2 font-display text-base font-semibold tracking-tight text-fg">
+                <span className="text-gain">✓</span>
+                {title}
+              </h3>
+              <p className="mt-1.5 text-sm leading-relaxed text-muted">{body}</p>
+            </div>
+          ))}
+        </div>
       </section>
     </div>
   );

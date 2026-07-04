@@ -1,5 +1,9 @@
 // Tier -> entitlements. MUST stay in sync with worker/entitlements.py (the supervisor is the
 // last line of defense, but the UI gates from here). See platform/RESEARCH.md §3.
+//
+// PRICING IS DISABLED FOR NOW: the platform is fully free. The free tier unlocks
+// everything, and the paid tiers are kept only so legacy subscription rows still
+// resolve. Checkout is not offered anywhere in the UI.
 
 export const ALL_TEMPLATES = [
   "ma_crossover", "rsi", "momentum", "vol_expansion",
@@ -20,14 +24,13 @@ export interface Tier {
   dashboard: "basic" | "full";
 }
 
-const DEFAULT_ONLY = [DEFAULT_TEMPLATE] as const;
-
 export const TIERS: Record<TierName, Tier> = {
-  free:    { name: "free",    priceInr: 0,   tradesPerDay: 5,   maxActive: 1,    allowed: DEFAULT_ONLY, custom: false, dashboard: "basic" },
-  starter: { name: "starter", priceInr: 299, tradesPerDay: 50,  maxActive: 1,    allowed: DEFAULT_ONLY, custom: false, dashboard: "basic" },
-  plus:    { name: "plus",    priceInr: 499, tradesPerDay: 50,  maxActive: 3,    allowed: ALL_TEMPLATES, custom: false, dashboard: "full" },
-  pro:     { name: "pro",     priceInr: 749, tradesPerDay: 75,  maxActive: null, allowed: ALL_TEMPLATES, custom: false, dashboard: "full" },
-  max:     { name: "max",     priceInr: 999, tradesPerDay: 100, maxActive: null, allowed: ALL_TEMPLATES, custom: true,  dashboard: "full" },
+  // Everything free while pricing is off: all templates, no active cap, full dashboard.
+  free:    { name: "free",    priceInr: 0,   tradesPerDay: 100, maxActive: null, allowed: ALL_TEMPLATES, custom: true, dashboard: "full" },
+  starter: { name: "starter", priceInr: 0,   tradesPerDay: 100, maxActive: null, allowed: ALL_TEMPLATES, custom: true, dashboard: "full" },
+  plus:    { name: "plus",    priceInr: 0,   tradesPerDay: 100, maxActive: null, allowed: ALL_TEMPLATES, custom: true, dashboard: "full" },
+  pro:     { name: "pro",     priceInr: 0,   tradesPerDay: 100, maxActive: null, allowed: ALL_TEMPLATES, custom: true, dashboard: "full" },
+  max:     { name: "max",     priceInr: 0,   tradesPerDay: 100, maxActive: null, allowed: ALL_TEMPLATES, custom: true, dashboard: "full" },
 };
 
 export function resolveTier(name?: string | null): Tier {

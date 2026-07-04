@@ -17,10 +17,10 @@ export function HeroCta() {
         {signedIn ? "Go to dashboard" : "Get started free"}
       </Link>
       <Link
-        href="#pricing"
+        href="#features"
         className="rounded-md border border-line px-5 py-2.5 text-sm font-medium text-dim transition-colors hover:bg-panel hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
-        See plans
+        What&rsquo;s included
       </Link>
     </div>
   );
