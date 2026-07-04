@@ -1,22 +1,56 @@
 "use client";
 // Strategy picker + manager. Templates are chosen from cards (not a raw dropdown);
-// the selected template shows its full config (entry rule, exit rule, parameters)
-// and a live preview chart of simulated entries/exits before the user adds it.
-import { useState, useTransition } from "react";
+// the selected template shows its full config (entry rule, exit rule, editable
+// parameters) and a live preview chart of simulated entries/exits before the user
+// adds it. Custom (user-built) strategies come from the builder at /strategies/build.
+import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { addStrategyAction, toggleStrategyAction, removeStrategyAction } from "@/app/actions";
 import type { StrategyRow } from "@/lib/queries";
-import type { Template } from "@/lib/entitlements";
+import { BUILTIN_TEMPLATES, type BuiltinTemplate, type Template } from "@/lib/entitlements";
 import { STRATEGY_META, strategyLabel } from "@/lib/strategies";
-import { TEMPLATE_CONFIG } from "@/lib/strategy-sim";
+import { TEMPLATE_CONFIG, paramRuleError, type ParamSpec } from "@/lib/strategy-sim";
+import { parseCustomDef, describeRule, describeExits } from "@/lib/custom-strategy";
 import { StrategyPreview } from "@/components/StrategyPreview";
 import { Select } from "@/components/Select";
 import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Spinner";
 
-const MARKETS = ["I-BTC_INR", "I-ETH_INR", "I-SOL_INR", "I-XRP_INR", "I-BNB_INR", "I-DOGE_INR"];
-const CUSTOM = "__custom__";
+export const MARKETS = ["I-BTC_INR", "I-ETH_INR", "I-SOL_INR", "I-XRP_INR", "I-BNB_INR", "I-DOGE_INR"];
+const CUSTOM_MARKET = "__custom__";
 
 const marketLabel = (m: string) => m.replace(/^I-/, "").replace("_", "/");
+
+function ParamInput({ spec, value, stock, onChange }: {
+  spec: ParamSpec; value: number; stock: number; onChange: (v: number) => void;
+}) {
+  const customised = value !== stock;
+  return (
+    <div className="flex items-center justify-between gap-3 py-1.5">
+      <label htmlFor={`p-${spec.key}`} className="text-xs text-muted">
+        {spec.label}
+        {customised && <span className="ml-1.5 text-[10px] text-accent">●</span>}
+      </label>
+      <input
+        id={`p-${spec.key}`}
+        type="number"
+        min={spec.min}
+        max={spec.max}
+        step={spec.step}
+        value={value}
+        onChange={(e) => {
+          const n = Number(e.target.value);
+          if (Number.isFinite(n)) onChange(spec.int ? Math.round(n) : n);
+        }}
+        className={[
+          "w-24 rounded-md border bg-inset px-2 py-1 text-right font-mono text-xs tabular-nums text-fg",
+          "focus:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent",
+          customised ? "border-accent/50" : "border-line",
+        ].join(" ")}
+      />
+    </div>
+  );
+}
 
 function ConfigRow({ k, v }: { k: string; v: string }) {
   return (
@@ -27,21 +61,36 @@ function ConfigRow({ k, v }: { k: string; v: string }) {
   );
 }
 
-export function StrategyManager({ allowed, strategies }: {
-  allowed: string[]; strategies: StrategyRow[];
-}) {
-  const templates = allowed as Template[];
+export function StrategyManager({ strategies }: { strategies: StrategyRow[] }) {
   const [pending, start] = useTransition();
-  const [tpl, setTpl] = useState<Template>(templates[0] ?? "ma_crossover");
-  const [marketSel, setMarketSel] = useState<string>(TEMPLATE_CONFIG[templates[0] ?? "ma_crossover"]?.market ?? MARKETS[0]);
+  const [tpl, setTpl] = useState<BuiltinTemplate>(BUILTIN_TEMPLATES[0]);
+  const [marketSel, setMarketSel] = useState<string>(TEMPLATE_CONFIG[BUILTIN_TEMPLATES[0]].market);
   const [customMarket, setCustomMarket] = useState("");
+  const [edits, setEdits] = useState<Record<string, number>>({});
   const [err, setErr] = useState<string | null>(null);
   const toast = useToast();
 
   const meta = STRATEGY_META[tpl];
   const cfg = TEMPLATE_CONFIG[tpl];
-  const market = marketSel === CUSTOM ? customMarket.trim().toUpperCase() : marketSel;
+  const market = marketSel === CUSTOM_MARKET ? customMarket.trim().toUpperCase() : marketSel;
   const marketValid = /^[A-Z0-9_-]{3,24}$/.test(market);
+
+  // Current param values = stock + edits; only genuine diffs are sent to the server.
+  const paramValues = useMemo(() => {
+    const v: Record<string, number> = {};
+    for (const s of cfg.editable) v[s.key] = edits[s.key] ?? cfg.params[s.key];
+    return v;
+  }, [cfg, edits]);
+  const diffs = useMemo(() => {
+    const d: Record<string, number> = {};
+    for (const s of cfg.editable) {
+      const val = Math.min(s.max, Math.max(s.min, paramValues[s.key]));
+      if (val !== cfg.params[s.key]) d[s.key] = val;
+    }
+    return d;
+  }, [cfg, paramValues]);
+  const customised = Object.keys(diffs).length > 0;
+  const ruleErr = paramRuleError(tpl, { ...cfg.params, ...diffs });
 
   function run(fn: () => Promise<void>, ok?: string) {
     setErr(null);
@@ -57,9 +106,10 @@ export function StrategyManager({ allowed, strategies }: {
     });
   }
 
-  function pickTemplate(t: Template) {
+  function pickTemplate(t: BuiltinTemplate) {
     setTpl(t);
-    if (marketSel !== CUSTOM) setMarketSel(TEMPLATE_CONFIG[t].market);
+    setEdits({});
+    if (marketSel !== CUSTOM_MARKET) setMarketSel(TEMPLATE_CONFIG[t].market);
   }
 
   const exits = cfg.exits;
@@ -74,9 +124,9 @@ export function StrategyManager({ allowed, strategies }: {
     <div className="space-y-6">
       {/* 1 · pick a template */}
       <section>
-        <h2 className="eyebrow mb-3">01 · Pick a template</h2>
+        <h2 className="eyebrow mb-3">01 · Pick a template — or build your own</h2>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4" role="radiogroup" aria-label="Strategy template">
-          {templates.map((t) => {
+          {BUILTIN_TEMPLATES.map((t) => {
             const m = STRATEGY_META[t];
             const active = t === tpl;
             return (
@@ -101,6 +151,22 @@ export function StrategyManager({ allowed, strategies }: {
               </button>
             );
           })}
+          {/* build-your-own card */}
+          <Link
+            href="/strategies/build"
+            className="group flex flex-col justify-between rounded-lg border border-dashed border-accent/50 bg-panel p-3 transition-colors hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-medium text-accent">Build your own</span>
+              <span className="shrink-0 rounded-sm bg-accent/15 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-accent">
+                BUILDER
+              </span>
+            </div>
+            <p className="mt-1.5 text-xs leading-relaxed text-muted">
+              Compose entry rules from indicator blocks and backtest them live while you design.
+            </p>
+            <span className="mt-2 text-xs font-medium text-accent group-hover:underline">Open the builder →</span>
+          </Link>
         </div>
       </section>
 
@@ -114,9 +180,9 @@ export function StrategyManager({ allowed, strategies }: {
               ariaLabel="Market"
               value={marketSel}
               onChange={setMarketSel}
-              options={[...MARKETS.map((m) => ({ value: m, label: marketLabel(m) })), { value: CUSTOM, label: "Custom…" }]}
+              options={[...MARKETS.map((m) => ({ value: m, label: marketLabel(m) })), { value: CUSTOM_MARKET, label: "Custom…" }]}
             />
-            {marketSel === CUSTOM && (
+            {marketSel === CUSTOM_MARKET && (
               <input
                 value={customMarket}
                 onChange={(e) => setCustomMarket(e.target.value)}
@@ -127,9 +193,12 @@ export function StrategyManager({ allowed, strategies }: {
             )}
             <button
               type="button"
-              disabled={pending || !marketValid}
+              disabled={pending || !marketValid || !!ruleErr}
               onClick={() => run(async () => {
-                const fd = new FormData(); fd.set("template", tpl); fd.set("market", market);
+                const fd = new FormData();
+                fd.set("template", tpl);
+                fd.set("market", market);
+                if (customised) fd.set("params", JSON.stringify(diffs));
                 await addStrategyAction(fd);
               }, `Added ${meta.label} on ${marketLabel(market)}`)}
               className="inline-flex items-center justify-center gap-2 rounded-md bg-accent px-4 py-1.5 text-sm font-medium text-accent-ink transition-colors hover:bg-accent-hi focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
@@ -142,7 +211,7 @@ export function StrategyManager({ allowed, strategies }: {
 
         {err && <p role="alert" className="border-b border-line px-4 py-2 text-sm text-loss">{err}</p>}
 
-        <div className="grid gap-0 lg:grid-cols-[300px_1fr]">
+        <div className="grid gap-0 lg:grid-cols-[320px_1fr]">
           {/* config sidebar */}
           <div className="space-y-4 border-b border-line p-4 lg:border-b-0 lg:border-r">
             <div>
@@ -157,27 +226,58 @@ export function StrategyManager({ allowed, strategies }: {
               </dl>
             </div>
             <div>
-              <h3 className="font-mono text-[10px] uppercase tracking-wider text-faint">Stock parameters</h3>
-              <dl className="mt-2 divide-y divide-line/60 rounded-md border border-line bg-inset px-3 py-1">
-                {cfg.paramLabels.map(([key, label]) => (
-                  <ConfigRow key={key} k={label} v={String(cfg.params[key])} />
+              <div className="flex items-center justify-between">
+                <h3 className="font-mono text-[10px] uppercase tracking-wider text-faint">
+                  Parameters {customised && <span className="ml-1 normal-case text-accent">· customised</span>}
+                </h3>
+                {customised && (
+                  <button
+                    type="button"
+                    onClick={() => setEdits({})}
+                    className="text-[11px] text-muted underline-offset-2 hover:text-fg hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+                  >
+                    Reset to stock
+                  </button>
+                )}
+              </div>
+              <div className="mt-2 divide-y divide-line/60 rounded-md border border-line bg-inset px-3 py-1">
+                {cfg.editable.map((spec) => (
+                  <ParamInput
+                    key={`${tpl}-${spec.key}`}
+                    spec={spec}
+                    value={paramValues[spec.key]}
+                    stock={cfg.params[spec.key]}
+                    onChange={(v) => setEdits((e) => ({ ...e, [spec.key]: v }))}
+                  />
                 ))}
-              </dl>
-              <p className="mt-2 text-[11px] leading-relaxed text-faint">
-                Parameters are the backtested stock values the engine runs - shown here so you know
-                exactly what you&rsquo;re enabling.
-              </p>
+              </div>
+              {ruleErr ? (
+                <p role="alert" className="mt-2 text-[11px] leading-relaxed text-loss">{ruleErr}</p>
+              ) : (
+                <p className="mt-2 text-[11px] leading-relaxed text-faint">
+                  Edit a value and the preview re-simulates instantly. The stock values are the
+                  backtested defaults - customise with care.
+                </p>
+              )}
             </div>
-            <div>
-              <h3 className="font-mono text-[10px] uppercase tracking-wider text-faint">Style</h3>
-              <p className="mt-1 text-xs leading-relaxed text-dim">{meta.style}</p>
-            </div>
+            <details className="group">
+              <summary className="cursor-pointer list-none font-mono text-[10px] uppercase tracking-wider text-faint transition-colors hover:text-dim">
+                <span className="mr-1 inline-block transition-transform group-open:rotate-90">▸</span>
+                How this strategy works
+              </summary>
+              <div className="mt-2 space-y-2">
+                {meta.explain.map((p, i) => (
+                  <p key={i} className="text-xs leading-relaxed text-dim">{p}</p>
+                ))}
+                <p className="text-xs leading-relaxed text-muted"><span className="text-faint">Style:</span> {meta.style}</p>
+              </div>
+            </details>
           </div>
 
           {/* live preview */}
           <div className="p-4">
             {marketValid ? (
-              <StrategyPreview template={tpl} market={market} />
+              <StrategyPreview template={tpl} market={market} params={ruleErr ? null : diffs} />
             ) : (
               <div className="grid h-[300px] place-items-center rounded-md border border-dashed border-line text-sm text-muted">
                 Enter a market id (e.g. I-BTC_INR) to preview.
@@ -203,19 +303,22 @@ export function StrategyManager({ allowed, strategies }: {
           <ul className="divide-y divide-line/70">
             {strategies.map((s) => {
               const enabled = !!s.enabled;
+              const def = s.template === "custom" ? parseCustomDef(s.params) : null;
               return (
                 <li key={s.id} className="flex items-center justify-between gap-4 px-4 py-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-medium text-fg">{strategyLabel(s.template)}</span>
+                      <span className="text-sm font-medium text-fg">
+                        {def ? def.name : strategyLabel(s.template)}
+                      </span>
                       <span className="rounded-sm bg-inset px-1.5 py-0.5 font-mono text-[11px] font-medium text-dim">
                         {s.market}
                       </span>
                       <span className="rounded-sm bg-inset px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-faint">
                         {STRATEGY_META[s.template as Template]?.kind ?? "custom"}
                       </span>
-                      {s.params && (
-                        <span className="rounded-sm bg-accent/15 px-1.5 py-0.5 text-[11px] font-medium text-accent">
+                      {s.params && s.template !== "custom" && (
+                        <span className="rounded-sm bg-accent/15 px-1.5 py-0.5 text-[11px] font-medium text-accent" title={s.params}>
                           custom params
                         </span>
                       )}
@@ -223,6 +326,11 @@ export function StrategyManager({ allowed, strategies }: {
                     <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted">
                       <span className={["h-1.5 w-1.5 rounded-full", enabled ? "bg-gain" : "bg-faint"].join(" ")} />
                       {enabled ? "Enabled" : "Disabled"}
+                      {def && (
+                        <span className="ml-1 truncate text-faint">
+                          · {def.rules.map(describeRule).join(" AND ")} · exits: {describeExits(def.exits)}
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -244,7 +352,7 @@ export function StrategyManager({ allowed, strategies }: {
                       type="button"
                       disabled={pending}
                       onClick={() => {
-                        if (!confirm(`Remove ${strategyLabel(s.template)} on ${s.market}? This can't be undone.`)) return;
+                        if (!confirm(`Remove ${def ? def.name : strategyLabel(s.template)} on ${s.market}? This can't be undone.`)) return;
                         run(() => removeStrategyAction(s.id), "Strategy removed");
                       }}
                       className="rounded-md px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:text-loss focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-loss disabled:opacity-50"

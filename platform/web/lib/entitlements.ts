@@ -5,11 +5,16 @@
 // everything, and the paid tiers are kept only so legacy subscription rows still
 // resolve. Checkout is not offered anywhere in the UI.
 
-export const ALL_TEMPLATES = [
+/** The stock strategy templates that ship with the bot. */
+export const BUILTIN_TEMPLATES = [
   "ma_crossover", "rsi", "momentum", "vol_expansion",
   "fast_rsi", "bb_reversion", "squeeze_breakout",
 ] as const;
+/** Everything a user may run: builtins + "custom" (user-built rule strategies,
+ *  interpreted by bot/strategies/custom.py; the rule JSON lives in user_strategies.params). */
+export const ALL_TEMPLATES = [...BUILTIN_TEMPLATES, "custom"] as const;
 export type Template = (typeof ALL_TEMPLATES)[number];
+export type BuiltinTemplate = (typeof BUILTIN_TEMPLATES)[number];
 export const DEFAULT_TEMPLATE: Template = "ma_crossover";
 
 export type TierName = "free" | "starter" | "plus" | "pro" | "max";

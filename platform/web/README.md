@@ -17,7 +17,8 @@ thing the two share — see `../RESEARCH.md`.
 | `/` | Landing (pricing removed — everything is free for now) |
 | `/sign-in`, `/sign-up` | Better Auth |
 | `/account` | Link CoinDCX keys (encrypted), bot on/off + DRY_RUN/LIVE switch |
-| `/strategies` | Card-based template picker with per-template config + a simulated entry/exit preview chart on live candles (`lib/strategy-sim.ts`, `components/StrategyPreview.tsx`) |
+| `/strategies` | Card-based template picker with per-template config, editable entry params, deep explanations + a simulated entry/exit preview chart on live candles (`lib/strategy-sim.ts`, `components/StrategyPreview.tsx`) |
+| `/strategies/build` | Custom strategy builder: compose entry rules from indicator blocks, live preview + multi-window historic analysis + head-to-head vs the stock templates (`lib/custom-strategy.ts`, `components/StrategyBuilder.tsx`). Defs run live via `bot/strategies/custom.py` - keep the two evaluators in lockstep |
 | `/billing` | Free-access notice; cancel button for legacy Cashfree subscriptions only |
 | `/dashboard` | Bot health, equity, trades/day vs cap, positions, recent trades |
 | `/api/auth/[...all]` | Better Auth handler |
@@ -66,7 +67,7 @@ false` in `app/actions.ts`, and the checkout UI is removed. The plumbing below i
   `CANCEL`, `EXPIR` substrings (resilient, but confirm payload shape in the dashboard test event).
 
 ## Known limits
-- "Custom" strategy params aren't surfaced in the UI yet (allowed on every tier now that
-  pricing is off); the data model supports them.
+- Custom strategy defs (template="custom") are validated by `sanitizeCustomDef` on the server
+  AND re-clamped in `worker/config_gen.py` - never trust the stored JSON alone.
 - Drizzle `sqlite-proxy` maps D1 object-rows by `Object.values` (column order = select order);
   fine for Better Auth's generated queries.

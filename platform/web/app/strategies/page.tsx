@@ -22,10 +22,10 @@ export default async function StrategiesPage() {
         </span>
       </div>
       <p className="text-sm text-muted">
-        Pick a template, preview exactly where it would have entered and exited on live market
-        data, then add it. Every template is unlocked · {tier.tradesPerDay} trades/day.
+        Pick a template - or build your own - preview exactly where it would have entered and
+        exited on live market data, then add it. Every template is unlocked · {tier.tradesPerDay} trades/day.
       </p>
-      <StrategyManager allowed={[...tier.allowed]} strategies={strategies} />
+      <StrategyManager strategies={strategies} />
     </div>
   );
 }

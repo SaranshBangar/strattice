@@ -65,7 +65,24 @@ TEMPLATE_DEFAULTS: dict[str, dict] = {
                    "max_chase": 0.02, "min_atr_frac": 0.005,
                    "regime_period": 96, "expected_move_pct": 0.03},
     },
+    # User-built rule strategies (bot/strategies/custom.py). The rule JSON travels in the
+    # row's params; exits come from the def's "exits" (clamped in _strategy_spec). These
+    # baseline exits apply only when the def carries none.
+    "custom": {
+        "market": "I-BTC_INR",
+        "stop_loss_pct": 0.03, "take_profit_pct": 0.05, "chandelier_k": 0.0,
+        "atr_period": 14, "max_hold_bars": 0,
+        "params": {},
+    },
 }
+
+
+def _clamp(v, lo: float, hi: float, dflt: float) -> float:
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return dflt
+    return min(hi, max(lo, v))
 
 _BASE = {
     "engine": {"poll_seconds": 180, "candle_interval": "15m", "candle_limit": 400},
@@ -85,7 +102,7 @@ def _strategy_spec(idx: int, s: dict) -> dict:
     tpl = s["template"]
     d = TEMPLATE_DEFAULTS[tpl]
     params = {**d["params"], **(s.get("params") or {})}
-    return {
+    spec = {
         "name": s.get("name") or f"{tpl}_{idx}",
         "module": tpl,
         "enabled": bool(s.get("enabled", True)),
@@ -95,6 +112,19 @@ def _strategy_spec(idx: int, s: dict) -> dict:
         "chandelier_k": d["chandelier_k"], "atr_period": d["atr_period"],
         "max_hold_bars": d["max_hold_bars"], "params": params,
     }
+    if tpl == "custom":
+        # user-built strategy: exits come from the def, clamped to the same bounds the web
+        # sanitizer enforces (defense in depth - never trust stored JSON). A def without
+        # rules simply never fires (custom.py HOLDs), so the row stays harmless.
+        e = params.get("exits") or {}
+        spec["stop_loss_pct"] = _clamp(e.get("stop_loss_pct"), 0.005, 0.2, d["stop_loss_pct"])
+        spec["take_profit_pct"] = _clamp(e.get("take_profit_pct"), 0.0, 0.5, d["take_profit_pct"])
+        spec["chandelier_k"] = _clamp(e.get("chandelier_k"), 0.0, 6.0, d["chandelier_k"])
+        spec["atr_period"] = int(_clamp(e.get("atr_period"), 2, 50, d["atr_period"]))
+        spec["max_hold_bars"] = int(_clamp(e.get("max_hold_bars"), 0, 500, d["max_hold_bars"]))
+        if isinstance(params.get("name"), str) and params["name"].strip():
+            spec["name"] = f"custom_{idx}"  # engine name stays machine-safe; display name lives in the def
+    return spec
 
 
 def build_config(tier: str, requested: list[dict], *, kill_switch_file: str) -> dict:

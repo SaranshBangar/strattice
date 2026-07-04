@@ -7,7 +7,7 @@ import { DataTable, type Cell } from "@/components/DataTable";
 import { TradesTable, type Trade } from "@/components/TradesTable";
 import { PriceChart } from "@/components/PriceChart";
 import { ProToggle } from "@/components/ProToggle";
-import { EquityCurve, PnlBars, WinRateDonut, Sparkline } from "@/components/charts";
+import { EquityCurve, PnlBars, WinRateDonut, Sparkline, DrawdownCurve, PnlHistogram } from "@/components/charts";
 import { strategyLabel } from "@/lib/strategies";
 
 export const dynamic = "force-dynamic";
@@ -154,16 +154,36 @@ export default async function DashboardPage() {
         </section>
       </div>
 
-      {/* Drawdown curve — pro-view only. */}
-      <section className="hidden rounded-lg border border-line bg-panel [html.pro_&]:block">
-        <div className="flex items-center justify-between border-b border-line px-4 py-3">
-          <h3 className="font-display text-sm font-semibold tracking-tight text-dim">Drawdown</h3>
-          <span className="font-mono text-[11px] text-faint">peak-to-trough · max -{maxDD.toFixed(1)}%</span>
-        </div>
-        <div className="p-4">
-          <EquityCurve points={ddSeries.length > 1 ? ddSeries : []} fmt={(n) => `${n.toFixed(1)}%`} xTicks={equityXTicks} />
-        </div>
-      </section>
+      {/* Drawdown + P&L distribution — pro-view only. */}
+      <div className="hidden grid-cols-1 gap-4 lg:grid-cols-2 [html.pro_&]:grid">
+        <section className="rounded-lg border border-line bg-panel">
+          <div className="flex items-center justify-between border-b border-line px-4 py-3">
+            <h3 className="font-display text-sm font-semibold tracking-tight text-dim">Drawdown from peak</h3>
+            <span className="font-mono text-[11px] text-faint">max -{maxDD.toFixed(1)}%</span>
+          </div>
+          <div className="p-4">
+            <DrawdownCurve points={ddSeries.map((v) => -v)} xTicks={equityXTicks} />
+          </div>
+          <p className="border-t border-line px-4 py-2 text-[11px] leading-relaxed text-faint">
+            How far below its own peak the account sat at each moment - depth and recovery time
+            matter more than any single losing day.
+          </p>
+        </section>
+
+        <section className="rounded-lg border border-line bg-panel">
+          <div className="flex items-center justify-between border-b border-line px-4 py-3">
+            <h3 className="font-display text-sm font-semibold tracking-tight text-dim">Daily P&amp;L distribution</h3>
+            <span className="font-mono text-[11px] text-faint">last {daily.length}d</span>
+          </div>
+          <div className="p-4">
+            <PnlHistogram values={dv} fmt={(n) => inr(n)} />
+          </div>
+          <p className="border-t border-line px-4 py-2 text-[11px] leading-relaxed text-faint">
+            The shape of your days: a healthy system clusters small red days left of zero with a
+            longer green tail to the right.
+          </p>
+        </section>
+      </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <section className="rounded-lg border border-line bg-panel lg:col-span-2">

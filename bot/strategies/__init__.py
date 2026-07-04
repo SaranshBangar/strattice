@@ -1,5 +1,6 @@
 """Strategy registry. Maps config `module` name -> Strategy subclass."""
 from .bb_reversion import BBReversion
+from .custom import CustomRules
 from .fast_rsi import FastRSIReversion
 from .ma_crossover import MACrossover
 from .momentum import Momentum
@@ -17,6 +18,7 @@ REGISTRY = {
     "bb_reversion": BBReversion,
     "squeeze_breakout": SqueezeBreakout,
     "tsmom": TSMomentum,
+    "custom": CustomRules,
 }
 
 
