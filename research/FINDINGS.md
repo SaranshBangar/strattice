@@ -2,7 +2,8 @@
 
 **TL;DR — every intraday configuration lost money after real India friction; daily
 trend-following won on nearly every market. The bot moved from a 15m mean-reversion-heavy
-lineup to three daily trend engines (tsmom @ ETH, Donchian breakout @ BTC, MA cross @ XRP).**
+lineup to four daily trend engines (tsmom @ ETH, Donchian breakout @ BTC, MA cross @ XRP,
+volatility-expansion @ BNB).**
 
 ## Data
 
@@ -62,6 +63,13 @@ Parameter sweeps on the 7 real INR daily series (median net / pairs positive):
 - **Donchian breakout**: all 9 combos (lookback 15/20/30 x regime 40/50/70) positive,
   median +87% to +160%.
 - **MA cross**: all 4 combos positive; 8/25 best (7/7 pairs positive, median +100%).
+- **Volatility expansion**: 78/81 combos (short/long ATR x expansion mult x lookback)
+  positive on 7/7 INR pairs, median +34% to +184% — the widest plateau of the study.
+- Mean reversion was re-tested at daily altitude too and STILL loses
+  (bb_reversion 1d median -1.2%, fast_rsi 1d -6.8%, rsi/Connors 1d ~0 trades) —
+  its retirement is an altitude-independent result, not a 15m artifact.
+  squeeze_breakout 1d is positive (+89% median) but overlaps the Donchian breakout's
+  trigger, so it stays benched rather than double-loading the same signal family.
 
 Rolling 250-day out-of-sample folds across all 7 INR pairs:
 tsmom **17/21 positive**, breakout **16/21**, ma_cross 11/21.
@@ -77,28 +85,36 @@ USDT twin — a guard against pair lottery (e.g. tsmom made +120% on I-BTC_INR b
 | tsmom 30d/+10% | I-ETH_INR | **+207.6%** | 2.58 | 7 | 38% | +18.3% |
 | Donchian 20d | I-BTC_INR | **+108.7%** | 2.75 | 8 | 32% | +9.2% |
 | MA 8/25 | I-XRP_INR | **+187.7%** | 2.25 | 6 | 48% | +109.8% |
+| Vol-expansion 5/20d | I-BNB_INR | **+143.6%** | 2.75 | 6 | 36% | +171.9% |
 
-Equal-sleeve portfolio: **~+168%** over ~2.8 years, net of all friction, at 18-62%
+Equal-sleeve portfolio: **~+162%** over ~2.8 years, net of all friction, at 18-62%
 market exposure (buy-and-hold median was +117% at 100% exposure with deeper drawdowns).
+Walk-forward folds positive: tsmom 17/21, breakout 16/21, vol-expansion 13/21 (with the
+largest cumulative fold P&L of the study), MA cross 11/21.
 All exits are chandelier trails (peak - 3.5xATR14) + a 7% hard stop; take-profits are
 deliberately off — capping trend winners destroys the edge that pays the TDS toll.
 
 ## Retired
 
-All 15m/1h/4h configurations of: `rsi`, `fast_rsi`, `bb_reversion`, `vol_expansion`,
-`squeeze_breakout`, 15m `ma_crossover`/`momentum`, and Connors RSI-2 (its gates never
-even align on daily bars — 0 trades). Modules remain in the registry because the
-platform references them; they are disabled in `config.yaml` with the evidence inline.
+All 15m/1h/4h configurations of every module, and mean reversion at EVERY altitude:
+`rsi`, `fast_rsi`, `bb_reversion` and Connors RSI-2 lose (or never trade) on daily bars
+too. `squeeze_breakout` is benched (positive at 1d but redundant with the Donchian
+breakout). Modules remain in the registry because the platform references them; they
+are disabled in `config.yaml` with the evidence inline.
 
 ## Caveats
 
 - INR daily history is ~2.8y (one regime cycle-ish: chop 2024, bull 2024-25, chop-bull
   2025-26). The USDT twin checks and 3y 1h windows partially derisk this.
-- Backtests are close-based and long-only-flat, matching the live engine; intrabar
-  stop gaps are approximated by close-price checks (same as live behavior, which polls
-  every 5 minutes — live stops will usually fire *earlier* than the daily-close model).
+- Backtests are close-based and long-only-flat, and the live engine matches them
+  exactly: it drops the in-progress bar and evaluates entries AND protective exits on
+  CLOSED daily bars only (no repainting). The flip side: stops act at daily-close
+  granularity, so a violent single-day move can close well past the 7% stop line —
+  the reported max-drawdowns include exactly those events. Adding an intraday "crash
+  brake" on the live ticker would be a behavior change vs. this backtest and must be
+  re-validated before adoption.
 - CoinDCX INR books are thin; 5 bps modelled slippage is optimistic for size. At ₹1000
   total it is fine; re-validate before scaling past ~₹1L per sleeve.
-- Volume confirmation on the developing daily bar is conservative early in the day
-  (accumulated volume < 20d average), so breakout entries tend to fire late in the
-  day — this biases live entries toward confirmed bars, consistent with the backtest.
+- Because signals fire on closed daily bars, live entries execute within one poll
+  (~5 min) *after* the daily close at the then-current market price; the modelled
+  5 bps slippage absorbs small drift between the bar close and the fill.

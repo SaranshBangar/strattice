@@ -49,7 +49,11 @@ class RiskManager:
         sod_equity = eq - s["realized_today"]
         if sod_equity > 0 and s["realized_today"] <= -self.daily_loss_frac * sod_equity:
             return RiskDecision(False, f"DAILY_LOSS_LIMIT hit (realized {s['realized_today']:.2f})")
-        if s["trades_today"] >= self.max_trades_per_day:
+        # Churn cap applies to INCREASING orders only: a position-closing sell (stop-loss,
+        # chandelier, take-profit, kill path) must never be blocked by the day's trade count.
+        # Runaway sells are still contained by per-candle idempotency, the daily-loss breaker
+        # above, and the kill switch.
+        if increasing and s["trades_today"] >= self.max_trades_per_day:
             return RiskDecision(False, f"MAX_TRADES_PER_DAY hit ({s['trades_today']})")
         if notional > self.max_position_frac * eq + _EPS:
             return RiskDecision(False, f"notional {notional:.2f} > MAX_POSITION {self.max_position_frac}*eq")
@@ -85,4 +89,12 @@ if __name__ == "__main__":
     audit.position_held_by_other = lambda strat, mkt: True  # type: ignore[assignment]
     d = rm.check(40, 40, strategy="a", market="X")
     assert not d.ok and d.reason == "DUP_ASSET", ("should block dup asset", d.reason)
+    # trade cap: blocks new entries, NEVER a position-closing sell (protective exits).
+    audit.position_held_by_other = lambda strat, mkt: False  # type: ignore[assignment]
+    audit.today_stats = lambda: {"trades_today": 99, "realized_today": 0.0,  # type: ignore[assignment]
+                                 "tds_today": 0.0, "capital_at_risk": 0.0}
+    d = rm.check(40, 40, strategy="a", market="X", increasing=True)
+    assert not d.ok and "MAX_TRADES_PER_DAY" in d.reason, ("cap must block entries", d.reason)
+    d = rm.check(40, 0, strategy="a", market="X", increasing=False)
+    assert d.ok, ("cap must NOT block a closing sell", d.reason)
     print("risk self-check OK")
