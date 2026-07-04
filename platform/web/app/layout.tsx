@@ -36,23 +36,48 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${display.variable} ${mono.variable}`}>
       <body className="min-h-screen">
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-accent focus:px-3 focus:py-1.5 focus:text-sm focus:font-medium focus:text-accent-ink"
+        >
+          Skip to content
+        </a>
         <ToastProvider>
           <Nav />
-          <main className="mx-auto max-w-5xl px-4 py-10">{children}</main>
+          <main id="main" className="mx-auto max-w-5xl px-4 py-10">{children}</main>
           <footer className="mt-16 border-t border-line">
-            <div className="mx-auto max-w-5xl space-y-3 px-4 py-8">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <span className="font-display text-sm font-semibold tracking-tight text-dim">strattice</span>
+            <div className="mx-auto max-w-5xl space-y-6 px-4 py-8">
+              <div className="flex flex-wrap items-start justify-between gap-6">
+                <div>
+                  <span className="font-display text-sm font-semibold tracking-tight text-dim">strattice</span>
+                  <p className="mt-1 max-w-xs text-xs leading-relaxed text-muted">
+                    Algorithmic strategies, executed on your own CoinDCX account with keys you control.
+                  </p>
+                </div>
+                <dl className="grid grid-cols-1 gap-x-10 gap-y-2 font-mono text-[11px] sm:grid-cols-3">
+                  {([
+                    ["custody", "never held by us"],
+                    ["default mode", "DRY_RUN"],
+                    ["kill switch", "one toggle, next poll"],
+                  ] as const).map(([k, v]) => (
+                    <div key={k}>
+                      <dt className="uppercase tracking-[0.15em] text-faint">{k}</dt>
+                      <dd className="mt-0.5 text-dim">{v}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+              <div className="space-y-3 border-t border-line/70 pt-5">
                 <span className="font-mono text-[11px] uppercase tracking-wider text-faint">
                   free during early access · non-custodial
                 </span>
+                <p className="max-w-3xl text-[11px] leading-relaxed text-faint">
+                  Crypto assets are volatile and unregulated in many jurisdictions; algorithmic strategies can and do
+                  lose money. Simulated or historical performance never guarantees future results. Strattice never holds
+                  your funds - trades execute on your own CoinDCX account with keys you control, and every round trip
+                  pays exchange fees, GST and TDS. Start in DRY_RUN, size positions you can afford to lose.
+                </p>
               </div>
-              <p className="max-w-3xl text-[11px] leading-relaxed text-faint">
-                Crypto assets are volatile and unregulated in many jurisdictions; algorithmic strategies can and do
-                lose money. Simulated or historical performance never guarantees future results. Strattice never holds
-                your funds - trades execute on your own CoinDCX account with keys you control, and every round trip
-                pays exchange fees, GST and TDS. Start in DRY_RUN, size positions you can afford to lose.
-              </p>
             </div>
           </footer>
         </ToastProvider>

@@ -38,11 +38,12 @@ export default async function DashboardPage() {
   const user = await getUser();
   if (!user) redirect("/sign-in");
 
-  const [tier, bot, equity, positions, trades, series, daily, breakdown, stats, strategies] = await Promise.all([
+  const [tier, bot, equity, positions, trades, series, daily, breakdown, stats, strategies, creds] = await Promise.all([
     q.effectiveTier(user.id), q.getBotState(user.id), q.latestEquity(user.id),
     q.openPositions(user.id), q.recentTrades(user.id, 500),
     q.equitySeries(user.id, 240), q.dailyPnl(user.id, 30),
     q.strategyBreakdown(user.id), q.tradeStats(user.id), q.listStrategies(user.id),
+    q.credentialsLinked(user.id),
   ]);
 
   const hbAge = bot.last_heartbeat ? Date.now() / 1000 - bot.last_heartbeat : null;
@@ -73,12 +74,69 @@ export default async function DashboardPage() {
   const vol = dv.length > 1 ? Math.sqrt(dv.reduce((a, b) => a + (b - avgDay) ** 2, 0) / (dv.length - 1)) : 0;
   const winRate = decided ? (stats.wins / decided) * 100 : 0;
 
+  // Onboarding: the three things that must be true before the bot can trade.
+  const setupSteps: { done: boolean; label: string; hint: string; href: string }[] = [
+    { done: creds.linked, label: "Link your CoinDCX API keys", hint: "Trading on, withdrawals off. Stored encrypted.", href: "/account" },
+    { done: strategies.length > 0, label: "Add a strategy", hint: "Preview entries and exits on live data first.", href: "/strategies" },
+    { done: !!bot.active, label: "Turn the bot on", hint: "Starts in DRY_RUN - no real orders until you go live.", href: "/account" },
+  ];
+  const setupDone = setupSteps.filter((s) => s.done).length;
+  const showSetup = setupDone < setupSteps.length;
+  const heartbeat = bot.last_heartbeat
+    ? new Date(bot.last_heartbeat * 1000).toLocaleString("en-IN", {
+        timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
+      })
+    : null;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-display text-2xl font-semibold tracking-tight">Dashboard</h1>
+        <div>
+          <h1 className="font-display text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <p className="mt-0.5 font-mono text-[11px] text-faint">
+            {heartbeat ? `last engine heartbeat ${heartbeat} IST` : "engine has not reported yet"}
+          </p>
+        </div>
         <ProToggle />
       </div>
+
+      {showSetup && (
+        <section className="overflow-hidden rounded-lg border border-line bg-panel">
+          <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+            <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-faint">setup</span>
+            <span className="font-mono text-[11px] tabular-nums text-muted">{setupDone} / {setupSteps.length} done</span>
+          </div>
+          <ol className="divide-y divide-line/70">
+            {setupSteps.map((s, i) => (
+              <li key={s.label}>
+                <Link
+                  href={s.href}
+                  className="flex items-center gap-3.5 px-4 py-3 transition-colors hover:bg-inset/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+                >
+                  {s.done ? (
+                    <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-gain/15 text-gain">
+                      <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="m5 10.5 3 3 7-7" />
+                      </svg>
+                    </span>
+                  ) : (
+                    <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full border border-line font-mono text-[10px] text-faint">
+                      {i + 1}
+                    </span>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className={["text-sm font-medium", s.done ? "text-muted line-through decoration-line" : "text-fg"].join(" ")}>
+                      {s.label}
+                    </div>
+                    {!s.done && <div className="mt-0.5 text-xs text-muted">{s.hint}</div>}
+                  </div>
+                  {!s.done && <span aria-hidden="true" className="font-mono text-sm text-faint">→</span>}
+                </Link>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
@@ -127,12 +185,6 @@ export default async function DashboardPage() {
           Engine error: {bot.last_error}
         </p>
       )}
-      {!bot.active && (
-        <p className="text-sm text-muted">
-          Bot is off. <Link href="/account" className="text-accent underline-offset-2 hover:underline">Link your CoinDCX account and turn it on.</Link>
-        </p>
-      )}
-
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <section className="rounded-lg border border-line bg-panel lg:col-span-2">
           <div className="flex items-center justify-between border-b border-line px-4 py-3">

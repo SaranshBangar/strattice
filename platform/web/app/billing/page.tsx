@@ -20,25 +20,43 @@ export default async function BillingPage() {
     <div className="mx-auto max-w-2xl space-y-6">
       <h1 className="font-display text-2xl font-semibold tracking-tight">Billing</h1>
 
-      <section className="rounded-lg border border-line bg-panel p-6">
-        <div className="flex items-center gap-2">
-          <span className="h-1.5 w-1.5 rounded-full bg-gain" />
-          <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-gain">free during early access</span>
+      <section className="overflow-hidden rounded-lg border border-line bg-panel">
+        <div className="flex items-center justify-between border-b border-line px-5 py-2.5">
+          <span className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em] text-gain">
+            <span className="h-1.5 w-1.5 rounded-full bg-gain" />
+            free during early access
+          </span>
+          <span className="font-mono text-[11px] text-muted">₹0 / mo</span>
         </div>
-        <h2 className="mt-3 font-display text-lg font-semibold tracking-tight text-fg">
-          Everything is free right now.
-        </h2>
-        <p className="mt-2 text-sm leading-relaxed text-muted">
-          All strategy templates, unlimited active strategies, the full analytics dashboard and
-          100 trades a day - no plan, no card, no mandate. If we ever introduce paid plans,
-          you&rsquo;ll be told well in advance and nothing will be charged without your explicit consent.
-        </p>
-        <Link
-          href="/strategies"
-          className="mt-4 inline-flex rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-ink transition-colors hover:bg-accent-hi focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-        >
-          Browse strategies
-        </Link>
+        <div className="p-5">
+          <h2 className="font-display text-lg font-semibold tracking-tight text-fg">
+            Everything is free right now.
+          </h2>
+          <p className="mt-2 text-sm leading-relaxed text-muted">
+            All strategy templates, unlimited active strategies, the full analytics dashboard and
+            100 trades a day - no plan, no card, no mandate. If we ever introduce paid plans,
+            you&rsquo;ll be told well in advance and nothing will be charged without your explicit consent.
+          </p>
+          <dl className="mt-4 grid grid-cols-2 gap-px overflow-hidden rounded-md border border-line bg-line sm:grid-cols-4">
+            {([
+              ["templates", "all 7"],
+              ["strategies", "no cap"],
+              ["trades / day", "100"],
+              ["analytics", "full + pro"],
+            ] as const).map(([k, v]) => (
+              <div key={k} className="bg-inset px-3 py-2.5">
+                <dt className="font-mono text-[10px] uppercase tracking-wider text-faint">{k}</dt>
+                <dd className="mt-0.5 font-mono text-sm text-fg">{v}</dd>
+              </div>
+            ))}
+          </dl>
+          <Link
+            href="/strategies"
+            className="mt-5 inline-flex rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-ink transition-colors hover:bg-accent-hi focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            Browse strategies
+          </Link>
+        </div>
       </section>
 
       {canCancel && (

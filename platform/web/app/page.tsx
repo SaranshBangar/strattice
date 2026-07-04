@@ -12,26 +12,84 @@ const STRATS: [keyof typeof STRATEGY_META, string][] = [
   ["squeeze_breakout", "DOGE/INR"],
 ];
 
+const NUMBERS: [string, string][] = [
+  ["7", "strategy templates, each with entry/exit previews"],
+  ["4", "risk checks in front of every single order"],
+  ["~1.5%", "real round-trip cost, modeled in every simulation"],
+  ["₹0", "per month while we're in early access"],
+];
+
 const STEPS: [string, string][] = [
-  ["Link your keys", "Add a CoinDCX API key with trading on and withdrawals off. Stored encrypted."],
-  ["Pick strategies", "Preview each template's entries and exits on live market data, then add the ones you like."],
-  ["Let it run", "Bots trade on a schedule against your balance. Start in DRY_RUN, go live when ready."],
+  ["Link your keys", "Add a CoinDCX API key with trading on and withdrawals off. Stored encrypted; never shown back to anyone."],
+  ["Pick strategies", "Preview each template's entries and exits on live market data, tune the parameters, then add the ones you like."],
+  ["Let it run", "Bots trade on a schedule against your balance. Start in DRY_RUN, flip to live only when the numbers convince you."],
+];
+
+// The engine's order path, stage by stage. This mirrors what the code actually
+// does - signal, risk gate, executor, exchange - not marketing abstraction.
+const PIPELINE: [string, string, string[]][] = [
+  ["signal", "Each enabled strategy evaluates the latest candle and emits BUY, SELL or HOLD. Every decision is logged, including the boring ones.", []],
+  ["risk gate", "A blocked order is a normal outcome, not an error. Any breached limit stops the trade before it exists.", [
+    "position size cap",
+    "daily loss limit",
+    "trades-per-day cap",
+    "capital-at-risk ceiling",
+  ]],
+  ["executor", "One order path for everything. Idempotent order ids survive restarts; protective exits override the strategy's own signal.", [
+    "hard stop-loss",
+    "take-profit / ATR trail",
+    "DRY_RUN honored",
+  ]],
+  ["your exchange", "The order lands on your own CoinDCX account, placed with your key. Fills, P&L and TDS are persisted per trade.", []],
+];
+
+// One ₹10,000 round trip on an INR pair. These are the numbers most bots
+// quietly leave out - GST on fees and TDS on the sell leg.
+const COST_ROWS: [string, string, string][] = [
+  ["buy", "exchange fee · 0.2%", "20.00"],
+  ["buy", "GST on fee · 18%", "3.60"],
+  ["sell", "exchange fee · 0.2%", "20.00"],
+  ["sell", "GST on fee · 18%", "3.60"],
+  ["sell", "TDS · 1%", "100.00"],
 ];
 
 const FEATURES: [string, string][] = [
   ["All 7 strategy templates", "Trend, momentum, mean-reversion, volatility and breakout systems - every template unlocked."],
   ["Entry / exit previews", "Every strategy is simulated on real candles before you add it, with entries and exits marked on the chart."],
+  ["Build your own", "Compose entry rules from indicator blocks and backtest them across four history windows while you design."],
   ["Full analytics dashboard", "Equity curve, drawdown, daily P&L, win rate and per-strategy breakdown - plus a pro view with technical metrics."],
   ["Risk-managed executor", "Hard stops, take-profits, ATR trailing stops, daily loss limits and a kill switch on every strategy."],
-  ["Non-custodial by design", "Funds never leave your CoinDCX account. Keys are encrypted, withdrawals stay disabled."],
   ["DRY_RUN first", "Paper-trade any setup with realistic fills, fees and TDS before a single rupee goes live."],
+];
+
+const FAQ: [string, string][] = [
+  [
+    "Where does my money actually sit?",
+    "In your own CoinDCX account, the whole time. Strattice holds an API key you create - with withdrawals disabled - and uses it only to read balances and place orders. We cannot move funds out, and we never touch custody.",
+  ],
+  [
+    "Can a strategy lose money?",
+    "Yes. Every strategy here can and sometimes will lose - that's what the hard stops, daily loss limit and kill switch are for. Nothing on this site is a guarantee of profit, and simulated results never promise live ones.",
+  ],
+  [
+    "Can I try it without risking anything?",
+    "That's the default. New bots run in DRY_RUN: the engine simulates fills at real prices, including fees, GST and TDS, so the dashboard numbers are honest. You flip to live explicitly, and only when you choose to.",
+  ],
+  [
+    "Can I stop instantly?",
+    "Turn the bot off from your account page and no new entries are placed from the next poll. One honest detail: a strategy disabled while holding a position keeps managing that position's exit until it's flat - abandoning an open trade would be worse.",
+  ],
+  [
+    "Why is it free?",
+    "Early access. We want real usage and blunt feedback more than early revenue. If paid plans ever arrive you'll be told well in advance, and nothing will ever be charged without your explicit consent.",
+  ],
 ];
 
 export default function Home() {
   return (
     <div className="space-y-24">
       {/* Hero - left-aligned, with a strategy ledger as the signature */}
-      <section className="grid items-center gap-10 pt-6 lg:grid-cols-[1.05fr_0.95fr] lg:gap-14">
+      <section className="rise grid items-center gap-10 pt-6 lg:grid-cols-[1.05fr_0.95fr] lg:gap-14">
         <div>
           <div className="eyebrow flex items-center gap-2">
             <span className="h-1.5 w-1.5 rounded-full bg-gain" />
@@ -46,10 +104,13 @@ export default function Home() {
             to run the strategies, nothing else.
           </p>
           <HeroCta />
+          <p className="mt-4 font-mono text-[11px] uppercase tracking-wider text-faint">
+            no card · withdrawals stay disabled · DRY_RUN by default
+          </p>
         </div>
 
         {/* Signature: the strategy ledger - real templates, terminal readout */}
-        <div className="overflow-hidden rounded-lg border border-line bg-panel">
+        <div id="templates" className="scroll-mt-20 overflow-hidden rounded-lg border border-line bg-panel">
           <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
             <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-faint">
               strategy_templates
@@ -68,10 +129,21 @@ export default function Home() {
               </li>
             ))}
           </ul>
-          <div className="border-t border-line px-4 py-2.5 font-mono text-[11px] text-faint">
-            exits handled by shared stop-loss / take-profit / trail
+          <div className="flex items-center justify-between border-t border-line px-4 py-2.5 font-mono text-[11px] text-faint">
+            <span>exits: shared stop-loss / take-profit / ATR trail</span>
+            <span className="text-accent">+ build your own</span>
           </div>
         </div>
+      </section>
+
+      {/* Numbers strip - four facts, no adjectives */}
+      <section aria-label="Key numbers" className="grid gap-px overflow-hidden rounded-lg border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
+        {NUMBERS.map(([n, body]) => (
+          <div key={body} className="bg-panel px-5 py-4">
+            <div className="font-mono text-2xl font-semibold tnum tracking-tight text-fg">{n}</div>
+            <p className="mt-1 text-xs leading-relaxed text-muted">{body}</p>
+          </div>
+        ))}
       </section>
 
       {/* How it works - a real three-step sequence, so the numbering earns its place */}
@@ -88,8 +160,94 @@ export default function Home() {
         </ol>
       </section>
 
+      {/* The execution path - what actually happens between a signal and a fill */}
+      <section>
+        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="eyebrow">The execution path</h2>
+            <p className="mt-2 max-w-2xl font-display text-2xl font-semibold tracking-tight">
+              Four stages between a signal and your exchange. Risk sits in the middle, always.
+            </p>
+          </div>
+          <span className="font-mono text-[11px] uppercase tracking-wider text-faint">
+            signal → risk → execute → fill
+          </span>
+        </div>
+        <ol className="grid gap-px overflow-hidden rounded-lg border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
+          {PIPELINE.map(([title, body, checks], i) => (
+            <li key={title} className="relative bg-panel p-5">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-accent">{title}</span>
+                {i < PIPELINE.length - 1 && (
+                  <span aria-hidden="true" className="font-mono text-sm text-faint">→</span>
+                )}
+              </div>
+              <p className="mt-2.5 text-sm leading-relaxed text-muted">{body}</p>
+              {checks.length > 0 && (
+                <ul className="mt-3 space-y-1 border-t border-line/70 pt-3">
+                  {checks.map((c) => (
+                    <li key={c} className="flex items-center gap-2 font-mono text-[11px] text-dim">
+                      <span className="h-1 w-1 shrink-0 bg-faint" />
+                      {c}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      {/* Costs - the honest section. Most bots pretend friction doesn't exist. */}
+      <section id="costs" className="scroll-mt-20 grid items-start gap-10 lg:grid-cols-[1fr_0.9fr]">
+        <div>
+          <h2 className="eyebrow">Costs, modeled honestly</h2>
+          <p className="mt-2 font-display text-2xl font-semibold tracking-tight">
+            Every round trip on an Indian exchange costs about 1.5% before you earn a rupee.
+          </p>
+          <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted">
+            Exchange fees on both legs, 18% GST on those fees, and 1% TDS on every sell. A
+            strategy that looks brilliant gross can be a slow bleed net - our own research
+            retired every intraday configuration we tested for exactly this reason, with some
+            paying more in friction than their starting capital over multi-year windows.
+          </p>
+          <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted">
+            So every preview, backtest and DRY_RUN fill on Strattice is computed{" "}
+            <span className="text-fg">net of the full friction stack</span>. The templates hold
+            winners for days to weeks because that is the only backtested way to stay ahead of it.
+          </p>
+        </div>
+        <div className="overflow-hidden rounded-lg border border-line bg-panel">
+          <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+            <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-faint">
+              round_trip · ₹10,000
+            </span>
+            <span className="font-mono text-[11px] text-muted">INR pair</span>
+          </div>
+          <table className="w-full font-mono text-[13px]">
+            <tbody>
+              {COST_ROWS.map(([leg, what, amt], i) => (
+                <tr key={i} className="border-b border-line/70">
+                  <td className="w-14 px-4 py-2.5 text-[10px] uppercase tracking-wider text-faint">{leg}</td>
+                  <td className="py-2.5 pr-4 text-muted">{what}</td>
+                  <td className="tnum py-2.5 pr-4 text-right text-dim">₹{amt}</td>
+                </tr>
+              ))}
+              <tr>
+                <td className="px-4 py-3 text-[10px] uppercase tracking-wider text-faint">total</td>
+                <td className="py-3 pr-4 font-medium text-fg">friction paid</td>
+                <td className="tnum py-3 pr-4 text-right font-semibold text-loss">₹147.20</td>
+              </tr>
+            </tbody>
+          </table>
+          <div className="border-t border-line px-4 py-2.5 font-mono text-[11px] text-faint">
+            ≈ 1.47% of notional. simulations here start from this number, not from zero.
+          </div>
+        </div>
+      </section>
+
       {/* Everything included - pricing is off, the whole platform is free */}
-      <section id="features">
+      <section id="features" className="scroll-mt-20">
         <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="font-display text-2xl font-semibold tracking-tight">
@@ -106,13 +264,53 @@ export default function Home() {
         <div className="grid gap-px overflow-hidden rounded-lg border border-line bg-line sm:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map(([title, body]) => (
             <div key={title} className="bg-panel p-5">
-              <h3 className="flex items-center gap-2 font-display text-base font-semibold tracking-tight text-fg">
-                <span className="text-gain">✓</span>
+              <h3 className="flex items-center gap-2.5 font-display text-base font-semibold tracking-tight text-fg">
+                <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 bg-accent" />
                 {title}
               </h3>
               <p className="mt-1.5 text-sm leading-relaxed text-muted">{body}</p>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* FAQ - the questions a skeptical trader actually asks */}
+      <section id="faq" className="scroll-mt-20 grid gap-10 lg:grid-cols-[0.8fr_1.2fr]">
+        <div>
+          <h2 className="eyebrow">Straight answers</h2>
+          <p className="mt-2 font-display text-2xl font-semibold tracking-tight">
+            The questions a skeptical trader should ask.
+          </p>
+          <p className="mt-3 max-w-sm text-sm leading-relaxed text-muted">
+            If yours isn&rsquo;t here, the footer disclaimer is the fine print - there is no other
+            fine print.
+          </p>
+        </div>
+        <div className="divide-y divide-line rounded-lg border border-line bg-panel">
+          {FAQ.map(([question, answer]) => (
+            <details key={question} className="group px-5 py-4">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-medium text-fg [&::-webkit-details-marker]:hidden">
+                {question}
+                <span aria-hidden="true" className="shrink-0 font-mono text-faint transition-transform group-open:rotate-90">▸</span>
+              </summary>
+              <p className="mt-2.5 max-w-xl text-sm leading-relaxed text-muted">{answer}</p>
+            </details>
+          ))}
+        </div>
+      </section>
+
+      {/* Final CTA - one bordered band, no fireworks */}
+      <section className="rounded-lg border border-line bg-panel px-6 py-10 text-center sm:px-10">
+        <p className="eyebrow">Start in DRY_RUN</p>
+        <h2 className="mx-auto mt-3 max-w-xl font-display text-3xl font-bold leading-tight tracking-tight">
+          Watch a strategy trade your account without spending a rupee.
+        </h2>
+        <p className="mx-auto mt-3 max-w-md text-sm text-muted">
+          Link a key, add a template, and let the paper trades convince you - or not. Either
+          answer costs nothing.
+        </p>
+        <div className="flex justify-center">
+          <HeroCta />
         </div>
       </section>
     </div>

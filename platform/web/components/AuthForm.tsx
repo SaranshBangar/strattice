@@ -49,7 +49,7 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
   }
 
   return (
-    <div className="mx-auto max-w-sm rounded-lg border border-line bg-panel p-6">
+    <div className="mx-auto w-full max-w-md rounded-lg border border-line bg-panel p-6">
       <h1 className="font-display text-xl font-semibold tracking-tight text-fg">{mode === "sign-up" ? "Create your account" : "Sign in"}</h1>
       <p className="mt-1 text-sm text-muted">
         {mode === "sign-up" ? "Start running strategies on your own CoinDCX account." : "Welcome back to Strattice."}
