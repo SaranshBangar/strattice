@@ -14,6 +14,23 @@ body {
   background: rgba(201, 162, 75, 0.28);
 }
 
+/* thin dark scrollbars so wide tables don't ship a white bar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #232838 transparent;
+}
+*::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #232838;
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 /* numerics read as terminal output, not prose */
 .tnum {
   font-variant-numeric: tabular-nums;
@@ -23,6 +40,20 @@ body {
 /* hairline eyebrow used above section headers */
 .eyebrow {
   @apply font-mono text-[11px] uppercase tracking-[0.2em] text-faint;
+}
+
+/* landing-page section entrance: one subtle rise, no parade of animations */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.rise {
+  animation: rise 0.5s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rise {
+    animation: none;
+  }
 }
 
 /* toast entrance */

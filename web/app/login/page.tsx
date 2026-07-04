@@ -30,14 +30,23 @@ export default function Login() {
   }
 
   return (
-    <div className="wrap" style={{ maxWidth: 360, marginTop: "20vh" }}>
-      <h1>Unlock</h1>
-      <form onSubmit={submit}>
+    <div className="login">
+      <div className="login-brand">
+        {/* eslint-disable-next-line @next/next/no-img-element -- static asset */}
+        <img src="/favicon.svg" alt="" width={40} height={40} />
+        <div>
+          <div className="login-name">coindcx bot</div>
+          <div className="login-tag">private dashboard</div>
+        </div>
+      </div>
+      <form onSubmit={submit} className="card login-card">
+        <label className="login-label" htmlFor="pass">Passphrase</label>
         <input
+          id="pass"
           className="pass"
           type="password"
           autoFocus
-          placeholder="Passphrase"
+          placeholder="••••••••"
           value={pass}
           onChange={(e) => setPass(e.target.value)}
           disabled={loading}
@@ -45,8 +54,9 @@ export default function Login() {
         <button className="primary" type="submit" disabled={loading}>
           {loading ? <span className="spin" /> : "Unlock"}
         </button>
+        {err && <p className="login-err" role="alert">{err}</p>}
       </form>
-      {err && <div className="card red" style={{ marginTop: 10 }}>{err}</div>}
+      <p className="login-foot">bot status · positions · live market charts</p>
     </div>
   );
 }

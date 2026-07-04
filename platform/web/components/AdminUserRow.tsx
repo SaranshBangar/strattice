@@ -57,15 +57,24 @@ export function AdminUserRow({ u }: { u: AdminUser }) {
         <span className={u.linked ? "text-xs text-gain" : "text-xs text-faint"}>{u.linked ? "Linked" : "—"}</span>
       </td>
       <td className="whitespace-nowrap px-4 py-2.5">
-        <div className="flex items-center gap-1.5">
-          <span className={["h-1.5 w-1.5 rounded-full", u.bot_active ? "bg-gain" : "bg-faint"].join(" ")} />
-          <span className="text-xs text-dim">{u.bot_active ? "On" : "Off"}</span>
-          {u.bot_active ? (
-            <span className={["ml-1 rounded-sm px-1 py-0.5 font-mono text-[9px] font-semibold", u.bot_live ? "bg-warn/15 text-warn" : "bg-inset text-muted"].join(" ")}>
-              {u.bot_live ? "LIVE" : "DRY"}
-            </span>
-          ) : null}
-        </div>
+        {(() => {
+          // A bot that claims to be on but hasn't heartbeat in 2 minutes is stalled —
+          // the row an admin actually needs to notice.
+          const stalled = !!u.bot_active && (!u.last_heartbeat || Date.now() / 1000 - u.last_heartbeat > 120);
+          return (
+            <div className="flex items-center gap-1.5">
+              <span className={["h-1.5 w-1.5 rounded-full", u.bot_active ? (stalled ? "bg-warn" : "bg-gain") : "bg-faint"].join(" ")} />
+              <span className={["text-xs", stalled ? "text-warn" : "text-dim"].join(" ")}>
+                {u.bot_active ? (stalled ? "Stalled" : "On") : "Off"}
+              </span>
+              {u.bot_active ? (
+                <span className={["ml-1 rounded-sm px-1 py-0.5 font-mono text-[9px] font-semibold", u.bot_live ? "bg-warn/15 text-warn" : "bg-inset text-muted"].join(" ")}>
+                  {u.bot_live ? "LIVE" : "DRY"}
+                </span>
+              ) : null}
+            </div>
+          );
+        })()}
       </td>
       <td className="px-4 py-2.5 text-right font-mono tnum text-xs text-dim">{u.trades}</td>
       <td className="px-4 py-2.5">

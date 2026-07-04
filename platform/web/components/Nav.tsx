@@ -34,7 +34,7 @@ export function Nav() {
   const linkClass = (href: string) =>
     [
       "rounded-md px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-      pathname === href ? "bg-panel text-fg" : "text-muted hover:bg-panel hover:text-fg",
+      pathname === href ? "bg-panel text-fg shadow-[inset_0_-2px_0_0_theme(colors.accent.DEFAULT)]" : "text-muted hover:bg-panel hover:text-fg",
     ].join(" ");
 
   return (
@@ -87,6 +87,23 @@ export function Nav() {
           </>
         ) : (
           <div className="flex items-center gap-2">
+            {pathname === "/" && (
+              <div className="mr-2 hidden items-center gap-1 md:flex">
+                {([
+                  ["#templates", "Templates"],
+                  ["#costs", "Costs"],
+                  ["#faq", "FAQ"],
+                ] as const).map(([href, label]) => (
+                  <a
+                    key={href}
+                    href={href}
+                    className="rounded-md px-2.5 py-1.5 text-sm text-muted transition-colors hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  >
+                    {label}
+                  </a>
+                ))}
+              </div>
+            )}
             <Link
               href="/sign-in"
               className="rounded-md px-3 py-1.5 text-sm text-dim transition-colors hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"

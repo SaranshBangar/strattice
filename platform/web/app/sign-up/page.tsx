@@ -1,2 +1,11 @@
 import { AuthForm } from "@/components/AuthForm";
-export default function SignUpPage() { return <AuthForm mode="sign-up" />; }
+import { AuthPanel } from "@/components/AuthPanel";
+
+export default function SignUpPage() {
+  return (
+    <div className="mx-auto grid max-w-4xl items-start gap-10 py-6 lg:grid-cols-[1fr_0.9fr]">
+      <AuthForm mode="sign-up" />
+      <AuthPanel />
+    </div>
+  );
+}

@@ -30,6 +30,8 @@ export default function Dashboard() {
   const [err, setErr] = useState("");
   const [prices, setPrices] = useState<Record<string, number>>({});
   const [toasts, setToasts] = useState<{ id: number; msg: string; kind: string }[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [lastAt, setLastAt] = useState<Date | null>(null);
   // Track last-seen counts to spot new trades/positions between polls (skip first load).
   const seen = useRef<{ trades: number; positions: number } | null>(null);
 
@@ -40,12 +42,14 @@ export default function Dashboard() {
   }
 
   async function load() {
+    setBusy(true);
     try {
       const r = await fetch("/api/status", { cache: "no-store" });
       if (!r.ok) throw new Error((await r.json()).error ?? r.statusText);
       const data: Status = await r.json();
       setS(data);
       setErr("");
+      setLastAt(new Date());
       // toast on new trade / opened position (count went up since last poll)
       if (seen.current) {
         if (data.trades.length > seen.current.trades) {
@@ -66,6 +70,8 @@ export default function Dashboard() {
       setPrices(Object.fromEntries(entries));
     } catch (e: any) {
       setErr(String(e.message ?? e));
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -97,13 +103,41 @@ export default function Dashboard() {
     return () => clearInterval(id);
   }, []);
 
+  // Unrealized P&L across open positions, from the latest per-market close.
+  const unrealized = s
+    ? s.positions.reduce((sum, p) => {
+        const px = prices[p.market];
+        return px ? sum + (px - p.avg_price) * p.qty : sum;
+      }, 0)
+    : 0;
+  const havePrices = s ? s.positions.some((p) => prices[p.market]) : false;
+
   return (
     <div className="wrap">
       <header className="topbar">
         <h1>Dashboard</h1>
         {s && <span className={`pill ${s.mode.toLowerCase().includes("live") ? "live" : "off"}`}>{s.mode}</span>}
         {s?.kill_switch && <span className="pill off">KILL</span>}
-        <button className="refresh" onClick={load}>↻</button>
+        <div className="top-meta">
+          {lastAt && !err && (
+            <span className="updated">
+              <span className="dot ok" aria-hidden="true" />
+              {lastAt.toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}
+            </span>
+          )}
+          {err && (
+            <span className="updated">
+              <span className="dot bad" aria-hidden="true" />
+              offline
+            </span>
+          )}
+          <button className={`refresh ${busy ? "busy" : ""}`} onClick={load} aria-label="Refresh" disabled={busy}>
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+              <path d="M21 3v6h-6" />
+            </svg>
+          </button>
+        </div>
       </header>
 
       {err && <div className="card red" style={{ marginTop: 10 }}>{err}</div>}
@@ -111,10 +145,13 @@ export default function Dashboard() {
 
       {s && (
         <>
-          {/* P&L hero — the at-a-glance numbers */}
+          {/* P&L hero — equity leads, everything else follows */}
           <div className="hero">
-            <Stat l="Equity" v={inr(s.equity)} />
-            <Stat l="Free" v={inr(s.free)} />
+            <div className="kv wide">
+              <span className="l">Equity</span>
+              <span className="v">{inr(s.equity)}</span>
+              <span className="sub">free {inr(s.free)}</span>
+            </div>
             <Stat l="Today" v={inr(s.realized_today)} cls={s.realized_today >= 0 ? "green" : "red"} />
             <Stat l="Total P&L" v={inr(s.total_realized)} cls={s.total_realized >= 0 ? "green" : "red"} />
           </div>
@@ -122,26 +159,48 @@ export default function Dashboard() {
           {/* Chart — centerpiece */}
           <MarketChart />
 
-          <h2>Strategies ({s.strategies?.filter((g) => g.enabled).length ?? 0}/{s.strategies?.length ?? 0} on)</h2>
+          <h2>Strategies <span className="count">{s.strategies?.filter((g) => g.enabled).length ?? 0}/{s.strategies?.length ?? 0} on</span></h2>
           <Strategies s={s} toggle={toggle} />
 
-          <h2>Positions ({s.positions.length})</h2>
+          <h2>
+            Positions <span className="count">{s.positions.length}</span>
+            {havePrices && unrealized !== 0 && (
+              <span className={`chip ${unrealized >= 0 ? "green" : "red"}`}>
+                {unrealized >= 0 ? "+" : ""}{inr(unrealized)} unrealized
+              </span>
+            )}
+          </h2>
           <Positions s={s} prices={prices} />
 
-          <h2>Trades ({s.trades.length})</h2>
+          <h2>Trades <span className="count">{s.trades.length}</span></h2>
           <Trades s={s} />
 
-          <h2>Signals ({s.signals?.length ?? 0})</h2>
+          <h2>Signals <span className="count">{s.signals?.length ?? 0}</span></h2>
           <Signals s={s} />
 
-          {/* Risk & limits — secondary, tucked at the bottom */}
+          {/* Risk & limits — how much headroom is left on each guardrail */}
           <h2>Risk &amp; limits</h2>
           <div className="card">
-            <div className="grid">
-              <Stat l="Loss limit" v={inr(s.loss_limit)} cls="red" />
+            <Meter
+              label="Trades today"
+              used={s.trades_today}
+              cap={s.max_trades_per_day}
+              text={`${s.trades_today} / ${s.max_trades_per_day}`}
+            />
+            <Meter
+              label="Daily loss"
+              used={Math.max(0, -s.realized_today)}
+              cap={s.loss_limit}
+              text={`${inr(Math.max(0, -s.realized_today))} of ${inr(s.loss_limit)}`}
+            />
+            <Meter
+              label="Capital at risk"
+              used={s.capital_at_risk}
+              cap={s.cap_ceiling}
+              text={`${inr(s.capital_at_risk)} of ${inr(s.cap_ceiling)}`}
+            />
+            <div className="grid" style={{ marginTop: 14 }}>
               <Stat l="TDS today" v={inr(s.tds_today)} />
-              <Stat l="At risk" v={`${inr(s.capital_at_risk)} / ${inr(s.cap_ceiling)}`} />
-              <Stat l="Trades today" v={`${s.trades_today} / ${s.max_trades_per_day}`} />
               <Stat l="Quote" v={s.quote} />
               {s.inr_per_usdt != null && <Stat l="INR / USDT" v={inr(s.inr_per_usdt)} />}
             </div>
@@ -360,6 +419,23 @@ function SignalsTable({ rows, page, setPage }: { rows: Signal[]; page: number; s
         </div>
       )}
     </>
+  );
+}
+
+// Guardrail usage bar: green with headroom, amber past 70%, red past 90%.
+function Meter({ label, used, cap, text }: { label: string; used: number; cap: number; text: string }) {
+  const frac = cap > 0 ? Math.min(1, used / cap) : 0;
+  const tone = frac >= 0.9 ? "red" : frac >= 0.7 ? "yellow" : "green";
+  return (
+    <div className="meter">
+      <div className="meter-head">
+        <span className="l">{label}</span>
+        <span className={`mono t ${tone}`}>{text}</span>
+      </div>
+      <div className="meter-track" role="progressbar" aria-valuenow={Math.round(frac * 100)} aria-valuemin={0} aria-valuemax={100} aria-label={label}>
+        <div className={`meter-fill ${tone}`} style={{ width: `${Math.max(frac * 100, used > 0 ? 2 : 0)}%` }} />
+      </div>
+    </div>
   );
 }
 

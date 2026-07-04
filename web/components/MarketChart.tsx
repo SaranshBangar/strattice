@@ -61,6 +61,8 @@ export default function MarketChart() {
   const last = data.at(-1)?.close;
   const chgPct =
     data.length > 1 ? ((data.at(-1)!.close - data[0].close) / data[0].close) * 100 : 0;
+  const hi = data.length ? Math.max(...data.map((c) => c.high)) : null;
+  const lo = data.length ? Math.min(...data.map((c) => c.low)) : null;
 
   const chart = useMemo(
     () => ({
@@ -100,13 +102,18 @@ export default function MarketChart() {
           ))}
         </select>
       </div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 6 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
         <span className="mono" style={{ fontSize: 22, fontWeight: 700 }}>
           {last ? `₹${last.toLocaleString("en-IN")}` : "—"}
         </span>
         <span className={up ? "green" : "red"} style={{ fontWeight: 600 }}>
           {chgPct >= 0 ? "+" : ""}{chgPct.toFixed(2)}%
         </span>
+        {hi !== null && lo !== null && (
+          <span className="mono muted" style={{ marginLeft: "auto", fontSize: 11 }}>
+            H ₹{hi.toLocaleString("en-IN")} · L ₹{lo.toLocaleString("en-IN")}
+          </span>
+        )}
       </div>
       <div style={{ height: "min(50vh, 320px)" }}>
         {loading ? (
