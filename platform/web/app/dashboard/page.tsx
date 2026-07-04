@@ -47,7 +47,6 @@ export default async function DashboardPage() {
 
   const hbAge = bot.last_heartbeat ? Date.now() / 1000 - bot.last_heartbeat : null;
   const healthy = hbAge !== null && hbAge < 120;
-  const full = tier.dashboard === "full";
   const tradeRows = trades as unknown as Trade[];
   const equityVals = series.map((s) => s.equity);
   const decided = stats.wins + stats.losses;
@@ -134,79 +133,65 @@ export default async function DashboardPage() {
         </p>
       )}
 
-      {full ? (
-        <>
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <section className="rounded-lg border border-line bg-panel lg:col-span-2">
-              <div className="flex items-center justify-between border-b border-line px-4 py-3">
-                <h3 className="font-display text-sm font-semibold tracking-tight text-dim">Equity curve</h3>
-                <span className="font-mono text-[11px] text-faint">{series.length} snapshots</span>
-              </div>
-              <div className="p-4">
-                <EquityCurve points={equityVals} fmt={inr} xTicks={equityXTicks} />
-              </div>
-            </section>
-
-            <section className="rounded-lg border border-line bg-panel">
-              <div className="border-b border-line px-4 py-3">
-                <h3 className="font-display text-sm font-semibold tracking-tight text-dim">Win / loss</h3>
-              </div>
-              <div className="grid place-items-center p-6">
-                <WinRateDonut wins={stats.wins} losses={stats.losses} />
-              </div>
-            </section>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <section className="rounded-lg border border-line bg-panel lg:col-span-2">
+          <div className="flex items-center justify-between border-b border-line px-4 py-3">
+            <h3 className="font-display text-sm font-semibold tracking-tight text-dim">Equity curve</h3>
+            <span className="font-mono text-[11px] text-faint">{series.length} snapshots</span>
           </div>
-
-          {/* Drawdown curve — pro-view only. */}
-          <section className="hidden rounded-lg border border-line bg-panel [html.pro_&]:block">
-            <div className="flex items-center justify-between border-b border-line px-4 py-3">
-              <h3 className="font-display text-sm font-semibold tracking-tight text-dim">Drawdown</h3>
-              <span className="font-mono text-[11px] text-faint">peak-to-trough · max -{maxDD.toFixed(1)}%</span>
-            </div>
-            <div className="p-4">
-              <EquityCurve points={ddSeries.length > 1 ? ddSeries : []} fmt={(n) => `${n.toFixed(1)}%`} xTicks={equityXTicks} />
-            </div>
-          </section>
-
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <section className="rounded-lg border border-line bg-panel lg:col-span-2">
-              <div className="flex items-center justify-between border-b border-line px-4 py-3">
-                <h3 className="font-display text-sm font-semibold tracking-tight text-dim">Daily realized P&L</h3>
-                <span className="font-mono text-[11px] text-faint">last {daily.length}d</span>
-              </div>
-              <div className="p-4">
-                <PnlBars data={daily.map((d) => ({ label: shortDay(d.day), value: d.pnl }))} fmt={(n) => inr(n)} />
-              </div>
-            </section>
-
-            <DataTable
-              title="By strategy"
-              head={["Strategy", "Trades", "Win%", "P&L"]}
-              align={["left", "right", "right", "right"]}
-              rows={breakdown.map((b): Cell[] => {
-                const dec = b.wins + b.losses;
-                return [
-                  strategyLabel(b.strategy),
-                  { v: b.trades, align: "right" },
-                  { v: dec ? `${Math.round((b.wins / dec) * 100)}%` : "-", align: "right", tone: "muted" },
-                  { v: `${b.pnl > 0 ? "+" : ""}${fmt(b.pnl)}`, align: "right", tone: b.pnl < 0 ? "bad" : b.pnl > 0 ? "good" : "muted" },
-                ];
-              })}
-              empty="No closed trades yet."
-            />
+          <div className="p-4">
+            <EquityCurve points={equityVals} fmt={inr} xTicks={equityXTicks} />
           </div>
-        </>
-      ) : (
-        <section className="flex flex-col items-start gap-2 rounded-lg border border-dashed border-line bg-panel px-4 py-5">
-          <h3 className="font-display text-sm font-semibold tracking-tight text-dim">Analytics dashboard</h3>
-          <p className="text-sm text-muted">
-            Equity curve, daily P&L, win-rate and per-strategy breakdown are part of the Plus plan and above.
-          </p>
-          <Link href="/billing" className="mt-1 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-ink transition-colors hover:bg-accent-hi">
-            Upgrade to unlock
-          </Link>
         </section>
-      )}
+
+        <section className="rounded-lg border border-line bg-panel">
+          <div className="border-b border-line px-4 py-3">
+            <h3 className="font-display text-sm font-semibold tracking-tight text-dim">Win / loss</h3>
+          </div>
+          <div className="grid place-items-center p-6">
+            <WinRateDonut wins={stats.wins} losses={stats.losses} />
+          </div>
+        </section>
+      </div>
+
+      {/* Drawdown curve — pro-view only. */}
+      <section className="hidden rounded-lg border border-line bg-panel [html.pro_&]:block">
+        <div className="flex items-center justify-between border-b border-line px-4 py-3">
+          <h3 className="font-display text-sm font-semibold tracking-tight text-dim">Drawdown</h3>
+          <span className="font-mono text-[11px] text-faint">peak-to-trough · max -{maxDD.toFixed(1)}%</span>
+        </div>
+        <div className="p-4">
+          <EquityCurve points={ddSeries.length > 1 ? ddSeries : []} fmt={(n) => `${n.toFixed(1)}%`} xTicks={equityXTicks} />
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <section className="rounded-lg border border-line bg-panel lg:col-span-2">
+          <div className="flex items-center justify-between border-b border-line px-4 py-3">
+            <h3 className="font-display text-sm font-semibold tracking-tight text-dim">Daily realized P&L</h3>
+            <span className="font-mono text-[11px] text-faint">last {daily.length}d</span>
+          </div>
+          <div className="p-4">
+            <PnlBars data={daily.map((d) => ({ label: shortDay(d.day), value: d.pnl }))} fmt={(n) => inr(n)} />
+          </div>
+        </section>
+
+        <DataTable
+          title="By strategy"
+          head={["Strategy", "Trades", "Win%", "P&L"]}
+          align={["left", "right", "right", "right"]}
+          rows={breakdown.map((b): Cell[] => {
+            const dec = b.wins + b.losses;
+            return [
+              strategyLabel(b.strategy),
+              { v: b.trades, align: "right" },
+              { v: dec ? `${Math.round((b.wins / dec) * 100)}%` : "-", align: "right", tone: "muted" },
+              { v: `${b.pnl > 0 ? "+" : ""}${fmt(b.pnl)}`, align: "right", tone: b.pnl < 0 ? "bad" : b.pnl > 0 ? "good" : "muted" },
+            ];
+          })}
+          empty="No closed trades yet."
+        />
+      </div>
 
       <PriceChart markets={userMarkets} />
 

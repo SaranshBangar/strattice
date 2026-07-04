@@ -9,7 +9,6 @@ import { useToast } from "@/components/Toast";
 const BASE_LINKS: [string, string][] = [
   ["/dashboard", "Dashboard"],
   ["/strategies", "Strategies"],
-  ["/billing", "Billing"],
   ["/account", "Account"],
 ];
 

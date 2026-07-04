@@ -15,17 +15,17 @@ export default async function StrategiesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-display text-2xl font-semibold tracking-tight">Strategies</h1>
-        <span className="rounded-md border border-line bg-panel px-3 py-1 font-mono text-xs uppercase tracking-wider text-dim">
-          {tier.name} plan
+        <span className="rounded-md border border-gain/40 bg-gain/10 px-3 py-1 font-mono text-xs uppercase tracking-wider text-gain">
+          all templates free
         </span>
       </div>
       <p className="text-sm text-muted">
-        {tier.tradesPerDay} trades/day · {tier.maxActive === null ? "unlimited" : tier.maxActive} active strategies ·{" "}
-        {tier.custom ? "custom strategies allowed" : "stock strategies only"}
+        Pick a template, preview exactly where it would have entered and exited on live market
+        data, then add it. Every template is unlocked · {tier.tradesPerDay} trades/day.
       </p>
-      <StrategyManager allowed={[...tier.allowed]} maxActive={tier.maxActive} strategies={strategies} />
+      <StrategyManager allowed={[...tier.allowed]} strategies={strategies} />
     </div>
   );
 }

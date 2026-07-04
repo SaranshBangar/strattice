@@ -3,6 +3,10 @@
 Mirrors platform/RESEARCH.md §3. The Next.js app MUST agree with this table; keep them in
 sync (or have Next.js read it). Enforced here in the supervisor as the last line of defense:
 even if the UI lets a user enable a forbidden strategy, resolve() + config_gen drop it.
+
+PRICING IS DISABLED FOR NOW: the platform is fully free. Every tier resolves to the same
+fully-unlocked entitlements; the paid tier names are kept only so legacy subscription rows
+still resolve. The allowlist/cap machinery stays in place for when pricing returns.
 """
 from __future__ import annotations
 
@@ -13,7 +17,7 @@ ALL_TEMPLATES = (
     "ma_crossover", "rsi", "momentum", "vol_expansion",
     "fast_rsi", "bb_reversion", "squeeze_breakout",
 )
-DEFAULT_TEMPLATE = "ma_crossover"  # the one free/starter users get
+DEFAULT_TEMPLATE = "ma_crossover"  # the starting template new users see first
 
 
 @dataclass(frozen=True)
@@ -27,15 +31,15 @@ class Tier:
     dashboard: str              # "basic" | "full"
 
 
-_DEFAULT_ONLY = frozenset({DEFAULT_TEMPLATE})
 _ALL = frozenset(ALL_TEMPLATES)
 
+# Everything free while pricing is off: all templates, no active cap, full dashboard.
 TIERS: dict[str, Tier] = {
-    "free":    Tier("free",      0,   5, 1, _DEFAULT_ONLY, False, "basic"),
-    "starter": Tier("starter", 299,  50, 1, _DEFAULT_ONLY, False, "basic"),
-    "plus":    Tier("plus",    499,  50, 3, _ALL,          False, "full"),
-    "pro":     Tier("pro",     749,  75, None, _ALL,       False, "full"),
-    "max":     Tier("max",     999, 100, None, _ALL,       True,  "full"),
+    "free":    Tier("free",    0, 100, None, _ALL, True, "full"),
+    "starter": Tier("starter", 0, 100, None, _ALL, True, "full"),
+    "plus":    Tier("plus",    0, 100, None, _ALL, True, "full"),
+    "pro":     Tier("pro",     0, 100, None, _ALL, True, "full"),
+    "max":     Tier("max",     0, 100, None, _ALL, True, "full"),
 }
 
 
@@ -71,29 +75,26 @@ def allowed_strategies(tier: str, requested: list[dict]) -> list[dict]:
 
 
 if __name__ == "__main__":
-    # self-check: caps + allowlist + custom gating actually bind.
+    # self-check: everything is unlocked while pricing is off, and the cap machinery
+    # still filters unknown templates.
     free = resolve("free")
-    assert free.trades_per_day == 5 and free.allowed == _DEFAULT_ONLY
+    assert free.trades_per_day == 100 and free.allowed == _ALL and free.custom
+    assert free.max_active is None and free.dashboard == "full"
     assert resolve("nonsense").name == "free"
     assert resolve("MAX").trades_per_day == 100 and resolve("max").custom
 
-    # free user requesting 3 strategies incl. a forbidden one -> only 1 default, enabled.
+    # free user may run any mix of templates, all enabled; unknown templates still drop.
     req = [
         {"template": "ma_crossover", "market": "I-BTC_INR", "enabled": True},
-        {"template": "rsi", "market": "I-ETH_INR", "enabled": True},          # not allowed on free
-        {"template": "ma_crossover", "market": "I-ETH_INR", "enabled": True}, # over max_active=1
+        {"template": "rsi", "market": "I-ETH_INR", "enabled": True},
+        {"template": "squeeze_breakout", "market": "I-DOGE_INR", "enabled": True},
+        {"template": "not_a_template", "market": "I-BTC_INR", "enabled": True},
     ]
     got = allowed_strategies("free", req)
-    assert all(s["template"] == "ma_crossover" for s in got), got
-    assert sum(s["enabled"] for s in got) == 1, ("free caps to 1 active", got)
+    assert len(got) == 3 and sum(s["enabled"] for s in got) == 3, got
 
-    # plus: any 3, cap enforced at 3 active.
-    req5 = [{"template": tpl, "market": "M", "enabled": True} for tpl in ALL_TEMPLATES[:5]]
-    got = allowed_strategies("plus", req5)
-    assert sum(s["enabled"] for s in got) == 3, ("plus caps to 3 active", got)
-
-    # custom params stripped for non-custom tier, kept for max.
+    # custom params are kept on every tier while pricing is off.
     cust = [{"template": "rsi", "market": "M", "enabled": True, "params": {"period": 9}}]
-    assert allowed_strategies("pro", cust)[0]["params"] is None
+    assert allowed_strategies("free", cust)[0]["params"] == {"period": 9}
     assert allowed_strategies("max", cust)[0]["params"] == {"period": 9}
     print("entitlements self-check OK")

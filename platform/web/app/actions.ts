@@ -45,7 +45,12 @@ export async function setBotAction(patch: { active?: boolean; live?: boolean }) 
 }
 
 // ---------- billing (Cashfree) ----------
+// Pricing is disabled for now (the platform is fully free); checkout is kept behind this
+// guard so the plumbing survives for when plans return, but nothing can start a mandate.
+const PRICING_ENABLED = false;
+
 export async function startSubscriptionAction(tier: string, phone: string) {
+  if (!PRICING_ENABLED) throw new Error("Strattice is free right now - there is nothing to subscribe to.");
   const user = await getUser();
   if (!user) throw new Error("unauthorized");
   if (!PAID_TIERS.includes(tier as TierName)) throw new Error("invalid tier");

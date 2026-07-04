@@ -14,11 +14,11 @@ thing the two share — see `../RESEARCH.md`.
 ## Routes
 | Path | What |
 |------|------|
-| `/` | Landing + pricing (from `lib/entitlements.ts`) |
+| `/` | Landing (pricing removed — everything is free for now) |
 | `/sign-in`, `/sign-up` | Better Auth |
 | `/account` | Link CoinDCX keys (encrypted), bot on/off + DRY_RUN/LIVE switch |
-| `/strategies` | Add/enable strategies, gated by tier |
-| `/billing` | Cashfree subscribe / cancel; shows current plan |
+| `/strategies` | Card-based template picker with per-template config + a simulated entry/exit preview chart on live candles (`lib/strategy-sim.ts`, `components/StrategyPreview.tsx`) |
+| `/billing` | Free-access notice; cancel button for legacy Cashfree subscriptions only |
 | `/dashboard` | Bot health, equity, trades/day vs cap, positions, recent trades |
 | `/api/auth/[...all]` | Better Auth handler |
 | `/api/cashfree/webhook` | Signed Cashfree webhook → updates tier/status (idempotent) |
@@ -49,7 +49,12 @@ npm run build              # production build
 Set the env vars in the Vercel project. D1 is reached via the REST API, so no Cloudflare runtime
 is needed. (Better Auth runs on the Node.js runtime — the credential crypto uses `Buffer`.)
 
-## Billing (Phase 3 — Cashfree Subscriptions)
+## Billing (Phase 3 — Cashfree Subscriptions) — DISABLED FOR NOW
+Pricing is off: every tier in `lib/entitlements.ts` (and `../worker/entitlements.py`) resolves
+to fully-unlocked entitlements, `startSubscriptionAction` is guarded behind `PRICING_ENABLED =
+false` in `app/actions.ts`, and the checkout UI is removed. The plumbing below is kept intact
+(webhook still processes events for legacy subscriptions; `/billing` still lets them cancel).
+
 - `lib/cashfree.ts`: create/cancel subscription (inline plan per tier), webhook verify.
 - Flow: `/billing` → `startSubscriptionAction` creates a subscription + a `pending` row →
   Cashfree JS `subscriptionsCheckout` (UPI Autopay/eMandate) → webhook confirms payment →
@@ -61,6 +66,7 @@ is needed. (Better Auth runs on the Node.js runtime — the credential crypto us
   `CANCEL`, `EXPIR` substrings (resilient, but confirm payload shape in the dashboard test event).
 
 ## Known limits
-- "Custom" strategy params (Max tier) aren't surfaced in the UI yet; the data model supports them.
+- "Custom" strategy params aren't surfaced in the UI yet (allowed on every tier now that
+  pricing is off); the data model supports them.
 - Drizzle `sqlite-proxy` maps D1 object-rows by `Object.values` (column order = select order);
   fine for Better Auth's generated queries.
