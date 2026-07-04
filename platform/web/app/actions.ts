@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { getUser, requireUserId, requireAdmin } from "@/lib/session";
 import * as q from "@/lib/queries";
 import { createSubscription, cancelSubscription, cashfreeMode } from "@/lib/cashfree";
-import { PAID_TIERS, TIERS, type TierName } from "@/lib/entitlements";
+import { PAID_TIERS, TIERS, BUILTIN_TEMPLATES, type TierName, type BuiltinTemplate } from "@/lib/entitlements";
+import { sanitizeParams } from "@/lib/strategy-sim";
+import { sanitizeCustomDef } from "@/lib/custom-strategy";
 import { sendApiKeyEmail } from "@/lib/email";
 
 export async function saveCredentialsAction(formData: FormData) {
@@ -21,7 +23,24 @@ export async function saveCredentialsAction(formData: FormData) {
 
 export async function addStrategyAction(formData: FormData) {
   const userId = await requireUserId();
-  await q.addStrategy(userId, String(formData.get("template")), String(formData.get("market")));
+  const template = String(formData.get("template"));
+  const market = String(formData.get("market") || "").trim().toUpperCase();
+  if (!/^[A-Z0-9_-]{3,24}$/.test(market)) throw new Error("Enter a valid market id, e.g. I-BTC_INR");
+
+  // params are user input: re-validate server-side regardless of what the UI enforced.
+  const raw = formData.get("params");
+  let paramsJson: string | null = null;
+  if (template === "custom") {
+    paramsJson = JSON.stringify(sanitizeCustomDef(String(raw ?? "")));
+  } else if (raw) {
+    if (!(BUILTIN_TEMPLATES as readonly string[]).includes(template)) throw new Error("unknown template");
+    let parsed: unknown;
+    try { parsed = JSON.parse(String(raw)); } catch { throw new Error("Invalid strategy parameters."); }
+    const clean = sanitizeParams(template as BuiltinTemplate, parsed);
+    paramsJson = clean ? JSON.stringify(clean) : null;
+  }
+
+  await q.addStrategy(userId, template, market, paramsJson);
   revalidatePath("/strategies");
 }
 

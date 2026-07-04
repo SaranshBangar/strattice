@@ -4,11 +4,12 @@
 // the template actually watches, shaded holding periods, and summary stats. This is
 // what "picking a strategy" should feel like: see the behavior before you add it.
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Template } from "@/lib/entitlements";
+import type { BuiltinTemplate } from "@/lib/entitlements";
 import {
-  simulate, overlays, TEMPLATE_CONFIG, EXIT_REASON_LABEL, FRICTION_PCT,
-  type Candle, type SimTrade,
+  simulate, overlays, mergedParams, EXIT_REASON_LABEL, FRICTION_PCT,
+  type Candle, type SimTrade, type OverlaySeries, type SimResult,
 } from "@/lib/strategy-sim";
+import { simulateCustom, customOverlays, customWarmup, type CustomDef } from "@/lib/custom-strategy";
 import { Select } from "@/components/Select";
 import { Spinner } from "@/components/Spinner";
 
@@ -43,7 +44,17 @@ function Stat({ label, value, tone = "default", hint }: {
   );
 }
 
-export function StrategyPreview({ template, market }: { template: Template; market: string }) {
+export function StrategyPreview({ template, market, params, custom, onWindowResult }: {
+  /** Builtin template to preview (ignored when `custom` is set). */
+  template?: BuiltinTemplate;
+  market: string;
+  /** Entry-param overrides for the builtin template. */
+  params?: Record<string, number> | null;
+  /** A user-built strategy definition - takes precedence over `template`. */
+  custom?: CustomDef | null;
+  /** Reports the current window's candles upward (the builder compares strategies on them). */
+  onWindowResult?: (interval: string, candles: Candle[]) => void;
+}) {
   const [interval, setInterval_] = useState("1h");
   const [candles, setCandles] = useState<Candle[]>([]);
   const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
@@ -63,21 +74,34 @@ export function StrategyPreview({ template, market }: { template: Template; mark
         if (!r.ok || !Array.isArray(j.candles) || j.candles.length < 10) { setStatus("error"); return; }
         setCandles(j.candles);
         setStatus("ok");
+        onWindowResult?.(interval, j.candles);
       } catch {
         if (alive) setStatus("error");
       }
     })();
     return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onWindowResult is a notification, not a dependency
   }, [pair, interval]);
 
-  const sim = useMemo(() => (candles.length ? simulate(template, candles) : null), [template, candles]);
-  const lines = useMemo(() => (candles.length ? overlays(template, candles) : []), [template, candles]);
-  const cfg = TEMPLATE_CONFIG[template];
+  const sim: SimResult | null = useMemo(() => {
+    if (!candles.length) return null;
+    if (custom) return simulateCustom(custom, candles);
+    return template ? simulate(template, candles, params) : null;
+  }, [template, candles, params, custom]);
+  const lines: OverlaySeries[] = useMemo(() => {
+    if (!candles.length) return [];
+    if (custom) return customOverlays(custom, candles);
+    return template ? overlays(template, candles, params) : [];
+  }, [template, candles, params, custom]);
 
   // Bars before the slowest indicator (usually the regime SMA) has data - marked on the chart.
   const warmup = Math.min(
     candles.length,
-    Math.max(...Object.values(cfg.params).filter((v) => Number.isInteger(v) && v > 1), 2) + 1,
+    custom
+      ? customWarmup(custom)
+      : template
+        ? Math.max(...Object.values(mergedParams(template, params)).filter((v) => Number.isInteger(v) && v > 1), 2) + 1
+        : 2,
   );
 
   // ----- chart geometry -----

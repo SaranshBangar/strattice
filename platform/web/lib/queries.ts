@@ -96,7 +96,7 @@ export async function listStrategies(userId: string): Promise<StrategyRow[]> {
     [userId]);
 }
 
-export async function addStrategy(userId: string, template: string, market: string) {
+export async function addStrategy(userId: string, template: string, market: string, params?: string | null) {
   const tier = await effectiveTier(userId);
   if (!isAllowed(tier, template)) throw new Error(`${template} not allowed on the ${tier.name} plan`);
   const rows = await listStrategies(userId);
@@ -105,8 +105,8 @@ export async function addStrategy(userId: string, template: string, market: stri
   const enabled = tier.maxActive === null || enabledCount < tier.maxActive ? 1 : 0;
   const pos = rows.length;
   await d1Query(
-    "insert into user_strategies(id,user_id,template,market,enabled,position) values (?,?,?,?,?,?)",
-    [randomUUID(), userId, template, market, enabled, pos]);
+    "insert into user_strategies(id,user_id,template,market,enabled,position,params) values (?,?,?,?,?,?,?)",
+    [randomUUID(), userId, template, market, enabled, pos, params ?? null]);
 }
 
 export async function setStrategyEnabled(userId: string, id: string, enabled: boolean) {

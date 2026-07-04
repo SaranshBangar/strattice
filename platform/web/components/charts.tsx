@@ -226,6 +226,111 @@ export function WinRateDonut({ wins, losses, size = 132 }: { wins: number; losse
   );
 }
 
+/** Underwater (drawdown) curve: 0% pinned to the top, depth grows downward in loss red.
+ *  `points` are drawdown depths as POSITIVE percentages (0 = at the peak). */
+export function DrawdownCurve({
+  points,
+  height = 180,
+  xTicks = [],
+}: {
+  points: number[];
+  height?: number;
+  xTicks?: string[];
+}) {
+  if (points.length < 2) return <ChartEmpty height={height} label="Not enough history yet." />;
+  const W = 1000;
+  const H = 300;
+  const N = 4;
+  const maxDD = Math.max(...points, 0.1); // never a zero-height domain
+  const hi = maxDD * 1.08; // headroom below the deepest trough
+  const y = (v: number) => (v / hi) * H;
+  const x = (i: number) => (i / (points.length - 1)) * W;
+  const path = points.map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ");
+  const area = `M0 0 ${points.map((v, i) => `L${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ")} L${W} 0 Z`;
+  const yTicks = Array.from({ length: N + 1 }, (_, i) => (i / N) * hi);
+  // deepest point, direct-labeled
+  let troughIdx = 0;
+  for (let i = 1; i < points.length; i++) if (points[i] > points[troughIdx]) troughIdx = i;
+
+  return (
+    <ChartFrame height={height} yTicks={yTicks} xTicks={xTicks} fmtY={(v) => (v === 0 ? "0%" : `-${v.toFixed(1)}%`)}>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" width="100%" style={{ height, display: "block" }} role="img" aria-label="Drawdown from peak over time">
+        {yTicks.map((_, i) => (
+          <line key={i} x1={0} x2={W} y1={(i / N) * H} y2={(i / N) * H} stroke={C.line} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        ))}
+        <line x1={0} x2={W} y1={0} y2={0} stroke={C.faint} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        <path d={area} fill={C.loss} fillOpacity={0.12} />
+        <path d={path} fill="none" stroke={C.loss} strokeWidth={1.75} vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+        {points[troughIdx] > 0.05 && (
+          <circle cx={x(troughIdx)} cy={y(points[troughIdx])} r={3.5} fill={C.loss} vectorEffect="non-scaling-stroke">
+            <title>{`Max drawdown -${points[troughIdx].toFixed(1)}%`}</title>
+          </circle>
+        )}
+      </svg>
+    </ChartFrame>
+  );
+}
+
+/** Distribution of daily P&L: how the days cluster around zero. Bars left of zero in
+ *  loss red, right of zero in gain green - the shape tells you more than the average. */
+export function PnlHistogram({
+  values,
+  height = 180,
+  fmt = (n: number) => n.toFixed(0),
+}: {
+  values: number[];
+  height?: number;
+  fmt?: (n: number) => string;
+}) {
+  if (values.length < 3) return <ChartEmpty height={height} label="Not enough closed days yet." />;
+  const W = 1000;
+  const H = 300;
+  const N = 4;
+  const lo = Math.min(...values, 0);
+  const hi = Math.max(...values, 0);
+  const span = hi - lo || 1;
+  const bins = Math.min(13, Math.max(5, Math.ceil(Math.sqrt(values.length)) | 1)); // odd → a bin brackets 0
+  const w = span / bins;
+  const counts = new Array(bins).fill(0);
+  for (const v of values) counts[Math.min(bins - 1, Math.max(0, Math.floor((v - lo) / w)))]++;
+  const maxC = Math.max(...counts, 1);
+  const yTicks = Array.from({ length: N + 1 }, (_, i) => maxC - (i / N) * maxC);
+  const slot = W / bins;
+  const bw = slot * 0.82;
+  const zeroX = ((0 - lo) / span) * W;
+  const xTicks = [fmt(lo), "0", fmt(hi)];
+
+  return (
+    <ChartFrame height={height} yTicks={yTicks} xTicks={xTicks} fmtY={(v) => `${Math.round(v)}`}>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" width="100%" style={{ height, display: "block" }} role="img" aria-label="Distribution of daily profit and loss">
+        {yTicks.map((_, i) => (
+          <line key={i} x1={0} x2={W} y1={(i / N) * H} y2={(i / N) * H} stroke={C.line} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        ))}
+        {counts.map((c, i) => {
+          if (c === 0) return null;
+          const center = lo + (i + 0.5) * w;
+          const h = (c / maxC) * (H - 6);
+          return (
+            <rect
+              key={i}
+              x={i * slot + (slot - bw) / 2}
+              y={H - h}
+              width={bw}
+              height={h}
+              fill={center < 0 ? C.loss : C.gain}
+              fillOpacity={0.8}
+              rx={1}
+            >
+              <title>{`${fmt(lo + i * w)} to ${fmt(lo + (i + 1) * w)}: ${c} day${c === 1 ? "" : "s"}`}</title>
+            </rect>
+          );
+        })}
+        <line x1={zeroX} x2={zeroX} y1={0} y2={H} stroke={C.faint} strokeWidth={1} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
+      </svg>
+    </ChartFrame>
+  );
+}
+
 /** Tiny inline trend line for stat cards. */
 export function Sparkline({ data, width = 120, height = 32, color }: { data: number[]; width?: number; height?: number; color?: string }) {
   if (data.length < 2) return <div style={{ height }} />;

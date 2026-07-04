@@ -13,9 +13,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 # Strategy templates we offer = the bot's REGISTRY (bot/strategies/__init__.py).
+# "custom" is the user-built rule strategy: the rule JSON travels in the row's params
+# and is interpreted by bot/strategies/custom.py.
 ALL_TEMPLATES = (
     "ma_crossover", "rsi", "momentum", "vol_expansion",
-    "fast_rsi", "bb_reversion", "squeeze_breakout",
+    "fast_rsi", "bb_reversion", "squeeze_breakout", "custom",
 )
 DEFAULT_TEMPLATE = "ma_crossover"  # the starting template new users see first
 
