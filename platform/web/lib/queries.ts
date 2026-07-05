@@ -194,6 +194,10 @@ export async function setBotState(userId: string, patch: { active?: boolean; liv
 }
 
 // ---------- dashboard read model ----------
+// Only orders that actually executed (live fills + simulated DRY_RUN fills) count toward
+// money. Rejected/errored orders stay visible in the trade log but never in P&L math.
+const EXECUTED = "status in ('placed','dry_run')";
+
 export async function recentTrades(userId: string, n = 30) {
   return d1Query(
     "select strategy, market, side, qty, price, notional, status, realized_pnl, tds, dry_run, ts from trades where user_id = ? order by ts desc limit ?",
@@ -219,28 +223,31 @@ export async function equitySeries(userId: string, limit = 240): Promise<EquityP
 }
 
 export interface DailyPnl { day: string; pnl: number; trades: number }
-/** Realized P&L grouped by calendar day (UTC), chronological. */
+/** Realized P&L grouped by calendar day (UTC), chronological. Executed orders only. */
 export async function dailyPnl(userId: string, days = 30): Promise<DailyPnl[]> {
   const rows = await d1Query<DailyPnl>(
     `select substr(ts,1,10) as day, coalesce(sum(realized_pnl),0) as pnl, count(*) as trades
-     from trades where user_id = ? group by substr(ts,1,10) order by day desc limit ?`,
+     from trades where user_id = ? and ${EXECUTED} group by substr(ts,1,10) order by day desc limit ?`,
     [userId, days]);
   return rows.reverse();
 }
 
 export interface StrategyStat { strategy: string; trades: number; pnl: number; wins: number; losses: number }
+/** Per-strategy aggregates. Wins/losses are counted on closing (sell) legs only — buy legs
+ *  book their entry fee as a small negative realized_pnl, which is a cost, not a lost trade. */
 export async function strategyBreakdown(userId: string): Promise<StrategyStat[]> {
   return d1Query<StrategyStat>(
     `select strategy, count(*) as trades, coalesce(sum(realized_pnl),0) as pnl,
-            sum(case when realized_pnl > 0 then 1 else 0 end) as wins,
-            sum(case when realized_pnl < 0 then 1 else 0 end) as losses
-     from trades where user_id = ? group by strategy order by pnl desc`,
+            coalesce(sum(case when side = 'sell' and realized_pnl > 0 then 1 else 0 end),0) as wins,
+            coalesce(sum(case when side = 'sell' and realized_pnl < 0 then 1 else 0 end),0) as losses
+     from trades where user_id = ? and ${EXECUTED} group by strategy order by pnl desc`,
     [userId]);
 }
 
 export interface TradeStats {
   total: number; wins: number; losses: number; pnl: number; tds: number;
   best: number; worst: number; volume: number;
+  livePnl: number; paperPnl: number; liveTrades: number; paperTrades: number;
 }
 /** All-time trade aggregates for the dashboard header. */
 // ---------- admin (owner-only; every caller re-checks requireAdmin first) ----------
@@ -311,16 +318,72 @@ export async function adminDisableBot(userId: string) {
     [userId]);
 }
 
+/** All-time aggregates over executed orders. Wins/losses count sell legs only (see
+ *  strategyBreakdown); live and paper P&L are kept apart so real money is never
+ *  averaged with DRY_RUN simulations in a headline number. */
 export async function tradeStats(userId: string): Promise<TradeStats> {
   const row = await d1First<TradeStats>(
     `select count(*) as total,
-            sum(case when realized_pnl > 0 then 1 else 0 end) as wins,
-            sum(case when realized_pnl < 0 then 1 else 0 end) as losses,
+            coalesce(sum(case when side = 'sell' and realized_pnl > 0 then 1 else 0 end),0) as wins,
+            coalesce(sum(case when side = 'sell' and realized_pnl < 0 then 1 else 0 end),0) as losses,
             coalesce(sum(realized_pnl),0) as pnl,
             coalesce(sum(tds),0) as tds,
             coalesce(max(realized_pnl),0) as best,
             coalesce(min(realized_pnl),0) as worst,
-            coalesce(sum(notional),0) as volume
-     from trades where user_id = ?`, [userId]);
-  return row ?? { total: 0, wins: 0, losses: 0, pnl: 0, tds: 0, best: 0, worst: 0, volume: 0 };
+            coalesce(sum(notional),0) as volume,
+            coalesce(sum(case when dry_run = 0 then realized_pnl else 0 end),0) as livePnl,
+            coalesce(sum(case when dry_run = 1 then realized_pnl else 0 end),0) as paperPnl,
+            coalesce(sum(case when dry_run = 0 then 1 else 0 end),0) as liveTrades,
+            coalesce(sum(case when dry_run = 1 then 1 else 0 end),0) as paperTrades
+     from trades where user_id = ? and ${EXECUTED}`, [userId]);
+  return row ?? {
+    total: 0, wins: 0, losses: 0, pnl: 0, tds: 0, best: 0, worst: 0, volume: 0,
+    livePnl: 0, paperPnl: 0, liveTrades: 0, paperTrades: 0,
+  };
+}
+
+// ---------- tax read model (India VDA) ----------
+export interface TaxSummary {
+  sells: number; consideration: number; gains: number; losses: number; tds: number;
+}
+/** Indian financial-year window [Apr 1, Mar 31] for a date, as ISO bounds + label. */
+export function financialYear(now = new Date()): { startISO: string; endISO: string; label: string } {
+  const y = now.getUTCMonth() >= 3 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
+  return {
+    startISO: `${y}-04-01`,
+    endISO: `${y + 1}-04-01`,
+    label: `FY ${y}-${String((y + 1) % 100).padStart(2, "0")}`,
+  };
+}
+
+/** LIVE sell legs inside a financial year — the trades that are actual tax events.
+ *  Gains and losses are summed separately because section 115BBH does not allow
+ *  offsetting VDA losses against VDA gains. Indicative only, not tax advice. */
+export async function taxSummary(userId: string, startISO: string, endISO: string): Promise<TaxSummary> {
+  const row = await d1First<TaxSummary>(
+    `select count(*) as sells,
+            coalesce(sum(notional),0) as consideration,
+            coalesce(sum(case when realized_pnl > 0 then realized_pnl else 0 end),0) as gains,
+            coalesce(sum(case when realized_pnl < 0 then realized_pnl else 0 end),0) as losses,
+            coalesce(sum(tds),0) as tds
+     from trades
+     where user_id = ? and dry_run = 0 and status = 'placed' and side = 'sell'
+       and ts >= ? and ts < ?`,
+    [userId, startISO, endISO]);
+  return row ?? { sells: 0, consideration: 0, gains: 0, losses: 0, tds: 0 };
+}
+
+export interface TaxReportRow {
+  ts: string; strategy: string; market: string; qty: number; price: number;
+  notional: number; realized_pnl: number; tds: number;
+}
+/** Every LIVE sell leg in the FY, oldest first, for the downloadable tax CSV. */
+export async function taxReportRows(userId: string, startISO: string, endISO: string): Promise<TaxReportRow[]> {
+  return d1Query<TaxReportRow>(
+    `select ts, strategy, market, qty, price, notional, realized_pnl, tds
+     from trades
+     where user_id = ? and dry_run = 0 and status = 'placed' and side = 'sell'
+       and ts >= ? and ts < ?
+     order by ts asc`,
+    [userId, startISO, endISO]);
 }

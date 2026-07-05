@@ -204,9 +204,13 @@ export default function Dashboard() {
               <Stat l="Quote" v={s.quote} />
               {s.inr_per_usdt != null && <Stat l="INR / USDT" v={inr(s.inr_per_usdt)} />}
             </div>
-            <div className="row" style={{ marginTop: 8, borderBottom: 0 }}>
+            <div className="row" style={{ marginTop: 8 }}>
               <span className="sub">Equity basis</span>
               <span className="sub">{s.equity_basis}</span>
+            </div>
+            <div className="row" style={{ borderBottom: 0 }}>
+              <span className="sub">P&amp;L basis</span>
+              <span className="sub">net of fees + GST · TDS tracked separately</span>
             </div>
           </div>
         </>
