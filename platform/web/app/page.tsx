@@ -207,14 +207,17 @@ export default function Home() {
           </p>
           <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted">
             Exchange fees on both legs, 18% GST on those fees, and 1% TDS on every sell. A
-            strategy that looks brilliant gross can be a slow bleed net - our own research
-            retired every intraday configuration we tested for exactly this reason, with some
-            paying more in friction than their starting capital over multi-year windows.
+            strategy that looks brilliant gross can be a slow bleed net - in our own multi-year
+            backtests, some fast configurations paid more in friction than their starting
+            capital. Frequency is the enemy: the more round trips, the more of your P&amp;L
+            friction eats.
           </p>
           <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted">
             So every preview, backtest and DRY_RUN fill on Strattice is computed{" "}
-            <span className="text-fg">net of the full friction stack</span>. The templates hold
-            winners for days to weeks because that is the only backtested way to stay ahead of it.
+            <span className="text-fg">net of the full friction stack</span> - and the engine
+            trades 15-minute bars, so this cost math matters here too. That is exactly why
+            DRY_RUN is the default: watch fees as a share of P&amp;L in paper mode, and only go
+            live if the numbers still work after friction.
           </p>
         </div>
         <div className="overflow-hidden rounded-lg border border-line bg-panel">

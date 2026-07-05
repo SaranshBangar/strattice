@@ -6,6 +6,7 @@ import { BotControls } from "@/components/BotControls";
 import { CredentialsForm } from "@/components/CredentialsForm";
 import { NotificationSettings } from "@/components/NotificationSettings";
 import { TourButton } from "@/components/TourButton";
+import { GUARDRAILS } from "@/lib/risk";
 
 export const dynamic = "force-dynamic";
 
@@ -22,11 +23,13 @@ export default async function AccountPage() {
   const user = await getUser();
   if (!user) redirect("/sign-in");
 
-  const [creds, bot, prefs] = await Promise.all([
+  const [creds, bot, prefs, strategies] = await Promise.all([
     q.credentialsLinked(user.id),
     q.getBotState(user.id),
     q.getNotificationPrefs(user.id),
+    q.listStrategies(user.id),
   ]);
+  const enabledStrategies = strategies.filter((s) => s.enabled).length;
 
   return (
     <div className="space-y-6">
@@ -73,7 +76,11 @@ export default async function AccountPage() {
             <CredentialsForm linked={creds.linked} />
           </section>
 
-          <BotControls initial={{ active: !!bot.active, live: !!bot.live }} linked={creds.linked} />
+          <BotControls
+            initial={{ active: !!bot.active, live: !!bot.live }}
+            linked={creds.linked}
+            enabledStrategies={enabledStrategies}
+          />
 
           <NotificationSettings
             email={user.email}
@@ -86,24 +93,47 @@ export default async function AccountPage() {
           />
         </div>
 
-        <aside className="overflow-hidden rounded-lg border border-line bg-panel">
-          <div className="border-b border-line px-4 py-2.5">
-            <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-faint">
-              what_happens_to_your_key
-            </span>
+        <aside className="space-y-6">
+          <div className="overflow-hidden rounded-lg border border-line bg-panel">
+            <div className="border-b border-line px-4 py-2.5">
+              <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-faint">
+                what_happens_to_your_key
+              </span>
+            </div>
+            <dl className="divide-y divide-line/70">
+              {KEY_FACTS.map(([k, v]) => (
+                <div key={k} className="px-4 py-3">
+                  <dt className="font-mono text-[10px] uppercase tracking-[0.15em] text-faint">{k}</dt>
+                  <dd className="mt-1 text-xs leading-relaxed text-dim">{v}</dd>
+                </div>
+              ))}
+            </dl>
+            <p className="border-t border-line px-4 py-2.5 font-mono text-[11px] leading-relaxed text-faint">
+              turning the bot off stops new entries at the next poll; open positions are still
+              managed to their exit.
+            </p>
           </div>
-          <dl className="divide-y divide-line/70">
-            {KEY_FACTS.map(([k, v]) => (
-              <div key={k} className="px-4 py-3">
-                <dt className="font-mono text-[10px] uppercase tracking-[0.15em] text-faint">{k}</dt>
-                <dd className="mt-1 text-xs leading-relaxed text-dim">{v}</dd>
-              </div>
-            ))}
-          </dl>
-          <p className="border-t border-line px-4 py-2.5 font-mono text-[11px] leading-relaxed text-faint">
-            turning the bot off stops new entries at the next poll; open positions are still
-            managed to their exit.
-          </p>
+
+          {/* The risk limits the engine actually enforces — real numbers, on the same
+              page as the switch that arms them. */}
+          <div className="overflow-hidden rounded-lg border border-line bg-panel">
+            <div className="border-b border-line px-4 py-2.5">
+              <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-faint">
+                enforced_guardrails
+              </span>
+            </div>
+            <dl className="divide-y divide-line/70">
+              {GUARDRAILS.map(([k, v]) => (
+                <div key={k} className="px-4 py-3">
+                  <dt className="font-mono text-[10px] uppercase tracking-[0.15em] text-faint">{k}</dt>
+                  <dd className="mt-1 text-xs leading-relaxed text-dim">{v}</dd>
+                </div>
+              ))}
+            </dl>
+            <p className="border-t border-line px-4 py-2.5 font-mono text-[11px] leading-relaxed text-faint">
+              enforced in the executor before every order — not settings you can forget to turn on.
+            </p>
+          </div>
         </aside>
       </div>
     </div>

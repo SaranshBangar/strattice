@@ -6,6 +6,7 @@ import * as q from "@/lib/queries";
 import { createSubscription, cancelSubscription, cashfreeMode } from "@/lib/cashfree";
 import { PAID_TIERS, TIERS, BUILTIN_TEMPLATES, type TierName, type BuiltinTemplate } from "@/lib/entitlements";
 import { sanitizeParams } from "@/lib/strategy-sim";
+import { GO_LIVE_PHRASE } from "@/lib/risk";
 import { sanitizeCustomDef } from "@/lib/custom-strategy";
 import { sendApiKeyEmail } from "@/lib/email";
 import { sendTelegram, telegramConfigured, table } from "@/lib/telegram";
@@ -57,9 +58,37 @@ export async function removeStrategyAction(id: string) {
   revalidatePath("/strategies");
 }
 
+// The supervisor turns bot_state.live into the engine's DRY_RUN=false +
+// LIVE_TRADING_CONFIRM pair, so this flag alone arms real-money trading. Enabling it
+// therefore goes through goLiveAction (typed confirmation + preconditions); this action
+// only turns things ON with linked keys, and always allows turning things OFF —
+// the off direction is a safety control and must never be gated.
 export async function setBotAction(patch: { active?: boolean; live?: boolean }) {
   const userId = await requireUserId();
+  if (patch.live === true) throw new Error("Enabling live trading requires confirmation.");
+  if (patch.active === true) {
+    const creds = await q.credentialsLinked(userId);
+    if (!creds.linked) throw new Error("Link your CoinDCX API keys before turning the bot on.");
+  }
   await q.setBotState(userId, patch);
+  revalidatePath("/account");
+  revalidatePath("/dashboard");
+}
+
+/** The only path that arms real-money trading. Mirrors the bot's own double-lock
+ *  (DRY_RUN=false + LIVE_TRADING_CONFIRM): keys must be linked, at least one strategy
+ *  enabled, and the user must have typed the confirmation phrase. */
+export async function goLiveAction(confirmPhrase: string) {
+  const userId = await requireUserId();
+  if (confirmPhrase.trim().toUpperCase() !== GO_LIVE_PHRASE)
+    throw new Error(`Type "${GO_LIVE_PHRASE}" to confirm.`);
+  const [creds, strategies] = await Promise.all([
+    q.credentialsLinked(userId), q.listStrategies(userId),
+  ]);
+  if (!creds.linked) throw new Error("Link your CoinDCX API keys before going live.");
+  if (!strategies.some((s) => s.enabled))
+    throw new Error("Enable at least one strategy before going live.");
+  await q.setBotState(userId, { live: true });
   revalidatePath("/account");
   revalidatePath("/dashboard");
 }

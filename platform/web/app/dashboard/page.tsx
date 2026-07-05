@@ -155,10 +155,12 @@ export default async function DashboardPage() {
           sub={bot.live ? "LIVE" : "DRY_RUN"}
           tone={bot.active ? (healthy ? "good" : "warn") : "default"}
         />
+        {/* The supervisor computes this as ₹1,000 paper base + realized P&L — a book
+            figure, not the user's exchange balance. Say so on the card, not in fine print. */}
         <StatCard
-          label="Equity"
+          label="Book equity"
           value={equity ? inr(equity.equity) : "-"}
-          sub={equity ? `free ${inr(equity.free)} · as of ${equityAsOf}` : ""}
+          sub={equity ? `₹1,000 paper base + realized P&L · as of ${equityAsOf}` : ""}
           chart={equityVals.length > 1 ? <Sparkline data={equityVals} /> : undefined}
         />
         <StatCard
@@ -186,6 +188,8 @@ export default async function DashboardPage() {
       <p className="font-mono text-[11px] leading-relaxed text-faint">
         P&amp;L is net of exchange fees and GST. TDS (1% on every sell) is a cash withholding
         tracked separately, not a cost inside P&amp;L. Win rate counts closed sells only.
+        Book equity is the engine&apos;s ledger (₹1,000 paper base + realized P&amp;L), not your
+        CoinDCX wallet balance — check the exchange for actual funds.
       </p>
 
       {/* Pro-view technical strip — hidden until "Pro view" is toggled on. */}
@@ -211,7 +215,7 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <section className="rounded-lg border border-line bg-panel lg:col-span-2">
           <div className="flex items-center justify-between border-b border-line px-4 py-3">
-            <h3 className="font-display text-sm font-semibold tracking-tight text-dim">Equity curve</h3>
+            <h3 className="font-display text-sm font-semibold tracking-tight text-dim">Book equity curve</h3>
             <span className="font-mono text-[11px] text-faint">{series.length} snapshots</span>
           </div>
           <div className="p-4">

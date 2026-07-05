@@ -91,8 +91,11 @@ _BASE = {
     "quote_currency": "INR",
     "costs": {"fee_rate": 0.002, "gst_on_fee": 0.18, "tds_rate": 0.01,
               "slippage_bps": 5.0, "edge_margin_pct": 0.002},
+    # daily_loss_frac 0.10: halt the day at -10% of equity. A 50% brake is not a
+    # guardrail — nobody's "bad day" budget is half the account. Surfaced verbatim in
+    # web/lib/risk.ts (keep in sync). max_trades_per_day is overwritten per tier.
     "risk": {"max_position_frac": 1.0, "max_total_capital_at_risk_frac": 1.0,
-             "daily_loss_frac": 0.5, "max_trades_per_day": 5},  # overwritten per tier
+             "daily_loss_frac": 0.10, "max_trades_per_day": 5},
 }
 
 
@@ -159,10 +162,11 @@ if __name__ == "__main__":
         {"template": "momentum", "market": "I-BTC_INR", "enabled": True},
         {"template": "fast_rsi", "market": "I-BNB_INR", "enabled": True},
     ]
+    # pricing is off: every tier is fully unlocked (see entitlements.py).
     free = build_config("free", req, kill_switch_file="data/users/u1/KILL")
-    assert free["risk"]["max_trades_per_day"] == 5
-    assert sum(s["enabled"] for s in free["strategies"]) == 1, "free -> 1 active"
-    assert all(s["module"] == "ma_crossover" for s in free["strategies"]), "free -> default only"
+    assert free["risk"]["max_trades_per_day"] == 100
+    assert free["risk"]["daily_loss_frac"] == 0.10, "daily loss brake must stay at 10%"
+    assert sum(s["enabled"] for s in free["strategies"]) == 4, "free -> all active while pricing is off"
 
     mx = build_config("max", req, kill_switch_file="data/users/u2/KILL")
     assert mx["risk"]["max_trades_per_day"] == 100

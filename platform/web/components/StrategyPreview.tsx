@@ -15,10 +15,11 @@ import { Spinner } from "@/components/Spinner";
 
 const C = { gain: "#16B97D", loss: "#F0584F", accent: "#C9A24B", line: "#232838", faint: "#5A6379" } as const;
 
-// Candle interval choices for the preview window (500 bars each). The engine trades
-// 15m bars; longer intervals just let you see more history / more entries.
+// Candle interval choices for the preview window (500 bars each). Only 15m matches
+// what the live engine trades — longer intervals show more history, but entries,
+// exits and returns are NOT what the engine would have done. Marked in the picker.
 const INTERVALS: Record<string, string> = {
-  "15m": "≈ 5 days", "1h": "≈ 3 weeks", "4h": "≈ 12 weeks", "1d": "≈ 16 months",
+  "15m": "≈ 5 days · live interval", "1h": "≈ 3 weeks", "4h": "≈ 12 weeks", "1d": "≈ 16 months",
 };
 const LIMIT = 500;
 
@@ -412,7 +413,8 @@ export function StrategyPreview({ template, market, params, custom, onWindowResu
 
       <p className="text-[11px] leading-relaxed text-faint">
         Simulated preview on public CoinDCX candles: fills at bar close, long-only, net of ~{FRICTION_PCT}% round-trip
-        friction (exchange fee + GST + TDS). Not a promise of future returns - the live engine also enforces
+        friction (exchange fee + GST + TDS). The live engine trades 15m bars - other intervals are for exploring
+        behavior, and results change with bar size. Not a promise of future returns; the live engine also enforces
         daily-loss limits and trade caps.
       </p>
     </div>
