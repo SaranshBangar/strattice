@@ -1,22 +1,28 @@
 "use client";
 import { useState, useTransition } from "react";
-import { setBotAction } from "@/app/actions";
+import { setBotAction, goLiveAction } from "@/app/actions";
 import { useToast } from "@/components/Toast";
+import { GO_LIVE_PHRASE, GUARDRAILS } from "@/lib/risk";
 
 export function BotControls({
   initial,
   linked = true,
+  enabledStrategies = 0,
 }: {
   initial: { active: boolean; live: boolean };
   linked?: boolean;
+  enabledStrategies?: number;
 }) {
   const [active, setActive] = useState(initial.active);
   const [live, setLive] = useState(initial.live);
+  const [confirming, setConfirming] = useState(false);
+  const [phrase, setPhrase] = useState("");
   const [pending, start] = useTransition();
   const toast = useToast();
 
   function update(patch: { active?: boolean; live?: boolean }) {
-    // Optimistic; revert to the prior values if the server rejects.
+    // Optimistic; revert to the prior values if the server rejects. Only used for
+    // the bot on/off switch and for turning live OFF — never for arming live.
     const prev = { active, live };
     if (patch.active !== undefined) setActive(patch.active);
     if (patch.live !== undefined) setLive(patch.live);
@@ -26,16 +32,33 @@ export function BotControls({
         toast(
           patch.active !== undefined
             ? patch.active ? "Bot turned on" : "Bot turned off"
-            : patch.live ? "Live trading enabled" : "Switched to dry run",
+            : "Switched to dry run",
           "success",
         );
-      } catch {
+      } catch (e) {
         setActive(prev.active);
         setLive(prev.live);
-        toast("Couldn't update bot settings. Please try again.", "error");
+        toast(e instanceof Error && e.message ? e.message : "Couldn't update bot settings. Please try again.", "error");
       }
     });
   }
+
+  // Arming live is never optimistic: the UI only shows LIVE after the server confirms.
+  function confirmGoLive() {
+    start(async () => {
+      try {
+        await goLiveAction(phrase);
+        setLive(true);
+        setConfirming(false);
+        setPhrase("");
+        toast("Live trading enabled", "success");
+      } catch (e) {
+        toast(e instanceof Error && e.message ? e.message : "Couldn't enable live trading.", "error");
+      }
+    });
+  }
+
+  const canGoLive = linked && enabledStrategies > 0;
 
   return (
     <div className="rounded-lg border border-line bg-panel p-5">
@@ -82,12 +105,74 @@ export function BotControls({
             </div>
             <Toggle
               checked={live}
-              disabled={pending || !linked}
-              onClick={() => update({ live: !live })}
+              disabled={pending || !linked || (!live && confirming)}
+              onClick={() => {
+                if (live) { update({ live: false }); setConfirming(false); }
+                else setConfirming(true);
+              }}
               label="Toggle live trading"
               accent="warn"
             />
           </div>
+
+          {/* Going live is a real-money decision: show exactly what changes and what
+              protects the account, and require the phrase — same double-lock idea the
+              engine itself uses (DRY_RUN=false + LIVE_TRADING_CONFIRM). */}
+          {!live && confirming && (
+            <div className="mt-3 space-y-3 rounded-md border border-warn/30 bg-warn/5 p-4">
+              <p className="text-sm text-fg">
+                <span className="font-semibold text-warn">You are about to trade real money.</span>{" "}
+                Bots will place real buy/sell orders against your CoinDCX balance from the next poll.
+                Simulated results never guarantee live ones.
+              </p>
+              <ul className="space-y-1.5">
+                {GUARDRAILS.map(([k, v]) => (
+                  <li key={k} className="flex gap-2 text-xs leading-relaxed text-muted">
+                    <span aria-hidden="true" className="mt-1.5 h-1 w-1 shrink-0 bg-warn/70" />
+                    <span><span className="font-medium text-dim">{k}.</span> {v}</span>
+                  </li>
+                ))}
+              </ul>
+              {!canGoLive && (
+                <p className="rounded-md border border-line bg-inset px-3 py-2 text-xs text-muted">
+                  {linked
+                    ? "Enable at least one strategy before going live — there is nothing to run yet."
+                    : "Link your CoinDCX API keys before going live."}
+                </p>
+              )}
+              <div className="flex flex-wrap items-center gap-2">
+                <label htmlFor="go-live-phrase" className="sr-only">
+                  Type {GO_LIVE_PHRASE} to confirm
+                </label>
+                <input
+                  id="go-live-phrase"
+                  type="text"
+                  value={phrase}
+                  onChange={(e) => setPhrase(e.target.value)}
+                  placeholder={`type ${GO_LIVE_PHRASE} to confirm`}
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="w-48 rounded-md border border-line bg-inset px-3 py-1.5 font-mono text-sm text-fg placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-warn"
+                />
+                <button
+                  type="button"
+                  disabled={pending || !canGoLive || phrase.trim().toUpperCase() !== GO_LIVE_PHRASE}
+                  onClick={confirmGoLive}
+                  className="rounded-md bg-warn px-3 py-1.5 text-sm font-semibold text-bg transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warn"
+                >
+                  Enable live trading
+                </button>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => { setConfirming(false); setPhrase(""); }}
+                  className="rounded-md border border-line px-3 py-1.5 text-sm text-muted transition-colors hover:bg-inset hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                >
+                  Stay in DRY_RUN
+                </button>
+              </div>
+            </div>
+          )}
 
           {live && (
             <p
@@ -95,7 +180,7 @@ export function BotControls({
               className="mt-3 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-sm text-warn"
             >
               <span className="font-semibold">Live mode is on.</span> Bots will place real buy/sell
-              orders using your CoinDCX balance. Start in DRY_RUN and review trades first.
+              orders using your CoinDCX balance. Turning live off is instant and never asks questions.
             </p>
           )}
         </div>
