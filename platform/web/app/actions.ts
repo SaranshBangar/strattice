@@ -8,6 +8,7 @@ import { PAID_TIERS, TIERS, BUILTIN_TEMPLATES, type TierName, type BuiltinTempla
 import { sanitizeParams } from "@/lib/strategy-sim";
 import { sanitizeCustomDef } from "@/lib/custom-strategy";
 import { sendApiKeyEmail } from "@/lib/email";
+import { sendTelegram, telegramConfigured, table } from "@/lib/telegram";
 
 export async function saveCredentialsAction(formData: FormData) {
   const user = await getUser();
@@ -61,6 +62,49 @@ export async function setBotAction(patch: { active?: boolean; live?: boolean }) 
   await q.setBotState(userId, patch);
   revalidatePath("/account");
   revalidatePath("/dashboard");
+}
+
+// ---------- notification preferences ----------
+export async function getNotificationPrefsAction() {
+  const userId = await requireUserId();
+  const p = await q.getNotificationPrefs(userId);
+  return {
+    emailEnabled: !!p.email_enabled,
+    telegramEnabled: !!p.telegram_enabled,
+    telegramChatId: p.telegram_chat_id ?? "",
+    telegramConfigured: telegramConfigured(),
+  };
+}
+
+export async function setEmailNotificationsAction(enabled: boolean) {
+  const userId = await requireUserId();
+  await q.setNotificationPrefs(userId, { emailEnabled: enabled });
+  revalidatePath("/account");
+}
+
+/** Save (and enable) a Telegram chat id. Sends a confirmation message so the user gets
+ *  immediate proof the id + bot chat are wired up; a failed send is reported, not fatal. */
+export async function saveTelegramNotificationsAction(chatId: string):
+  Promise<{ ok: true; test: "sent" | "failed" | "unconfigured" }> {
+  const userId = await requireUserId();
+  const id = chatId.trim();
+  if (!/^-?\d{5,20}$/.test(id)) {
+    throw new Error("Enter the numeric chat id from @userinfobot (digits only).");
+  }
+  await q.setNotificationPrefs(userId, { telegramEnabled: true, telegramChatId: id });
+  const res = await sendTelegram(
+    id,
+    table("Strattice connected", [["Alerts", "on"], ["You'll get", "buy / sell fills"]]),
+  );
+  const test = res.ok ? "sent" : res.reason === "unconfigured" ? "unconfigured" : "failed";
+  revalidatePath("/account");
+  return { ok: true, test };
+}
+
+export async function removeTelegramNotificationsAction() {
+  const userId = await requireUserId();
+  await q.setNotificationPrefs(userId, { telegramEnabled: false, telegramChatId: null });
+  revalidatePath("/account");
 }
 
 // ---------- billing (Cashfree) ----------

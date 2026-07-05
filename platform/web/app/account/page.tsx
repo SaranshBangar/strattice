@@ -1,8 +1,11 @@
 import { redirect } from "next/navigation";
 import { getUser } from "@/lib/session";
 import * as q from "@/lib/queries";
+import { telegramConfigured } from "@/lib/telegram";
 import { BotControls } from "@/components/BotControls";
 import { CredentialsForm } from "@/components/CredentialsForm";
+import { NotificationSettings } from "@/components/NotificationSettings";
+import { TourButton } from "@/components/TourButton";
 
 export const dynamic = "force-dynamic";
 
@@ -19,13 +22,20 @@ export default async function AccountPage() {
   const user = await getUser();
   if (!user) redirect("/sign-in");
 
-  const [creds, bot] = await Promise.all([q.credentialsLinked(user.id), q.getBotState(user.id)]);
+  const [creds, bot, prefs] = await Promise.all([
+    q.credentialsLinked(user.id),
+    q.getBotState(user.id),
+    q.getNotificationPrefs(user.id),
+  ]);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-2xl font-semibold tracking-tight">Account</h1>
-        <p className="mt-0.5 font-mono text-[11px] text-faint">{user.email}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-2xl font-semibold tracking-tight">Account</h1>
+          <p className="mt-0.5 font-mono text-[11px] text-faint">{user.email}</p>
+        </div>
+        <TourButton label="Replay walkthrough" />
       </div>
 
       <div className="grid items-start gap-6 lg:grid-cols-[1fr_300px]">
@@ -64,6 +74,16 @@ export default async function AccountPage() {
           </section>
 
           <BotControls initial={{ active: !!bot.active, live: !!bot.live }} linked={creds.linked} />
+
+          <NotificationSettings
+            email={user.email}
+            initial={{
+              emailEnabled: !!prefs.email_enabled,
+              telegramEnabled: !!prefs.telegram_enabled,
+              telegramChatId: prefs.telegram_chat_id ?? "",
+              telegramConfigured: telegramConfigured(),
+            }}
+          />
         </div>
 
         <aside className="overflow-hidden rounded-lg border border-line bg-panel">
