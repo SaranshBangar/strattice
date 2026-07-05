@@ -47,7 +47,7 @@ export function Nav() {
         >
           {/* eslint-disable-next-line @next/next/no-img-element -- static SVG, no optimization needed */}
           <img src="/strattice-logo-transparent.svg" alt="Strattice" className="h-7 w-7" width={28} height={28} />
-          <span className="font-display text-sm font-semibold tracking-tight text-fg">strattice</span>
+          <span className="font-display text-sm font-semibold tracking-tight text-fg">stra<span className="text-accent">tt</span>ice</span>
         </Link>
 
         {signedIn ? (

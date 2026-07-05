@@ -97,8 +97,8 @@ async function smtpSend(to: string, subject: string, html: string) {
 
   const headers = [
     `From: ${fromName} <${fromAddr}>`,
-    `To: <${to}>`,
-    `Subject: ${subject}`,
+    `To: <${to.replace(/[\r\n]/g, "")}>`,
+    `Subject: ${subject.replace(/[\r\n]/g, " ")}`,
     `Date: ${new Date().toUTCString()}`,
     `Message-ID: <${randomUUID()}@${domain}>`,
     "MIME-Version: 1.0",
@@ -125,6 +125,11 @@ async function send(to: string, subject: string, html: string) {
 // ---------- template ----------
 type Row = [string, string];
 
+// All layout inputs are plain text (some user-controlled: name, key label,
+// custom strategy name) — escape them so nothing injects HTML into emails.
+const esc = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
 function layout(opts: {
   heading: string;
   lead: string;
@@ -135,8 +140,8 @@ function layout(opts: {
   const rows = (opts.rows ?? [])
     .map(
       ([k, v]) => `<tr>
-        <td style="padding:6px 0;color:#828AA0;font-size:13px;">${k}</td>
-        <td style="padding:6px 0;color:#E6E9F0;font-size:13px;text-align:right;font-weight:600;">${v}</td>
+        <td style="padding:6px 0;color:#828AA0;font-size:13px;">${esc(k)}</td>
+        <td style="padding:6px 0;color:#E6E9F0;font-size:13px;text-align:right;font-weight:600;">${esc(v)}</td>
       </tr>`,
     )
     .join("");
@@ -147,10 +152,10 @@ function layout(opts: {
   const cta = opts.cta
     ? `<a href="${opts.cta.href}"
          style="display:inline-block;margin-top:8px;padding:11px 22px;background:${GOLD};
-         color:#0B0D12;text-decoration:none;border-radius:8px;font-size:14px;font-weight:700;">${opts.cta.label}</a>`
+         color:#0B0D12;text-decoration:none;border-radius:8px;font-size:14px;font-weight:700;">${esc(opts.cta.label)}</a>`
     : "";
   const note = opts.note
-    ? `<p style="margin:20px 0 0;color:#5A6379;font-size:12px;line-height:1.6;">${opts.note}</p>`
+    ? `<p style="margin:20px 0 0;color:#5A6379;font-size:12px;line-height:1.6;">${esc(opts.note)}</p>`
     : "";
 
   return `<!doctype html>
@@ -161,15 +166,15 @@ function layout(opts: {
         style="max-width:480px;width:100%;background:#131722;border:1px solid #232838;border-radius:14px;
         font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
         <tr><td style="padding:28px 32px 8px;">
-          <img src="${appUrl()}/favicon-64.png" width="34" height="34" alt=""
-            style="display:block;border-radius:8px;">
+          <img src="${appUrl()}/favicon-180.png" width="34" height="34" alt="${BRAND} logo"
+            style="display:block;width:34px;height:34px;border-radius:8px;">
           <div style="margin-top:12px;font-size:19px;font-weight:600;letter-spacing:-0.5px;color:#E6E9F0;">
             stra<span style="color:${GOLD};">tt</span>ice
           </div>
         </td></tr>
         <tr><td style="padding:8px 32px 28px;">
-          <h1 style="margin:12px 0 6px;font-size:18px;font-weight:600;color:#E6E9F0;">${opts.heading}</h1>
-          <p style="margin:0;color:#AEB6C8;font-size:14px;line-height:1.6;">${opts.lead}</p>
+          <h1 style="margin:12px 0 6px;font-size:18px;font-weight:600;color:#E6E9F0;">${esc(opts.heading)}</h1>
+          <p style="margin:0;color:#AEB6C8;font-size:14px;line-height:1.6;">${esc(opts.lead)}</p>
           ${rowsBlock}
           ${cta}
           ${note}

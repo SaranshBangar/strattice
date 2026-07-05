@@ -430,8 +430,8 @@ def main() -> None:
     p.add_argument("--limit", type=int, default=1000)
     p.add_argument("--capital", type=float, default=1000.0)
     p.add_argument("--params", default="{}", help="JSON strategy params")
-    p.add_argument("--stop-loss", type=float, default=0.0, help="stop-loss fraction, e.g. 0.04 = 4%")
-    p.add_argument("--take-profit", type=float, default=0.0, help="take-profit fraction, e.g. 0.06 = 6%")
+    p.add_argument("--stop-loss", type=float, default=0.0, help="stop-loss fraction, e.g. 0.04 = 4%%")
+    p.add_argument("--take-profit", type=float, default=0.0, help="take-profit fraction, e.g. 0.06 = 6%%")
     p.add_argument("--slippage", type=float, default=None,
                    help="per-fill slippage fraction (default: config costs.slippage_bps)")
     p.add_argument("--chandelier-k", type=float, default=0.0, help="ATR multiple for chandelier trailing stop")

@@ -51,7 +51,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <div className="mx-auto max-w-5xl space-y-6 px-4 py-8">
               <div className="flex flex-wrap items-start justify-between gap-6">
                 <div>
-                  <span className="font-display text-sm font-semibold tracking-tight text-dim">strattice</span>
+                  <span className="font-display text-sm font-semibold tracking-tight text-dim">stra<span className="text-accent">tt</span>ice</span>
                   <p className="mt-1 max-w-xs text-xs leading-relaxed text-muted">
                     Algorithmic strategies, executed on your own CoinDCX account with keys you control.
                   </p>

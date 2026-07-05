@@ -26,7 +26,11 @@ export async function GET(req: Request) {
   const rows = await taxReportRows(user.id, fy.startISO, fy.endISO);
   const head = ["time_utc", "market", "strategy", "qty", "sale_price", "sale_consideration", "realized_pnl", "tds_withheld"];
   const esc = (v: unknown) => {
-    const s = String(v ?? "");
+    let s = String(v ?? "");
+    // Neutralize spreadsheet formula injection (=, +, -, @ starters) — strategy
+    // names are user-controlled and this file is destined for Excel. Plain
+    // numbers (e.g. negative P&L) are left untouched.
+    if (/^[=+\-@\t\r]/.test(s) && !/^-?\d+(\.\d+)?$/.test(s)) s = `'${s}`;
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   const lines = rows.map((r) =>

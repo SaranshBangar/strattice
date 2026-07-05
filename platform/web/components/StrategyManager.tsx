@@ -12,6 +12,7 @@ import { STRATEGY_META, strategyLabel } from "@/lib/strategies";
 import { TEMPLATE_CONFIG, paramRuleError, type ParamSpec } from "@/lib/strategy-sim";
 import { parseCustomDef, describeRule, describeExits } from "@/lib/custom-strategy";
 import { StrategyPreview } from "@/components/StrategyPreview";
+import { BestStrategyFinder } from "@/components/BestStrategyFinder";
 import { Select } from "@/components/Select";
 import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Spinner";
@@ -124,7 +125,9 @@ export function StrategyManager({ strategies }: { strategies: StrategyRow[] }) {
     <div className="space-y-6">
       {/* 1 · pick a template */}
       <section>
-        <h2 className="eyebrow mb-3">01 · Pick a template — or build your own</h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="eyebrow">01 · Pick a template — or build your own</h2>
+        </div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4" role="radiogroup" aria-label="Strategy template">
           {BUILTIN_TEMPLATES.map((t) => {
             const m = STRATEGY_META[t];
@@ -167,6 +170,15 @@ export function StrategyManager({ strategies }: { strategies: StrategyRow[] }) {
             </p>
             <span className="mt-2 text-xs font-medium text-accent group-hover:underline">Open the builder →</span>
           </Link>
+        </div>
+
+        {/* not sure which one? compare all templates on live data and auto-pick */}
+        <div className="mt-3">
+          <BestStrategyFinder
+            market={marketValid ? market : TEMPLATE_CONFIG[tpl].market}
+            disabled={pending}
+            onPick={(t) => pickTemplate(t)}
+          />
         </div>
       </section>
 
