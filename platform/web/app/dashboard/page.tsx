@@ -38,12 +38,13 @@ export default async function DashboardPage() {
   const user = await getUser();
   if (!user) redirect("/sign-in");
 
-  const [tier, bot, equity, positions, trades, series, daily, breakdown, stats, strategies, creds] = await Promise.all([
+  const fy = q.financialYear();
+  const [tier, bot, equity, positions, trades, series, daily, breakdown, stats, strategies, creds, tax] = await Promise.all([
     q.effectiveTier(user.id), q.getBotState(user.id), q.latestEquity(user.id),
     q.openPositions(user.id), q.recentTrades(user.id, 500),
     q.equitySeries(user.id, 240), q.dailyPnl(user.id, 30),
     q.strategyBreakdown(user.id), q.tradeStats(user.id), q.listStrategies(user.id),
-    q.credentialsLinked(user.id),
+    q.credentialsLinked(user.id), q.taxSummary(user.id, fy.startISO, fy.endISO),
   ]);
 
   const hbAge = bot.last_heartbeat ? Date.now() / 1000 - bot.last_heartbeat : null;
@@ -72,7 +73,11 @@ export default async function DashboardPage() {
   const worstDay = dv.length ? Math.min(...dv) : 0;
   const avgDay = dv.length ? dv.reduce((a, b) => a + b, 0) / dv.length : 0;
   const vol = dv.length > 1 ? Math.sqrt(dv.reduce((a, b) => a + (b - avgDay) ** 2, 0) / (dv.length - 1)) : 0;
+  const sharpe = vol > 0 ? (avgDay / vol) * Math.sqrt(365) : null;
   const winRate = decided ? (stats.wins / decided) * 100 : 0;
+  // Real money and paper money never share a headline: live P&L leads once live
+  // trades exist; until then the card says plainly that everything is simulated.
+  const hasLive = stats.liveTrades > 0;
 
   // Onboarding: the three things that must be true before the bot can trade.
   const setupSteps: { done: boolean; label: string; hint: string; href: string }[] = [
@@ -82,6 +87,11 @@ export default async function DashboardPage() {
   ];
   const setupDone = setupSteps.filter((s) => s.done).length;
   const showSetup = setupDone < setupSteps.length;
+  // Equity snapshots are written by the supervisor in UTC ("YYYY-MM-DD HH:MM:SS").
+  const equityAsOf = equity
+    ? new Date(equity.ts.replace(" ", "T") + (/[Z+]/.test(equity.ts.slice(10)) ? "" : "Z"))
+        .toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" }) + " IST"
+    : null;
   const heartbeat = bot.last_heartbeat
     ? new Date(bot.last_heartbeat * 1000).toLocaleString("en-IN", {
         timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
@@ -148,7 +158,7 @@ export default async function DashboardPage() {
         <StatCard
           label="Equity"
           value={equity ? inr(equity.equity) : "-"}
-          sub={equity ? `free ${inr(equity.free)}` : ""}
+          sub={equity ? `free ${inr(equity.free)} · as of ${equityAsOf}` : ""}
           chart={equityVals.length > 1 ? <Sparkline data={equityVals} /> : undefined}
         />
         <StatCard
@@ -157,13 +167,26 @@ export default async function DashboardPage() {
           sub={`${equity?.trades_today ?? 0} / ${tier.tradesPerDay} trades`}
           tone={equity && equity.realized_today < 0 ? "bad" : equity && equity.realized_today > 0 ? "good" : "default"}
         />
-        <StatCard
-          label="Net P&L (all-time)"
-          value={inr(stats.pnl)}
-          sub={`${stats.total} trades · TDS ${inr(stats.tds)}`}
-          tone={stats.pnl < 0 ? "bad" : stats.pnl > 0 ? "good" : "default"}
-        />
+        {hasLive ? (
+          <StatCard
+            label="Net P&L (live)"
+            value={inr(stats.livePnl)}
+            sub={`${stats.liveTrades} live fills · paper ${inr(stats.paperPnl)}`}
+            tone={stats.livePnl < 0 ? "bad" : stats.livePnl > 0 ? "good" : "default"}
+          />
+        ) : (
+          <StatCard
+            label="Paper P&L (all-time)"
+            value={inr(stats.paperPnl)}
+            sub={`${stats.paperTrades} DRY_RUN fills · no live trades yet`}
+            tone={stats.paperPnl < 0 ? "bad" : stats.paperPnl > 0 ? "good" : "default"}
+          />
+        )}
       </div>
+      <p className="font-mono text-[11px] leading-relaxed text-faint">
+        P&amp;L is net of exchange fees and GST. TDS (1% on every sell) is a cash withholding
+        tracked separately, not a cost inside P&amp;L. Win rate counts closed sells only.
+      </p>
 
       {/* Pro-view technical strip — hidden until "Pro view" is toggled on. */}
       <div className="hidden space-y-2 [html.pro_&]:block">
@@ -176,7 +199,7 @@ export default async function DashboardPage() {
           <Metric label="Best day" value={inr(bestDay)} tone={bestDay > 0 ? "good" : "default"} />
           <Metric label="Worst day" value={inr(worstDay)} tone={worstDay < 0 ? "bad" : "default"} />
           <Metric label="σ / day" value={inr(vol)} />
-          <Metric label="Trades" value={String(stats.total)} />
+          <Metric label="Sharpe (ann.)" value={sharpe === null ? "-" : sharpe.toFixed(2)} tone={sharpe === null ? "default" : sharpe >= 1 ? "good" : sharpe < 0 ? "bad" : "default"} />
         </div>
       </div>
 
@@ -198,7 +221,7 @@ export default async function DashboardPage() {
 
         <section className="rounded-lg border border-line bg-panel">
           <div className="border-b border-line px-4 py-3">
-            <h3 className="font-display text-sm font-semibold tracking-tight text-dim">Win / loss</h3>
+            <h3 className="font-display text-sm font-semibold tracking-tight text-dim">Win / loss · closed sells</h3>
           </div>
           <div className="grid place-items-center p-6">
             <WinRateDonut wins={stats.wins} losses={stats.losses} />
@@ -278,6 +301,44 @@ export default async function DashboardPage() {
       />
 
       <TradesTable trades={tradeRows} />
+
+      {/* Tax ledger — LIVE sells only; paper trades are never tax events. */}
+      <section className="rounded-lg border border-line bg-panel">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
+          <h3 className="font-display text-sm font-semibold tracking-tight text-dim">
+            Tax · {fy.label} <span className="font-mono text-[11px] font-normal text-faint">India VDA</span>
+          </h3>
+          {tax.sells > 0 && (
+            <a
+              href="/api/tax-report"
+              className="rounded-md border border-line px-2.5 py-1.5 text-xs font-medium text-dim transition-colors hover:bg-inset hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              Download sell ledger (CSV)
+            </a>
+          )}
+        </div>
+        {tax.sells === 0 ? (
+          <p className="px-4 py-6 text-sm text-muted">
+            No live sells this financial year — nothing taxable yet. DRY_RUN fills are
+            simulations and never create a tax liability.
+          </p>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-4 lg:grid-cols-5">
+              <Metric label="Live sells" value={String(tax.sells)} />
+              <Metric label="Sale consideration" value={inr(tax.consideration)} />
+              <Metric label="Realized gains" value={inr(tax.gains)} tone={tax.gains > 0 ? "good" : "default"} />
+              <Metric label="Realized losses" value={inr(tax.losses)} tone={tax.losses < 0 ? "bad" : "default"} />
+              <Metric label="TDS withheld" value={inr(tax.tds)} />
+            </div>
+            <p className="border-t border-line px-4 py-2.5 text-[11px] leading-relaxed text-faint">
+              Indicative only, not tax advice. VDA gains are taxed flat at 30% under section
+              115BBH and losses cannot be offset against gains; TDS withheld under section 194S
+              is a credit you claim when filing. The CSV lists every live sell for your records.
+            </p>
+          </>
+        )}
+      </section>
 
       {tradeRows.length >= 500 && (
         <p className="text-center font-mono text-[11px] text-faint">Showing the most recent 500 trades.</p>

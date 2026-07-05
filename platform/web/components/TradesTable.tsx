@@ -30,6 +30,7 @@ export function TradesTable({ trades }: { trades: Trade[] }) {
   const [search, setSearch] = useState("");
   const [strategy, setStrategy] = useState("all");
   const [side, setSide] = useState("all");
+  const [mode, setMode] = useState("all");
   const [sort, setSort] = useState<SortKey>("ts");
   const [dir, setDir] = useState<"asc" | "desc">("desc");
   const [pageSize, setPageSize] = useState(25);
@@ -45,6 +46,8 @@ export function TradesTable({ trades }: { trades: Trade[] }) {
     let rows = trades.filter((t) => {
       if (strategy !== "all" && t.strategy !== strategy) return false;
       if (side !== "all" && t.side?.toLowerCase() !== side) return false;
+      if (mode === "live" && t.dry_run) return false;
+      if (mode === "paper" && !t.dry_run) return false;
       if (q && !(`${t.market} ${strategyLabel(t.strategy)} ${t.side} ${t.status}`.toLowerCase().includes(q))) return false;
       return true;
     });
@@ -124,6 +127,13 @@ export function TradesTable({ trades }: { trades: Trade[] }) {
             onChange={resetPage(setSide)}
             options={[{ value: "all", label: "Both sides" }, { value: "buy", label: "Buy" }, { value: "sell", label: "Sell" }]}
           />
+          <Select
+            size="sm"
+            ariaLabel="Filter by mode"
+            value={mode}
+            onChange={resetPage(setMode)}
+            options={[{ value: "all", label: "Live + paper" }, { value: "live", label: "Live only" }, { value: "paper", label: "Paper only" }]}
+          />
           <button
             type="button"
             onClick={exportCsv}
@@ -157,12 +167,14 @@ export function TradesTable({ trades }: { trades: Trade[] }) {
                 {pageRows.map((t, i) => {
                   const buy = t.side?.toLowerCase() === "buy";
                   const p = t.realized_pnl;
+                  const executed = t.status === "placed" || t.status === "dry_run";
                   return (
-                    <tr key={i} className="border-b border-line/60 last:border-0 hover:bg-inset/60">
+                    <tr key={i} className={["border-b border-line/60 last:border-0 hover:bg-inset/60", executed ? "" : "opacity-60"].join(" ")}>
                       <td className="whitespace-nowrap px-4 py-2.5 font-mono tnum text-muted">{fmtTs(t.ts)}</td>
                       <td className="whitespace-nowrap px-4 py-2.5 font-mono font-medium text-fg">
                         {strategyLabel(t.strategy)}
                         {t.dry_run ? <span className="ml-1.5 rounded-sm bg-inset px-1 py-0.5 text-[9px] uppercase tracking-wide text-faint">dry</span> : null}
+                        {!executed && <span className="ml-1.5 rounded-sm bg-loss/10 px-1 py-0.5 text-[9px] uppercase tracking-wide text-loss">{t.status}</span>}
                       </td>
                       <td className="whitespace-nowrap px-4 py-2.5 font-mono text-dim">{t.market}</td>
                       <td className={["whitespace-nowrap px-4 py-2.5 font-mono", buy ? "text-gain" : "text-loss"].join(" ")}>{t.side?.toUpperCase()}</td>
