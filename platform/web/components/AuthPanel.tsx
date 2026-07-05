@@ -12,14 +12,14 @@ const GUARANTEES: [string, string][] = [
 export function AuthPanel() {
   return (
     <div className="hidden lg:block">
-      <div className="overflow-hidden rounded-lg border border-line bg-panel">
-        <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+      <div className="overflow-hidden card">
+        <div className="flex items-center justify-between px-4 py-2.5">
           <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-faint">
             what_you_agree_to
           </span>
           <span className="font-mono text-[11px] text-muted">nothing else</span>
         </div>
-        <dl className="divide-y divide-line/70">
+        <dl>
           {GUARANTEES.map(([k, v]) => (
             <div key={k} className="px-4 py-3">
               <dt className="font-mono text-[10px] uppercase tracking-[0.15em] text-faint">{k}</dt>
@@ -27,7 +27,7 @@ export function AuthPanel() {
             </div>
           ))}
         </dl>
-        <div className="border-t border-line px-4 py-2.5 font-mono text-[11px] text-faint">
+        <div className="px-4 py-2.5 font-mono text-[11px] text-faint">
           free during early access · no card asked, ever
         </div>
       </div>

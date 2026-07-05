@@ -43,7 +43,7 @@ export default async function AccountPage() {
 
       <div className="grid items-start gap-6 lg:grid-cols-[1fr_300px]">
         <div className="space-y-6">
-          <section className="rounded-lg border border-line bg-panel p-5">
+          <section className="card p-5">
             <h2 className="font-display text-sm font-semibold tracking-tight text-dim">CoinDCX API keys</h2>
 
             {creds.linked && (
@@ -62,7 +62,7 @@ export default async function AccountPage() {
                 ["Add our server IP to the key's allowlist", "So the key only works from the machine that runs your bots."],
               ] as const).map(([title, hint], i) => (
                 <li key={title} className="flex gap-3">
-                  <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border border-line font-mono text-[10px] text-faint">
+                  <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-white/5 font-mono text-[10px] text-faint">
                     {i + 1}
                   </span>
                   <div>
@@ -94,13 +94,13 @@ export default async function AccountPage() {
         </div>
 
         <aside className="space-y-6">
-          <div className="overflow-hidden rounded-lg border border-line bg-panel">
-            <div className="border-b border-line px-4 py-2.5">
+          <div className="overflow-hidden card">
+            <div className="bg-white/[0.03] px-4 py-2.5">
               <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-faint">
                 what_happens_to_your_key
               </span>
             </div>
-            <dl className="divide-y divide-line/70">
+            <dl>
               {KEY_FACTS.map(([k, v]) => (
                 <div key={k} className="px-4 py-3">
                   <dt className="font-mono text-[10px] uppercase tracking-[0.15em] text-faint">{k}</dt>
@@ -108,21 +108,21 @@ export default async function AccountPage() {
                 </div>
               ))}
             </dl>
-            <p className="border-t border-line px-4 py-2.5 font-mono text-[11px] leading-relaxed text-faint">
+            <p className="bg-white/[0.03] px-4 py-2.5 font-mono text-[11px] leading-relaxed text-faint">
               turning the bot off stops new entries at the next poll; open positions are still
               managed to their exit.
             </p>
           </div>
 
-          {/* The risk limits the engine actually enforces — real numbers, on the same
+          {/* The risk limits the engine actually enforces - real numbers, on the same
               page as the switch that arms them. */}
-          <div className="overflow-hidden rounded-lg border border-line bg-panel">
-            <div className="border-b border-line px-4 py-2.5">
+          <div className="overflow-hidden card">
+            <div className="bg-white/[0.03] px-4 py-2.5">
               <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-faint">
                 enforced_guardrails
               </span>
             </div>
-            <dl className="divide-y divide-line/70">
+            <dl>
               {GUARDRAILS.map(([k, v]) => (
                 <div key={k} className="px-4 py-3">
                   <dt className="font-mono text-[10px] uppercase tracking-[0.15em] text-faint">{k}</dt>
@@ -130,8 +130,8 @@ export default async function AccountPage() {
                 </div>
               ))}
             </dl>
-            <p className="border-t border-line px-4 py-2.5 font-mono text-[11px] leading-relaxed text-faint">
-              enforced in the executor before every order — not settings you can forget to turn on.
+            <p className="bg-white/[0.03] px-4 py-2.5 font-mono text-[11px] leading-relaxed text-faint">
+              enforced in the executor before every order - not settings you can forget to turn on.
             </p>
           </div>
         </aside>

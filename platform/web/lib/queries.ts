@@ -49,7 +49,7 @@ const DEFAULT_PREFS: NotificationPrefs = { email_enabled: 1, telegram_enabled: 0
 
 // notification_prefs shipped after the original schema, so deployed D1 databases may not
 // have it yet (schema.sql is applied manually with wrangler). Rather than 500 the account
-// page until someone runs the migration, create the table on first miss and retry —
+// page until someone runs the migration, create the table on first miss and retry -
 // the DDL is byte-identical to platform/db/schema.sql and idempotent.
 const PREFS_DDL = `create table if not exists notification_prefs (
   user_id          text primary key references user(id) on delete cascade,
@@ -255,7 +255,7 @@ export async function dailyPnl(userId: string, days = 30): Promise<DailyPnl[]> {
 }
 
 export interface StrategyStat { strategy: string; trades: number; pnl: number; wins: number; losses: number }
-/** Per-strategy aggregates. Wins/losses are counted on closing (sell) legs only — buy legs
+/** Per-strategy aggregates. Wins/losses are counted on closing (sell) legs only - buy legs
  *  book their entry fee as a small negative realized_pnl, which is a cost, not a lost trade. */
 export async function strategyBreakdown(userId: string): Promise<StrategyStat[]> {
   return d1Query<StrategyStat>(
@@ -378,7 +378,7 @@ export function financialYear(now = new Date()): { startISO: string; endISO: str
   };
 }
 
-/** LIVE sell legs inside a financial year — the trades that are actual tax events.
+/** LIVE sell legs inside a financial year - the trades that are actual tax events.
  *  Gains and losses are summed separately because section 115BBH does not allow
  *  offsetting VDA losses against VDA gains. Indicative only, not tax advice. */
 export async function taxSummary(userId: string, startISO: string, endISO: string): Promise<TaxSummary> {

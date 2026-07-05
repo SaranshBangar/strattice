@@ -18,7 +18,7 @@ export function HeroCta() {
       </Link>
       <Link
         href="#features"
-        className="rounded-md border border-line px-5 py-2.5 text-sm font-medium text-dim transition-colors hover:bg-panel hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="rounded-md bg-white/5 px-5 py-2.5 text-sm font-medium text-dim transition-colors hover:bg-white/10 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         What&rsquo;s included
       </Link>

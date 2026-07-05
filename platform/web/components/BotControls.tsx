@@ -22,7 +22,7 @@ export function BotControls({
 
   function update(patch: { active?: boolean; live?: boolean }) {
     // Optimistic; revert to the prior values if the server rejects. Only used for
-    // the bot on/off switch and for turning live OFF — never for arming live.
+    // the bot on/off switch and for turning live OFF - never for arming live.
     const prev = { active, live };
     if (patch.active !== undefined) setActive(patch.active);
     if (patch.live !== undefined) setLive(patch.live);
@@ -61,11 +61,11 @@ export function BotControls({
   const canGoLive = linked && enabledStrategies > 0;
 
   return (
-    <div className="rounded-lg border border-line bg-panel p-5">
+    <div className="card p-5">
       <h2 className="font-display text-sm font-semibold tracking-tight text-dim">Bot controls</h2>
 
       {!linked && (
-        <p className="mt-3 rounded-md border border-line bg-inset px-3 py-2 text-sm text-muted">
+        <p className="mt-3 rounded-md bg-inset px-3 py-2 text-sm text-muted">
           Link your CoinDCX API keys above to enable the bot.
         </p>
       )}
@@ -85,7 +85,7 @@ export function BotControls({
           />
         </div>
 
-        <div className="border-t border-line pt-4">
+        <div className="pt-4">
           <div className="flex items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 text-sm font-medium text-fg">
@@ -116,7 +116,7 @@ export function BotControls({
           </div>
 
           {/* Going live is a real-money decision: show exactly what changes and what
-              protects the account, and require the phrase — same double-lock idea the
+              protects the account, and require the phrase - same double-lock idea the
               engine itself uses (DRY_RUN=false + LIVE_TRADING_CONFIRM). */}
           {!live && confirming && (
             <div className="mt-3 space-y-3 rounded-md border border-warn/30 bg-warn/5 p-4">
@@ -134,9 +134,9 @@ export function BotControls({
                 ))}
               </ul>
               {!canGoLive && (
-                <p className="rounded-md border border-line bg-inset px-3 py-2 text-xs text-muted">
+                <p className="rounded-md bg-inset px-3 py-2 text-xs text-muted">
                   {linked
-                    ? "Enable at least one strategy before going live — there is nothing to run yet."
+                    ? "Enable at least one strategy before going live - there is nothing to run yet."
                     : "Link your CoinDCX API keys before going live."}
                 </p>
               )}
@@ -166,7 +166,7 @@ export function BotControls({
                   type="button"
                   disabled={pending}
                   onClick={() => { setConfirming(false); setPhrase(""); }}
-                  className="rounded-md border border-line px-3 py-1.5 text-sm text-muted transition-colors hover:bg-inset hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  className="rounded-md bg-white/5 px-3 py-1.5 text-sm text-muted transition-colors hover:bg-white/10 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 >
                   Stay in DRY_RUN
                 </button>

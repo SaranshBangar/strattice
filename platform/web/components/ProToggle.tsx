@@ -1,14 +1,14 @@
 "use client";
 // Display-density switch. Toggles the `pro` class on <html>, which reveals the
 // pro-only technical panels (see `[html.pro_&]:` variants in the dashboard) and
-// is purely a view preference — it does NOT unlock plan-gated analytics.
+// is purely a view preference - it does NOT unlock plan-gated analytics.
 import { useEffect, useState } from "react";
 
 export function ProToggle() {
   const [pro, setPro] = useState(false);
 
   // Restore preference on mount (pro-only sections are hidden by default, so an
-  // enabled user sees a brief flash before this applies — acceptable, no SSR cookie).
+  // enabled user sees a brief flash before this applies - acceptable, no SSR cookie).
   useEffect(() => {
     const on = localStorage.getItem("proView") === "1";
     setPro(on);

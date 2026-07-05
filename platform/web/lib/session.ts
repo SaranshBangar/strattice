@@ -13,7 +13,7 @@ export async function requireUserId(): Promise<string> {
   return u.id;
 }
 
-/** Server-side admin gate. Every admin action must call this — never trust the client. */
+/** Server-side admin gate. Every admin action must call this - never trust the client. */
 export async function requireAdmin() {
   const u = await getUser();
   if (!u || !isAdmin(u.email)) throw new Error("forbidden");

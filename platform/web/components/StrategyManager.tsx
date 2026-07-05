@@ -126,7 +126,7 @@ export function StrategyManager({ strategies }: { strategies: StrategyRow[] }) {
       {/* 1 · pick a template */}
       <section>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="eyebrow">01 · Pick a template — or build your own</h2>
+          <h2 className="eyebrow">01 · Pick a template - or build your own</h2>
         </div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4" role="radiogroup" aria-label="Strategy template">
           {BUILTIN_TEMPLATES.map((t) => {
@@ -140,8 +140,8 @@ export function StrategyManager({ strategies }: { strategies: StrategyRow[] }) {
                 aria-checked={active}
                 onClick={() => pickTemplate(t)}
                 className={[
-                  "rounded-lg border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-                  active ? "border-accent bg-panel ring-1 ring-accent/30" : "border-line bg-panel hover:border-faint",
+                  "rounded-lg p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                  active ? "bg-panel ring-1 ring-accent/50" : "bg-white/[0.03] hover:bg-panel",
                 ].join(" ")}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -183,9 +183,9 @@ export function StrategyManager({ strategies }: { strategies: StrategyRow[] }) {
       </section>
 
       {/* 2 · config + live preview */}
-      <section className="overflow-hidden rounded-lg border border-line bg-panel">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
-          <h2 className="eyebrow">02 · {meta.label} — config &amp; preview</h2>
+      <section className="overflow-hidden card">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+          <h2 className="eyebrow">02 · {meta.label} - config &amp; preview</h2>
           <div className="flex items-center gap-2">
             <Select
               size="sm"
@@ -221,11 +221,11 @@ export function StrategyManager({ strategies }: { strategies: StrategyRow[] }) {
           </div>
         </div>
 
-        {err && <p role="alert" className="border-b border-line px-4 py-2 text-sm text-loss">{err}</p>}
+        {err && <p role="alert" className="px-4 py-2 text-sm text-loss">{err}</p>}
 
         <div className="grid gap-0 lg:grid-cols-[320px_1fr]">
           {/* config sidebar */}
-          <div className="space-y-4 border-b border-line p-4 lg:border-b-0 lg:border-r">
+          <div className="space-y-4 p-4">
             <div>
               <h3 className="font-mono text-[10px] uppercase tracking-wider text-faint">Enters when</h3>
               <p className="mt-1 text-xs leading-relaxed text-dim">{meta.entry}</p>
@@ -233,7 +233,7 @@ export function StrategyManager({ strategies }: { strategies: StrategyRow[] }) {
             <div>
               <h3 className="font-mono text-[10px] uppercase tracking-wider text-faint">Exits via</h3>
               <p className="mt-1 text-xs leading-relaxed text-dim">{meta.exit}</p>
-              <dl className="mt-2 divide-y divide-line/60 rounded-md border border-line bg-inset px-3 py-1">
+              <dl className="mt-2 rounded-md bg-inset px-3 py-1">
                 {exitRows.map(([k, v]) => <ConfigRow key={k} k={k} v={v} />)}
               </dl>
             </div>
@@ -252,7 +252,7 @@ export function StrategyManager({ strategies }: { strategies: StrategyRow[] }) {
                   </button>
                 )}
               </div>
-              <div className="mt-2 divide-y divide-line/60 rounded-md border border-line bg-inset px-3 py-1">
+              <div className="mt-2 rounded-md bg-inset px-3 py-1">
                 {cfg.editable.map((spec) => (
                   <ParamInput
                     key={`${tpl}-${spec.key}`}
@@ -300,8 +300,8 @@ export function StrategyManager({ strategies }: { strategies: StrategyRow[] }) {
       </section>
 
       {/* 3 · your strategies */}
-      <section className="rounded-lg border border-line bg-panel">
-        <div className="flex items-center justify-between border-b border-line px-4 py-3">
+      <section className="card">
+        <div className="flex items-center justify-between px-4 py-3">
           <h2 className="eyebrow">03 · Your strategies</h2>
           <span className="font-mono text-[11px] text-faint">
             {strategies.filter((s) => s.enabled).length} active · no cap
@@ -312,7 +312,7 @@ export function StrategyManager({ strategies }: { strategies: StrategyRow[] }) {
             No strategies yet. Pick a template above, preview it, and add it.
           </div>
         ) : (
-          <ul className="divide-y divide-line/70">
+          <ul>
             {strategies.map((s) => {
               const enabled = !!s.enabled;
               const def = s.template === "custom" ? parseCustomDef(s.params) : null;
@@ -352,10 +352,10 @@ export function StrategyManager({ strategies }: { strategies: StrategyRow[] }) {
                       disabled={pending}
                       onClick={() => run(() => toggleStrategyAction(s.id, !s.enabled), enabled ? "Strategy disabled" : "Strategy enabled")}
                       className={[
-                        "rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50",
+                        "rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50",
                         enabled
-                          ? "border-line text-dim hover:bg-inset"
-                          : "border-gain/50 text-gain hover:bg-gain/10",
+                          ? "bg-white/5 text-dim hover:bg-white/10"
+                          : "bg-gain/10 text-gain hover:bg-gain/20",
                       ].join(" ")}
                     >
                       {enabled ? "Disable" : "Enable"}

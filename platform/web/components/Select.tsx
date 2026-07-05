@@ -88,7 +88,7 @@ export function Select({
         <ul
           id={listId}
           role="listbox"
-          className="absolute z-50 mt-1 max-h-60 w-full min-w-max overflow-auto rounded-md border border-line bg-panel py-1 shadow-xl shadow-black/40"
+          className="absolute z-50 mt-1 max-h-60 w-full min-w-max overflow-auto rounded-md bg-white/5 py-1 shadow-xl shadow-black/40"
         >
           {options.map((o, i) => {
             const selected = o.value === value;

@@ -42,7 +42,16 @@ body {
   @apply font-mono text-[11px] uppercase tracking-[0.2em] text-faint;
 }
 
-/* landing-page section entrance: one subtle rise, no parade of animations */
+/* Panels separate by light, not lines: a faint top highlight (as if lit from
+   above) and a soft drop shadow. No borders anywhere on chrome. */
+.card {
+  @apply rounded-xl bg-panel;
+  box-shadow:
+    inset 0 1px 0 rgba(230, 233, 240, 0.05),
+    0 16px 40px -24px rgba(0, 0, 0, 0.6);
+}
+
+/* landing-page hero entrance: one subtle rise on load */
 @keyframes rise {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: none; }
@@ -50,8 +59,71 @@ body {
 .rise {
   animation: rise 0.5s ease-out both;
 }
+
+@media (prefers-reduced-motion: no-preference) {
+  /* scroll-triggered reveal - Reveal.tsx adds .is-in when the element enters */
+  .reveal {
+    opacity: 0;
+    transform: translateY(16px);
+    transition: opacity 0.7s ease, transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .reveal.is-in {
+    opacity: 1;
+    transform: none;
+  }
+  /* staggered variant: the wrapper stays put, direct children cascade in */
+  .reveal.stagger {
+    opacity: 1;
+    transform: none;
+  }
+  .stagger > * {
+    opacity: 0;
+    transform: translateY(12px);
+    transition: opacity 0.55s ease, transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .stagger.is-in > * {
+    opacity: 1;
+    transform: none;
+  }
+  .stagger > :nth-child(2) { transition-delay: 70ms; }
+  .stagger > :nth-child(3) { transition-delay: 140ms; }
+  .stagger > :nth-child(4) { transition-delay: 210ms; }
+  .stagger > :nth-child(5) { transition-delay: 280ms; }
+  .stagger > :nth-child(6) { transition-delay: 350ms; }
+  .stagger > :nth-child(7) { transition-delay: 420ms; }
+  .stagger > :nth-child(8) { transition-delay: 490ms; }
+
+  /* hero ledger "boots" on load, one row at a time, like a terminal readout */
+  .boot > * {
+    opacity: 0;
+    animation: rise 0.4s ease-out forwards;
+  }
+  .boot > :nth-child(1) { animation-delay: 0.20s; }
+  .boot > :nth-child(2) { animation-delay: 0.28s; }
+  .boot > :nth-child(3) { animation-delay: 0.36s; }
+  .boot > :nth-child(4) { animation-delay: 0.44s; }
+  .boot > :nth-child(5) { animation-delay: 0.52s; }
+  .boot > :nth-child(6) { animation-delay: 0.60s; }
+  .boot > :nth-child(7) { animation-delay: 0.68s; }
+}
 @media (prefers-reduced-motion: reduce) {
   .rise {
+    animation: none;
+  }
+}
+
+/* blinking terminal caret, used once in the hero ledger footer */
+@keyframes blink {
+  50% { opacity: 0; }
+}
+.caret::after {
+  content: "▍";
+  margin-left: 3px;
+  color: #c9a24b;
+  animation: blink 1.15s steps(2, start) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .caret::after {
     animation: none;
   }
 }

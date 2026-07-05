@@ -16,7 +16,7 @@ export interface NotificationInitial {
 }
 
 const inputClass =
-  "w-full rounded-md border border-line bg-inset px-3 py-2 text-sm text-fg placeholder-faint focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
+  "w-full rounded-md bg-inset px-3 py-2 text-sm text-fg placeholder-faint focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
 
 export function NotificationSettings({ initial, email }: { initial: NotificationInitial; email: string }) {
   const toast = useToast();
@@ -49,7 +49,7 @@ export function NotificationSettings({ initial, email }: { initial: Notification
         setChatId(id);
         setTgOn(true);
         setDraft("");
-        if (res.test === "sent") toast("Telegram connected — check for our test message", "success");
+        if (res.test === "sent") toast("Telegram connected - check for our test message", "success");
         else if (res.test === "unconfigured") toast("Telegram alerts saved (test message skipped)", "success");
         else toast("Saved, but the test message failed. Have you messaged the bot first?", "info");
       } catch (err: any) {
@@ -72,7 +72,7 @@ export function NotificationSettings({ initial, email }: { initial: Notification
   }
 
   return (
-    <section className="rounded-lg border border-line bg-panel p-5" data-tour="notifications">
+    <section className="card p-5" data-tour="notifications">
       <h2 className="font-display text-sm font-semibold tracking-tight text-dim">Notifications</h2>
       <p className="mt-1 text-sm text-muted">Get a message every time a strategy places a buy or sell.</p>
 
@@ -89,7 +89,7 @@ export function NotificationSettings({ initial, email }: { initial: Notification
         </div>
 
         {/* Telegram */}
-        <div className="border-t border-line pt-4">
+        <div className="pt-4">
           <div className="flex items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 text-sm font-medium text-fg">
@@ -108,14 +108,14 @@ export function NotificationSettings({ initial, email }: { initial: Notification
           </div>
 
           {tgOn ? (
-            <div className="mt-3 flex flex-wrap items-center gap-3 rounded-md border border-line bg-inset px-3 py-2.5">
+            <div className="mt-3 flex flex-wrap items-center gap-3 rounded-md bg-inset px-3 py-2.5">
               <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-faint">chat_id</span>
               <span className="font-mono text-sm text-dim">{chatId}</span>
               <button
                 type="button"
                 onClick={removeTelegram}
                 disabled={pending}
-                className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-xs text-dim transition-colors hover:border-loss/40 hover:text-loss focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+                className="ml-auto inline-flex items-center gap-1.5 rounded-md bg-white/5 px-2.5 py-1.5 text-xs text-dim transition-colors hover:bg-loss/10 hover:text-loss focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
               >
                 {pending && <Spinner className="h-3.5 w-3.5" />}
                 Remove
@@ -162,7 +162,7 @@ export function NotificationSettings({ initial, email }: { initial: Notification
               </div>
               {!initial.telegramConfigured && (
                 <p className="text-xs text-faint">
-                  Telegram delivery isn&apos;t configured on the server yet — you can still save your id.
+                  Telegram delivery isn&apos;t configured on the server yet - you can still save your id.
                 </p>
               )}
             </div>

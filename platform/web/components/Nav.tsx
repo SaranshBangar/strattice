@@ -33,12 +33,12 @@ export function Nav() {
 
   const linkClass = (href: string) =>
     [
-      "rounded-md px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-      pathname === href ? "bg-panel text-fg shadow-[inset_0_-2px_0_0_theme(colors.accent.DEFAULT)]" : "text-muted hover:bg-panel hover:text-fg",
+      "rounded-full px-3.5 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+      pathname === href ? "bg-white/[0.07] text-fg" : "text-muted hover:text-fg",
     ].join(" ");
 
   return (
-    <header className="sticky top-0 z-40 border-b border-line bg-bg/85 backdrop-blur">
+    <header className="sticky top-0 z-40 bg-bg/75 shadow-[0_18px_36px_-26px_rgba(0,0,0,0.9)] backdrop-blur-md">
       <nav className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
         <Link
           href="/"
@@ -62,7 +62,7 @@ export function Nav() {
               <button
                 type="button"
                 onClick={handleSignOut}
-                className="ml-1 rounded-md border border-line px-3 py-1.5 text-sm text-dim transition-colors hover:bg-panel hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="ml-2 rounded-full bg-white/5 px-3.5 py-1.5 text-sm text-dim transition-colors hover:bg-white/10 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 Sign out
               </button>
@@ -74,7 +74,7 @@ export function Nav() {
               aria-label="Menu"
               aria-expanded={open}
               onClick={() => setOpen((v) => !v)}
-              className="grid h-9 w-9 place-items-center rounded-md border border-line text-dim transition-colors hover:bg-panel hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:hidden"
+              className="grid h-9 w-9 place-items-center rounded-full bg-white/5 text-dim transition-colors hover:bg-white/10 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:hidden"
             >
               <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
                 {open ? (
@@ -97,7 +97,7 @@ export function Nav() {
                   <a
                     key={href}
                     href={href}
-                    className="rounded-md px-2.5 py-1.5 text-sm text-muted transition-colors hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    className="rounded-full px-2.5 py-1.5 text-sm text-muted transition-colors hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   >
                     {label}
                   </a>
@@ -106,13 +106,13 @@ export function Nav() {
             )}
             <Link
               href="/sign-in"
-              className="rounded-md px-3 py-1.5 text-sm text-dim transition-colors hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="rounded-full px-3 py-1.5 text-sm text-dim transition-colors hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               Sign in
             </Link>
             <Link
               href="/sign-up"
-              className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-ink transition-colors hover:bg-accent-hi focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="rounded-full bg-accent px-3.5 py-1.5 text-sm font-medium text-accent-ink transition-colors hover:bg-accent-hi focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               Get started
             </Link>
@@ -122,7 +122,7 @@ export function Nav() {
 
       {/* Mobile dropdown panel */}
       {signedIn && open && (
-        <div className="border-t border-line bg-bg sm:hidden">
+        <div className="bg-bg/95 shadow-[0_28px_44px_-24px_rgba(0,0,0,0.85)] backdrop-blur-md sm:hidden">
           <div className="mx-auto flex max-w-5xl flex-col gap-1 px-4 py-3">
             {LINKS.map(([href, label]) => (
               <Link
@@ -130,8 +130,8 @@ export function Nav() {
                 href={href}
                 onClick={() => setOpen(false)}
                 className={[
-                  "rounded-md px-3 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-                  pathname === href ? "bg-panel text-fg" : "text-muted hover:bg-panel hover:text-fg",
+                  "rounded-lg px-3 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                  pathname === href ? "bg-white/[0.07] text-fg" : "text-muted hover:bg-white/5 hover:text-fg",
                 ].join(" ")}
               >
                 {label}
@@ -140,7 +140,7 @@ export function Nav() {
             <button
               type="button"
               onClick={handleSignOut}
-              className="mt-1 rounded-md border border-line px-3 py-2.5 text-left text-sm text-dim transition-colors hover:bg-panel hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="mt-1 rounded-lg bg-white/5 px-3 py-2.5 text-left text-sm text-dim transition-colors hover:bg-white/10 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               Sign out
             </button>

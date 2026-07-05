@@ -54,8 +54,8 @@ export default async function AdminPage({
         <StatCard label="Trades" value={stats.trades.toLocaleString("en-IN")} sub={tierLine} />
       </div>
 
-      <section className="rounded-lg border border-line bg-panel">
-        <div className="flex flex-col gap-3 border-b border-line p-4 sm:flex-row sm:items-center sm:justify-between">
+      <section className="card">
+        <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
           <h3 className="font-display text-sm font-semibold tracking-tight text-dim">
             Users <span className="ml-1 font-mono text-xs font-normal text-faint">{list.total}</span>
           </h3>
@@ -73,7 +73,7 @@ export default async function AdminPage({
                 className="w-full rounded-md border border-line bg-inset py-1.5 pl-8 pr-3 text-xs text-fg placeholder-faint focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:w-64"
               />
             </div>
-            <button type="submit" className="rounded-md border border-line px-3 py-1.5 text-xs font-medium text-dim transition-colors hover:bg-inset hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+            <button type="submit" className="rounded-md bg-white/5 px-3 py-1.5 text-xs font-medium text-dim transition-colors hover:bg-white/10 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
               Search
             </button>
             {search && (
@@ -88,7 +88,7 @@ export default async function AdminPage({
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-line text-left font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-faint">
+                <tr className="text-left font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-faint">
                   <th className="px-4 py-2.5">User</th>
                   <th className="px-4 py-2.5">Joined</th>
                   <th className="px-4 py-2.5">Keys</th>
@@ -106,11 +106,11 @@ export default async function AdminPage({
         )}
 
         {totalPages > 1 && (
-          <div className="flex items-center justify-between border-t border-line px-4 py-3 text-xs text-muted">
+          <div className="flex items-center justify-between px-4 py-3 text-xs text-muted">
             <span className="tabular-nums">Page {page} / {totalPages}</span>
             <div className="flex items-center gap-1">
-              {page > 1 && <Link href={pageHref(page - 1)} className="rounded-md border border-line px-2.5 py-1 font-mono transition-colors hover:bg-inset hover:text-fg">Prev</Link>}
-              {page < totalPages && <Link href={pageHref(page + 1)} className="rounded-md border border-line px-2.5 py-1 font-mono transition-colors hover:bg-inset hover:text-fg">Next</Link>}
+              {page > 1 && <Link href={pageHref(page - 1)} className="rounded-md bg-white/5 px-2.5 py-1 font-mono transition-colors hover:bg-white/10 hover:text-fg">Prev</Link>}
+              {page < totalPages && <Link href={pageHref(page + 1)} className="rounded-md bg-white/5 px-2.5 py-1 font-mono transition-colors hover:bg-white/10 hover:text-fg">Next</Link>}
             </div>
           </div>
         )}

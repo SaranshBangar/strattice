@@ -8,7 +8,7 @@ export default {
         bg: "#0B0D12",
         panel: "#131722",
         inset: "#0E121A",
-        line: "#232838",
+        line: "#1F2433",
         fg: "#E6E9F0",
         dim: "#AEB6C8",
         muted: "#828AA0",

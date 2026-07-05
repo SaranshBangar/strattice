@@ -15,7 +15,7 @@ const STEPS: Step[] = [
   {
     icon: <IconSpark />,
     title: "Welcome to Strattice",
-    body: "Automated trading strategies that run on your own CoinDCX account. It's non-custodial — we never hold your funds, and you keep control of the keys.",
+    body: "Automated trading strategies that run on your own CoinDCX account. It's non-custodial - we never hold your funds, and you keep control of the keys.",
   },
   {
     icon: <IconKey />,
@@ -34,7 +34,7 @@ const STEPS: Step[] = [
   {
     icon: <IconPower />,
     title: "Flip the bot on",
-    body: "Turn the bot on from Account. It starts in DRY_RUN — simulated orders only. Switch to LIVE when you've reviewed the trades and you're ready.",
+    body: "Turn the bot on from Account. It starts in DRY_RUN - simulated orders only. Switch to LIVE when you've reviewed the trades and you're ready.",
     href: "/account",
     cta: "Bot controls",
   },
@@ -122,7 +122,7 @@ export function Walkthrough() {
         onClick={() => close(true)}
         className="absolute inset-0 bg-black/70 backdrop-blur-sm [animation:toastIn_.2s_ease-out]"
       />
-      <div className="relative w-full max-w-md overflow-hidden rounded-xl border border-line bg-panel shadow-2xl shadow-black/60 [animation:rise_.35s_ease-out_both]">
+      <div className="relative w-full max-w-md overflow-hidden card shadow-2xl shadow-black/60 [animation:rise_.35s_ease-out_both]">
         <div className="flex items-start justify-between px-6 pt-6">
           <span className="grid h-11 w-11 place-items-center rounded-lg border border-accent/30 bg-accent/10 text-accent">
             {step.icon}
@@ -175,7 +175,7 @@ export function Walkthrough() {
           ))}
         </div>
 
-        <div className="flex items-center justify-between gap-3 border-t border-line px-6 py-4">
+        <div className="flex items-center justify-between gap-3 px-6 py-4">
           <button
             type="button"
             onClick={() => close(true)}
@@ -188,7 +188,7 @@ export function Walkthrough() {
               <button
                 type="button"
                 onClick={() => setI((v) => Math.max(v - 1, 0))}
-                className="rounded-md border border-line px-3.5 py-1.5 text-sm text-dim transition-colors hover:bg-inset hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="rounded-md bg-white/5 px-3.5 py-1.5 text-sm text-dim transition-colors hover:bg-white/10 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 Back
               </button>

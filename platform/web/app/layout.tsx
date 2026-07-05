@@ -47,8 +47,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Walkthrough />
           <Nav />
           <main id="main" className="mx-auto max-w-5xl px-4 py-10">{children}</main>
-          <footer className="mt-16 border-t border-line">
-            <div className="mx-auto max-w-5xl space-y-6 px-4 py-8">
+          <footer className="mt-20 bg-inset/70">
+            <div className="mx-auto max-w-5xl space-y-8 px-4 py-12">
               <div className="flex flex-wrap items-start justify-between gap-6">
                 <div>
                   <span className="font-display text-sm font-semibold tracking-tight text-dim">stra<span className="text-accent">tt</span>ice</span>
@@ -69,7 +69,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   ))}
                 </dl>
               </div>
-              <div className="space-y-3 border-t border-line/70 pt-5">
+              <div className="space-y-3">
                 <span className="font-mono text-[11px] uppercase tracking-wider text-faint">
                   free during early access · non-custodial
                 </span>

@@ -49,7 +49,7 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
   }
 
   return (
-    <div className="mx-auto w-full max-w-md rounded-lg border border-line bg-panel p-6">
+    <div className="mx-auto w-full max-w-md card p-6">
       <h1 className="font-display text-xl font-semibold tracking-tight text-fg">{mode === "sign-up" ? "Create your account" : "Sign in"}</h1>
       <p className="mt-1 text-sm text-muted">
         {mode === "sign-up" ? "Start running strategies on your own CoinDCX account." : "Welcome back to Strattice."}
@@ -138,7 +138,7 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
         type="button"
         onClick={google}
         disabled={gbusy || busy}
-        className="mt-4 inline-flex w-full items-center justify-center gap-2.5 rounded-md border border-line bg-inset px-4 py-2 text-sm font-medium text-fg transition-colors hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+        className="mt-4 inline-flex w-full items-center justify-center gap-2.5 rounded-md bg-white/5 px-4 py-2 text-sm font-medium text-fg transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
       >
         {gbusy ? <Spinner className="h-4 w-4" /> : <GoogleIcon />}
         {gbusy ? "Connecting…" : "Continue with Google"}

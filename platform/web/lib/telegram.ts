@@ -1,4 +1,4 @@
-// Telegram alerts via the Bot API — one fetch, no SDK. The platform runs a single bot
+// Telegram alerts via the Bot API - one fetch, no SDK. The platform runs a single bot
 // (TELEGRAM_BOT_TOKEN, from @BotFather); each user stores the numeric chat id they get from
 // @userinfobot and starts a chat with that bot so it's allowed to message them.
 //

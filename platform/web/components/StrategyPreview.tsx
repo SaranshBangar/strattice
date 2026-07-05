@@ -16,7 +16,7 @@ import { Spinner } from "@/components/Spinner";
 const C = { gain: "#16B97D", loss: "#F0584F", accent: "#C9A24B", line: "#232838", faint: "#5A6379" } as const;
 
 // Candle interval choices for the preview window (500 bars each). Only 15m matches
-// what the live engine trades — longer intervals show more history, but entries,
+// what the live engine trades - longer intervals show more history, but entries,
 // exits and returns are NOT what the engine would have done. Marked in the picker.
 const INTERVALS: Record<string, string> = {
   "15m": "≈ 5 days · live interval", "1h": "≈ 3 weeks", "4h": "≈ 12 weeks", "1d": "≈ 16 months",
@@ -38,7 +38,7 @@ function Stat({ label, value, tone = "default", hint }: {
 }) {
   const c = tone === "good" ? "text-gain" : tone === "bad" ? "text-loss" : "text-fg";
   return (
-    <div className="rounded-md border border-line bg-inset px-3 py-2" title={hint}>
+    <div className="rounded-md bg-inset px-3 py-2" title={hint}>
       <div className="font-mono text-[10px] uppercase tracking-wider text-faint">{label}</div>
       <div className={`mt-0.5 font-mono text-sm font-semibold tabular-nums ${c}`}>{value}</div>
     </div>
@@ -186,13 +186,13 @@ export function StrategyPreview({ template, market, params, custom, onWindowResu
           <Stat label="Entries" value={String(trades.length)} hint="Simulated entries in this window" />
           <Stat
             label="Win rate"
-            value={sim.winRate === null ? "—" : `${sim.winRate.toFixed(0)}%`}
+            value={sim.winRate === null ? "-" : `${sim.winRate.toFixed(0)}%`}
             tone={sim.winRate === null ? "default" : sim.winRate >= 50 ? "good" : "bad"}
             hint="Closed trades with positive net P&L"
           />
           <Stat
             label="Net return"
-            value={sim.closed ? pct(sim.totalNetPct) : "—"}
+            value={sim.closed ? pct(sim.totalNetPct) : "-"}
             tone={sim.closed === 0 ? "default" : sim.totalNetPct >= 0 ? "good" : "bad"}
             hint={`Compounded across closed trades, after ~${FRICTION_PCT}% round-trip friction (fees + GST + TDS)`}
           />
@@ -324,13 +324,13 @@ export function StrategyPreview({ template, market, params, custom, onWindowResu
 
               {/* hover tooltip */}
               {hc && (
-                <div className="pointer-events-none absolute left-2 top-2 z-10 rounded-md border border-line bg-bg/95 px-2.5 py-1.5 font-mono text-[11px] shadow-lg">
+                <div className="pointer-events-none absolute left-2 top-2 z-10 rounded-md bg-panel/95 px-2.5 py-1.5 font-mono text-[11px] shadow-xl backdrop-blur">
                   <div className="text-faint">{new Date(hc.t).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: interval === "1d" ? undefined : "short" })}</div>
                   <div className="mt-0.5 tnum text-dim">
                     O {fmt(hc.o)} · H {fmt(hc.h)} · L {fmt(hc.l)} · C <span className="text-fg">{fmt(hc.c)}</span>
                   </div>
                   {hoverEvent && (
-                    <div className={`mt-1 border-t border-line pt-1 ${hoverEvent.kind === "entry" ? "text-gain" : "text-loss"}`}>
+                    <div className={`mt-1 pt-1 ${hoverEvent.kind === "entry" ? "text-gain" : "text-loss"}`}>
                       {hoverEvent.kind === "entry"
                         ? `▲ entry @ ₹${fmt(hoverEvent.trade.entryPrice)}`
                         : `▼ exit (${EXIT_REASON_LABEL[hoverEvent.trade.reason]}) @ ₹${fmt(hoverEvent.trade.exitPrice)} · net ${pct(hoverEvent.trade.netPct)}`}
@@ -369,7 +369,7 @@ export function StrategyPreview({ template, market, params, custom, onWindowResu
       {/* simulated trade log */}
       {status === "ok" && (
         trades.length ? (
-          <div className="overflow-hidden rounded-md border border-line">
+          <div className="overflow-hidden rounded-md bg-inset">
             <div className="max-h-44 overflow-y-auto">
               <table className="w-full text-left font-mono text-[11px]">
                 <thead className="sticky top-0 bg-inset text-faint">
@@ -381,7 +381,7 @@ export function StrategyPreview({ template, market, params, custom, onWindowResu
                     <th className="px-3 py-1.5 text-right font-medium uppercase tracking-wider">Net</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-line/60">
+                <tbody className="[&>tr:nth-child(odd)]:bg-white/[0.015]">
                   {[...trades].reverse().map((t, i) => (
                     <tr key={i}>
                       <td className="px-3 py-1.5 text-dim">

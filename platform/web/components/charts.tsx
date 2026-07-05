@@ -1,5 +1,5 @@
 // Zero-dependency SVG charts. Server-renderable (no client JS). Palette matches
-// tailwind.config.ts exactly. No gradients — solid low-opacity fills only.
+// tailwind.config.ts exactly. No gradients - solid low-opacity fills only.
 import type { ReactNode } from "react";
 
 const C = {
@@ -217,7 +217,7 @@ export function WinRateDonut({ wins, losses, size = 132 }: { wins: number; losse
           <dt className="text-muted">Losses</dt>
           <dd className="ml-auto font-mono tabular-nums text-dim">{losses}</dd>
         </div>
-        <div className="flex items-center gap-2 border-t border-line pt-1.5">
+        <div className="flex items-center gap-2 pt-1.5">
           <dt className="text-muted">Total</dt>
           <dd className="ml-auto font-mono tabular-nums text-dim">{total}</dd>
         </div>

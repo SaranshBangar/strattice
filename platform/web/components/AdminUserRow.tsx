@@ -46,7 +46,7 @@ export function AdminUserRow({ u }: { u: AdminUser }) {
   const paid = tier !== "free";
 
   return (
-    <tr className="border-b border-line/60 last:border-0 align-middle hover:bg-inset/40">
+    <tr className="align-middle odd:bg-white/[0.015] hover:bg-inset/40">
       <td className="px-4 py-2.5">
         <div className="font-mono text-sm text-fg">{u.email}</div>
         {u.name && <div className="text-xs text-muted">{u.name}</div>}
@@ -54,11 +54,11 @@ export function AdminUserRow({ u }: { u: AdminUser }) {
       </td>
       <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-muted">{joined(u.created_at)}</td>
       <td className="px-4 py-2.5">
-        <span className={u.linked ? "text-xs text-gain" : "text-xs text-faint"}>{u.linked ? "Linked" : "—"}</span>
+        <span className={u.linked ? "text-xs text-gain" : "text-xs text-faint"}>{u.linked ? "Linked" : "-"}</span>
       </td>
       <td className="whitespace-nowrap px-4 py-2.5">
         {(() => {
-          // A bot that claims to be on but hasn't heartbeat in 2 minutes is stalled —
+          // A bot that claims to be on but hasn't heartbeat in 2 minutes is stalled -
           // the row an admin actually needs to notice.
           const stalled = !!u.bot_active && (!u.last_heartbeat || Date.now() / 1000 - u.last_heartbeat > 120);
           return (
@@ -88,7 +88,7 @@ export function AdminUserRow({ u }: { u: AdminUser }) {
           type="button"
           onClick={stopBot}
           disabled={pending || !u.bot_active}
-          className="rounded-md border border-line px-2.5 py-1 text-xs font-medium text-dim transition-colors hover:border-loss/50 hover:text-loss focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-loss disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-md bg-white/5 px-2.5 py-1 text-xs font-medium text-dim transition-colors hover:bg-loss/10 hover:text-loss focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-loss disabled:cursor-not-allowed disabled:opacity-40"
           title={u.bot_active ? "Force this user's bot off" : "Bot already off"}
         >
           Stop bot

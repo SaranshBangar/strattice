@@ -1,7 +1,7 @@
 "use client";
 // Trade history with client-side search, filtering, sorting, pagination and CSV
 // export. The server passes a bounded window of rows (see dashboard) and all
-// interaction happens here — instant, no round-trips.
+// interaction happens here - instant, no round-trips.
 import { useMemo, useState } from "react";
 import { Select } from "@/components/Select";
 import { strategyLabel } from "@/lib/strategies";
@@ -93,8 +93,8 @@ export function TradesTable({ trades }: { trades: Trade[] }) {
   const resetPage = <T,>(setter: (v: T) => void) => (v: T) => { setter(v); setPage(1); };
 
   return (
-    <section className="rounded-lg border border-line bg-panel">
-      <div className="flex flex-col gap-3 border-b border-line p-4 lg:flex-row lg:items-center lg:justify-between">
+    <section className="card">
+      <div className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
         <h3 className="font-display text-sm font-semibold tracking-tight text-dim">
           Trade history
           <span className="ml-2 font-mono text-xs font-normal text-faint">{filtered.length}</span>
@@ -138,7 +138,7 @@ export function TradesTable({ trades }: { trades: Trade[] }) {
             type="button"
             onClick={exportCsv}
             disabled={filtered.length === 0}
-            className="rounded-md border border-line px-2.5 py-1.5 text-xs font-medium text-dim transition-colors hover:bg-inset hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-md bg-white/5 px-2.5 py-1.5 text-xs font-medium text-dim transition-colors hover:bg-white/10 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
           >
             Export CSV
           </button>
@@ -152,7 +152,7 @@ export function TradesTable({ trades }: { trades: Trade[] }) {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-line">
+                <tr>
                   <Th onClick={() => toggleSort("ts")} active={sort === "ts"} dir={dir}>Time</Th>
                   <th className="whitespace-nowrap px-4 py-2.5 text-left font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-faint">Strategy</th>
                   <Th onClick={() => toggleSort("market")} active={sort === "market"} dir={dir}>Market</Th>
@@ -169,7 +169,7 @@ export function TradesTable({ trades }: { trades: Trade[] }) {
                   const p = t.realized_pnl;
                   const executed = t.status === "placed" || t.status === "dry_run";
                   return (
-                    <tr key={i} className={["border-b border-line/60 last:border-0 hover:bg-inset/60", executed ? "" : "opacity-60"].join(" ")}>
+                    <tr key={i} className={["odd:bg-white/[0.015] hover:bg-inset/60", executed ? "" : "opacity-60"].join(" ")}>
                       <td className="whitespace-nowrap px-4 py-2.5 font-mono tnum text-muted">{fmtTs(t.ts)}</td>
                       <td className="whitespace-nowrap px-4 py-2.5 font-mono font-medium text-fg">
                         {strategyLabel(t.strategy)}
@@ -191,7 +191,7 @@ export function TradesTable({ trades }: { trades: Trade[] }) {
             </table>
           </div>
 
-          <div className="flex flex-col items-center justify-between gap-3 border-t border-line px-4 py-3 sm:flex-row">
+          <div className="flex flex-col items-center justify-between gap-3 px-4 py-3 sm:flex-row">
             <div className="flex items-center gap-2 text-xs text-muted">
               <span>Rows</span>
               <Select
@@ -240,7 +240,7 @@ function PageBtn({ children, onClick, disabled }: { children: React.ReactNode; o
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="rounded-md border border-line px-2.5 py-1 font-mono text-xs text-dim transition-colors hover:bg-inset hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-40"
+      className="rounded-md bg-white/5 px-2.5 py-1 font-mono text-xs text-dim transition-colors hover:bg-white/10 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-40"
     >
       {children}
     </button>

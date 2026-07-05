@@ -10,7 +10,7 @@ export function TourButton({ className, label = "Take the tour" }: { className?:
       onClick={() => window.dispatchEvent(new Event(TOUR_EVENT))}
       className={
         className ??
-        "inline-flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm text-dim transition-colors hover:bg-panel hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        "inline-flex items-center gap-1.5 rounded-md bg-white/5 px-3 py-1.5 text-sm text-dim transition-colors hover:bg-white/10 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       }
     >
       <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

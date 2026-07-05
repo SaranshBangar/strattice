@@ -25,9 +25,9 @@ const toneClass: Record<CellTone, string> = {
 
 export function DataTable({ title, head, rows, empty, align }: DataTableProps) {
   return (
-    <section className="rounded-lg border border-line bg-panel">
+    <section className="card">
       {title && (
-        <div className="border-b border-line px-4 py-3">
+        <div className="px-4 py-3">
           <h3 className="font-display text-sm font-semibold tracking-tight text-dim">{title}</h3>
         </div>
       )}
@@ -40,7 +40,7 @@ export function DataTable({ title, head, rows, empty, align }: DataTableProps) {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-line">
+              <tr>
                 {head.map((h, j) => (
                   <th
                     key={h}
@@ -56,7 +56,7 @@ export function DataTable({ title, head, rows, empty, align }: DataTableProps) {
             </thead>
             <tbody>
               {rows.map((row, i) => (
-                <tr key={i} className="border-b border-line/60 last:border-0 hover:bg-inset/60">
+                <tr key={i} className="odd:bg-white/[0.015] hover:bg-inset/60">
                   {row.map((cell, j) => {
                     const obj = typeof cell === "object" && cell !== null ? cell : null;
                     const value: string | number = obj ? obj.v : (cell as string | number);

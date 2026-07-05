@@ -12,14 +12,14 @@ export default function Loading() {
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-[92px] rounded-lg border border-line bg-panel" />
+          <div key={i} className="h-[92px] card" />
         ))}
       </div>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div className="h-64 rounded-lg border border-line bg-panel lg:col-span-2" />
-        <div className="h-64 rounded-lg border border-line bg-panel" />
+        <div className="h-64 card lg:col-span-2" />
+        <div className="h-64 card" />
       </div>
-      <div className="h-60 rounded-lg border border-line bg-panel" />
+      <div className="h-60 card" />
     </div>
   );
 }

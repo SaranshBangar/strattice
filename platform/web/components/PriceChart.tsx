@@ -11,7 +11,7 @@ interface Candle { t: number; o: number; h: number; l: number; c: number; v: num
 const DEFAULT_MARKETS = ["I-BTC_INR", "I-ETH_INR", "I-SOL_INR", "I-XRP_INR", "I-DOGE_INR", "I-BNB_INR"];
 // Selectable display *windows* (now → now−window), each mapped to the candle
 // granularity + count that fills exactly that span. The label is the window,
-// not the bar width — "15m" shows the last 15 minutes, not 15-min bars for days.
+// not the bar width - "15m" shows the last 15 minutes, not 15-min bars for days.
 const WINDOWS: Record<string, { interval: string; limit: number }> = {
   "15m": { interval: "1m", limit: 15 },
   "1h": { interval: "1m", limit: 60 },
@@ -101,8 +101,8 @@ export function PriceChart({ markets }: { markets?: string[] }) {
   const hoverCandle = hover != null ? candles[hover] : null;
 
   return (
-    <section className="rounded-lg border border-line bg-panel">
-      <div className="flex flex-col gap-3 border-b border-line p-4 sm:flex-row sm:items-center sm:justify-between">
+    <section className="card">
+      <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-baseline gap-3">
             <h3 className="font-display text-sm font-semibold tracking-tight text-dim">{label(pair)}</h3>
@@ -160,7 +160,7 @@ export function PriceChart({ markets }: { markets?: string[] }) {
                 {hover != null && <circle cx={x(hover)} cy={y(closes[hover])} r={3.5} fill={stroke} vectorEffect="non-scaling-stroke" />}
               </svg>
               {hoverCandle && (
-                <div className="pointer-events-none absolute left-2 top-2 rounded-md border border-line bg-bg/95 px-2.5 py-1.5 font-mono text-[11px] shadow-lg">
+                <div className="pointer-events-none absolute left-2 top-2 rounded-md bg-panel/95 px-2.5 py-1.5 font-mono text-[11px] shadow-xl backdrop-blur">
                   <div className="tnum text-fg">₹{fmt(hoverCandle.c)}</div>
                   <div className="mt-0.5 text-faint">{new Date(hoverCandle.t).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}</div>
                 </div>

@@ -61,7 +61,7 @@ export async function removeStrategyAction(id: string) {
 // The supervisor turns bot_state.live into the engine's DRY_RUN=false +
 // LIVE_TRADING_CONFIRM pair, so this flag alone arms real-money trading. Enabling it
 // therefore goes through goLiveAction (typed confirmation + preconditions); this action
-// only turns things ON with linked keys, and always allows turning things OFF —
+// only turns things ON with linked keys, and always allows turning things OFF -
 // the off direction is a safety control and must never be gated.
 export async function setBotAction(patch: { active?: boolean; live?: boolean }) {
   const userId = await requireUserId();

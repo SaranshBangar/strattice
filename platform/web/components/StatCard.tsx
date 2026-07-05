@@ -20,7 +20,7 @@ const valueTone: Record<StatCardTone, string> = {
 
 export function StatCard({ label, value, sub, tone = "default", chart }: StatCardProps) {
   return (
-    <div className="flex flex-col rounded-lg border border-line bg-panel p-4">
+    <div className="flex flex-col card p-4">
       <div className="font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-faint">{label}</div>
       <div className={["mt-2 font-mono text-2xl font-semibold tnum tracking-tight", valueTone[tone]].join(" ")}>
         {value}

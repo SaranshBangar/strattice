@@ -1,4 +1,4 @@
-// Inline loading spinner — inherits `currentColor`, sizes via className (default h-4 w-4).
+// Inline loading spinner - inherits `currentColor`, sizes via className (default h-4 w-4).
 export function Spinner({ className = "h-4 w-4" }: { className?: string }) {
   return (
     <svg className={`animate-spin ${className}`} viewBox="0 0 24 24" fill="none" aria-hidden="true">

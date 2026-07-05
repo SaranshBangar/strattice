@@ -4,7 +4,7 @@ import { financialYear, taxReportRows } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
-// Downloadable CSV of every LIVE sell leg in an Indian financial year — the raw
+// Downloadable CSV of every LIVE sell leg in an Indian financial year - the raw
 // material for Schedule VDA. One row per taxable disposal; DRY_RUN never appears.
 export async function GET(req: Request) {
   const user = await getUser();
@@ -27,7 +27,7 @@ export async function GET(req: Request) {
   const head = ["time_utc", "market", "strategy", "qty", "sale_price", "sale_consideration", "realized_pnl", "tds_withheld"];
   const esc = (v: unknown) => {
     let s = String(v ?? "");
-    // Neutralize spreadsheet formula injection (=, +, -, @ starters) — strategy
+    // Neutralize spreadsheet formula injection (=, +, -, @ starters) - strategy
     // names are user-controlled and this file is destined for Excel. Plain
     // numbers (e.g. negative P&L) are left untouched.
     if (/^[=+\-@\t\r]/.test(s) && !/^-?\d+(\.\d+)?$/.test(s)) s = `'${s}`;

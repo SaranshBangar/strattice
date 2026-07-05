@@ -1,7 +1,7 @@
-strattice — brand assets
+strattice - brand assets
 ========================
 
-Mark: "Candlestick S" — three trading candles arranged into an implied S.
+Mark: "Candlestick S" - three trading candles arranged into an implied S.
 Brand color: #C9A24B (gold) on #0a0a0a (near-black).
 
 Files
@@ -9,7 +9,7 @@ Files
 SVG (vector, scale freely):
   strattice-logo-dark.svg          gold mark on rounded near-black tile
   strattice-logo-light.svg         deeper gold (#A67F2E) mark on white tile
-  strattice-logo-transparent.svg   gold mark, no background — use on any surface
+  strattice-logo-transparent.svg   gold mark, no background - use on any surface
   strattice-wordmark-dark.svg      mark + "strattice" lockup, for dark backgrounds
   strattice-wordmark-light.svg     mark + "strattice" lockup, for light backgrounds
   favicon.svg                      same as logo-dark, for <link rel=icon>

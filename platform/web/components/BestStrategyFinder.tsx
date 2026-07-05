@@ -1,5 +1,5 @@
 "use client";
-// "Choose the best strategy" — for users who don't know which template to pick.
+// "Choose the best strategy" - for users who don't know which template to pick.
 // Replays every builtin template over live CoinDCX candles on two windows
 // (15m = the live trading interval, 1h = longer history for robustness),
 // ranks them on net-of-fees performance with enough closed trades to mean
@@ -10,7 +10,7 @@ import { STRATEGY_META } from "@/lib/strategies";
 import { simulate, FRICTION_PCT, type Candle, type SimResult } from "@/lib/strategy-sim";
 import { Spinner } from "@/components/Spinner";
 
-// Both windows are 500 bars — 15m matches what the engine actually trades,
+// Both windows are 500 bars - 15m matches what the engine actually trades,
 // 1h adds ~3 weeks of history so one lucky day can't crown a winner.
 const WINDOWS = ["15m", "1h"] as const;
 const LIMIT = 500;
@@ -59,7 +59,7 @@ function explain(v: Verdict, runnerUp: Verdict | undefined, buyHold: number, mar
   const label = STRATEGY_META[v.template].label;
   const parts: string[] = [];
   if (!v.eligible) {
-    return `${label} scored best, but no template closed ${MIN_CLOSED}+ trades on ${market} in these windows — the stock filters are deliberately picky and this market has been quiet. Treat this pick as weak evidence; try another market or keep the default.`;
+    return `${label} scored best, but no template closed ${MIN_CLOSED}+ trades on ${market} in these windows - the stock filters are deliberately picky and this market has been quiet. Treat this pick as weak evidence; try another market or keep the default.`;
   }
   parts.push(
     `${label} came out on top: ${pct(v.net)} net of ~${FRICTION_PCT}% round-trip fees across the two test windows, from ${v.closed} closed trades (${v.winRate!.toFixed(0)}% winners).`,
@@ -67,12 +67,12 @@ function explain(v: Verdict, runnerUp: Verdict | undefined, buyHold: number, mar
   if (v.net > buyHold) {
     parts.push(`That beats simply holding ${market} (${pct(buyHold)} over the ~3-week test stretch).`);
   } else {
-    parts.push(`Buy-and-hold did better over this exact stretch (${pct(buyHold)}) — the strategy's value is the stop-losses and exits, not raw return in a straight-up market.`);
+    parts.push(`Buy-and-hold did better over this exact stretch (${pct(buyHold)}) - the strategy's value is the stop-losses and exits, not raw return in a straight-up market.`);
   }
   if (runnerUp && runnerUp.eligible) {
     parts.push(`Runner-up: ${STRATEGY_META[runnerUp.template].label} at ${pct(runnerUp.net)}.`);
   }
-  parts.push(`It's a ${STRATEGY_META[v.template].kind.toLowerCase()} template — ${STRATEGY_META[v.template].blurb.toLowerCase()}`);
+  parts.push(`It's a ${STRATEGY_META[v.template].kind.toLowerCase()} template - ${STRATEGY_META[v.template].blurb.toLowerCase()}`);
   return parts.join(" ");
 }
 
@@ -154,21 +154,21 @@ export function BestStrategyFinder({ market, disabled, onPick }: {
                   <th className="py-1 text-right font-medium uppercase tracking-wider">Trades</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-line/60">
+              <tbody className="[&>tr:nth-child(odd)]:bg-white/[0.015]">
                 {result.verdicts.map((v, i) => (
                   <tr key={v.template} className={i === 0 ? "text-fg" : "text-muted"}>
                     <td className="py-1.5 pr-3">
                       {i === 0 && <span className="mr-1 text-accent">✦</span>}
                       {STRATEGY_META[v.template].label}
-                      {!v.eligible && <span className="ml-1.5 text-[9px] uppercase text-faint" title={`Fewer than ${MIN_CLOSED} closed trades — not enough evidence`}>low data</span>}
+                      {!v.eligible && <span className="ml-1.5 text-[9px] uppercase text-faint" title={`Fewer than ${MIN_CLOSED} closed trades - not enough evidence`}>low data</span>}
                     </td>
                     <td className={`py-1.5 pr-3 text-right tnum ${v.perWindow["15m"].totalNetPct >= 0 ? "text-gain" : "text-loss"}`}>
-                      {v.perWindow["15m"].closed ? pct(v.perWindow["15m"].totalNetPct) : "—"}
+                      {v.perWindow["15m"].closed ? pct(v.perWindow["15m"].totalNetPct) : "-"}
                     </td>
                     <td className={`py-1.5 pr-3 text-right tnum ${v.perWindow["1h"].totalNetPct >= 0 ? "text-gain" : "text-loss"}`}>
-                      {v.perWindow["1h"].closed ? pct(v.perWindow["1h"].totalNetPct) : "—"}
+                      {v.perWindow["1h"].closed ? pct(v.perWindow["1h"].totalNetPct) : "-"}
                     </td>
-                    <td className="py-1.5 pr-3 text-right tnum">{v.winRate === null ? "—" : `${v.winRate.toFixed(0)}%`}</td>
+                    <td className="py-1.5 pr-3 text-right tnum">{v.winRate === null ? "-" : `${v.winRate.toFixed(0)}%`}</td>
                     <td className="py-1.5 text-right tnum">{v.closed}</td>
                   </tr>
                 ))}
@@ -178,7 +178,7 @@ export function BestStrategyFinder({ market, disabled, onPick }: {
 
           <p className="mt-3 text-[10px] leading-relaxed text-faint">
             Ranked by net return after ~{FRICTION_PCT}% round-trip friction on 500×15m + 500×1h live candles;
-            templates need {MIN_CLOSED}+ closed trades to qualify. Small sample — a good score here is a
+            templates need {MIN_CLOSED}+ closed trades to qualify. Small sample - a good score here is a
             starting point, not a promise of future returns.
           </p>
         </div>

@@ -1,4 +1,4 @@
-// Native email service — no third-party deps. Speaks SMTP directly over node:tls
+// Native email service - no third-party deps. Speaks SMTP directly over node:tls
 // (implicit TLS on 465, or STARTTLS on 587/25). Runs on the Node.js runtime only.
 //
 // Config (.env): SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM,
@@ -126,7 +126,7 @@ async function send(to: string, subject: string, html: string) {
 type Row = [string, string];
 
 // All layout inputs are plain text (some user-controlled: name, key label,
-// custom strategy name) — escape them so nothing injects HTML into emails.
+// custom strategy name) - escape them so nothing injects HTML into emails.
 const esc = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 

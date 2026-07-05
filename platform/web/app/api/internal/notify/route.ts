@@ -1,5 +1,5 @@
 // Trade notifications. The Python supervisor POSTs here after it records a buy/sell
-// fill (trades live in D1, written by the bot — this app only reads them), so a
+// fill (trades live in D1, written by the bot - this app only reads them), so a
 // trade notification needs a push from that side. Guarded by a shared secret.
 //
 // Fans a fill out to the channels the user has enabled: email (default on) and/or

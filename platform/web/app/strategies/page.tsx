@@ -24,7 +24,7 @@ export default async function StrategiesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="rounded-md border border-line bg-panel px-3 py-1 font-mono text-xs text-muted">
+          <span className="rounded-md bg-white/5 px-3 py-1 font-mono text-xs text-muted">
             {tier.tradesPerDay} trades/day
           </span>
           <span className="rounded-md border border-gain/40 bg-gain/10 px-3 py-1 font-mono text-xs uppercase tracking-wider text-gain">

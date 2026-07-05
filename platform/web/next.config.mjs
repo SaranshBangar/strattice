@@ -5,7 +5,7 @@ const nextConfig = {
       {
         source: "/(.*)",
         headers: [
-          // App is never meant to be framed — blocks clickjacking.
+          // App is never meant to be framed - blocks clickjacking.
           { key: "X-Frame-Options", value: "DENY" },
           { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
           { key: "X-Content-Type-Options", value: "nosniff" },

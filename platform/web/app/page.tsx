@@ -1,4 +1,5 @@
 import { HeroCta } from "@/components/HeroCta";
+import { Reveal } from "@/components/Reveal";
 import { STRATEGY_META } from "@/lib/strategies";
 
 // The strategy templates that actually ship - shown as a terminal-style ledger.
@@ -65,11 +66,11 @@ const FEATURES: [string, string][] = [
 const FAQ: [string, string][] = [
   [
     "Where does my money actually sit?",
-    "In your own CoinDCX account, the whole time. Strattice holds an API key you create - with withdrawals disabled - and uses it only to read balances and place orders. We cannot move funds out, and we never touch custody.",
+    "In your own CoinDCX account, the whole time. Strattice holds an API key you create, with withdrawals disabled, and uses it only to read balances and place orders. We cannot move funds out, and we never touch custody.",
   ],
   [
     "Can a strategy lose money?",
-    "Yes. Every strategy here can and sometimes will lose - that's what the hard stops, daily loss limit and kill switch are for. Nothing on this site is a guarantee of profit, and simulated results never promise live ones.",
+    "Yes. Every strategy here can and sometimes will lose. That's what the hard stops, daily loss limit and kill switch are for. Nothing on this site is a guarantee of profit, and simulated results never promise live ones.",
   ],
   [
     "Can I try it without risking anything?",
@@ -77,7 +78,7 @@ const FAQ: [string, string][] = [
   ],
   [
     "Can I stop instantly?",
-    "Turn the bot off from your account page and no new entries are placed from the next poll. One honest detail: a strategy disabled while holding a position keeps managing that position's exit until it's flat - abandoning an open trade would be worse.",
+    "Turn the bot off from your account page and no new entries are placed from the next poll. One honest detail: a strategy disabled while holding a position keeps managing that position's exit until it's flat. Abandoning an open trade would be worse.",
   ],
   [
     "Why is it free?",
@@ -100,7 +101,7 @@ export default function Home() {
           </h1>
           <p className="mt-5 max-w-lg text-lg text-muted">
             Pick a strategy, see exactly where it would have entered and exited on real market
-            data, and let bots trade for you. Your funds never leave CoinDCX - we hold the keys
+            data, and let bots trade for you. Your funds never leave CoinDCX. We hold the keys
             to run the strategies, nothing else.
           </p>
           <HeroCta />
@@ -109,17 +110,20 @@ export default function Home() {
           </p>
         </div>
 
-        {/* Signature: the strategy ledger - real templates, terminal readout */}
-        <div id="templates" className="scroll-mt-20 overflow-hidden rounded-lg border border-line bg-panel">
-          <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+        {/* Signature: the strategy ledger boots one row at a time, like a terminal */}
+        <div id="templates" className="card scroll-mt-20 overflow-hidden">
+          <div className="flex items-center justify-between bg-white/[0.03] px-4 py-2.5">
             <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-faint">
               strategy_templates
             </span>
             <span className="font-mono text-[11px] text-muted">{STRATS.length} shipped</span>
           </div>
-          <ul className="divide-y divide-line/70">
+          <ul className="boot">
             {STRATS.map(([name, market]) => (
-              <li key={name} className="flex items-center gap-3 px-4 py-2.5 font-mono text-[13px]">
+              <li
+                key={name}
+                className="flex items-center gap-3 px-4 py-2.5 font-mono text-[13px] transition-colors hover:bg-white/[0.03]"
+              >
                 <span className="text-gain">▸</span>
                 <span className="text-fg">{name.replace(/_/g, " ")}</span>
                 <span className="ml-auto tnum text-muted">{market}</span>
@@ -129,193 +133,219 @@ export default function Home() {
               </li>
             ))}
           </ul>
-          <div className="flex items-center justify-between border-t border-line px-4 py-2.5 font-mono text-[11px] text-faint">
-            <span>exits: shared stop-loss / take-profit / ATR trail</span>
+          <div className="flex items-center justify-between bg-white/[0.03] px-4 py-2.5 font-mono text-[11px] text-faint">
+            <span className="caret">exits: shared stop-loss / take-profit / ATR trail</span>
             <span className="text-accent">+ build your own</span>
           </div>
         </div>
       </section>
 
       {/* Numbers strip - four facts, no adjectives */}
-      <section aria-label="Key numbers" className="grid gap-px overflow-hidden rounded-lg border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
-        {NUMBERS.map(([n, body]) => (
-          <div key={body} className="bg-panel px-5 py-4">
-            <div className="font-mono text-2xl font-semibold tnum tracking-tight text-fg">{n}</div>
-            <p className="mt-1 text-xs leading-relaxed text-muted">{body}</p>
-          </div>
-        ))}
-      </section>
+      <Reveal stagger>
+        <section aria-label="Key numbers" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {NUMBERS.map(([n, body]) => (
+            <div key={body} className="card px-5 py-4">
+              <div className="font-mono text-2xl font-semibold tnum tracking-tight text-fg">{n}</div>
+              <p className="mt-1 text-xs leading-relaxed text-muted">{body}</p>
+            </div>
+          ))}
+        </section>
+      </Reveal>
 
       {/* How it works - a real three-step sequence, so the numbering earns its place */}
       <section>
-        <h2 className="eyebrow">How it works</h2>
-        <ol className="mt-5 grid gap-px overflow-hidden rounded-lg border border-line bg-line sm:grid-cols-3">
-          {STEPS.map(([title, body], i) => (
-            <li key={title} className="bg-panel p-5">
-              <span className="font-mono text-sm text-accent">0{i + 1}</span>
-              <h3 className="mt-3 font-display text-base font-semibold tracking-tight text-fg">{title}</h3>
-              <p className="mt-1.5 text-sm leading-relaxed text-muted">{body}</p>
-            </li>
-          ))}
-        </ol>
+        <Reveal>
+          <h2 className="eyebrow">How it works</h2>
+        </Reveal>
+        <Reveal stagger>
+          <ol className="mt-5 grid gap-3 sm:grid-cols-3">
+            {STEPS.map(([title, body], i) => (
+              <li key={title} className="card p-5">
+                <span className="font-mono text-sm text-accent">0{i + 1}</span>
+                <h3 className="mt-3 font-display text-base font-semibold tracking-tight text-fg">{title}</h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-muted">{body}</p>
+              </li>
+            ))}
+          </ol>
+        </Reveal>
       </section>
 
       {/* The execution path - what actually happens between a signal and a fill */}
       <section>
-        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="eyebrow">The execution path</h2>
-            <p className="mt-2 max-w-2xl font-display text-2xl font-semibold tracking-tight">
-              Four stages between a signal and your exchange. Risk sits in the middle, always.
-            </p>
+        <Reveal>
+          <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="eyebrow">The execution path</h2>
+              <p className="mt-2 max-w-2xl font-display text-2xl font-semibold tracking-tight">
+                Four stages between a signal and your exchange. Risk sits in the middle, always.
+              </p>
+            </div>
+            <span className="font-mono text-[11px] uppercase tracking-wider text-faint">
+              signal → risk → execute → fill
+            </span>
           </div>
-          <span className="font-mono text-[11px] uppercase tracking-wider text-faint">
-            signal → risk → execute → fill
-          </span>
-        </div>
-        <ol className="grid gap-px overflow-hidden rounded-lg border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
-          {PIPELINE.map(([title, body, checks], i) => (
-            <li key={title} className="relative bg-panel p-5">
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-accent">{title}</span>
-                {i < PIPELINE.length - 1 && (
-                  <span aria-hidden="true" className="font-mono text-sm text-faint">→</span>
+        </Reveal>
+        <Reveal stagger>
+          <ol className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {PIPELINE.map(([title, body, checks], i) => (
+              <li key={title} className="card relative p-5">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-accent">{title}</span>
+                  {i < PIPELINE.length - 1 && (
+                    <span aria-hidden="true" className="font-mono text-sm text-faint">→</span>
+                  )}
+                </div>
+                <p className="mt-2.5 text-sm leading-relaxed text-muted">{body}</p>
+                {checks.length > 0 && (
+                  <ul className="mt-3 space-y-1 rounded-lg bg-inset/70 p-3">
+                    {checks.map((c) => (
+                      <li key={c} className="flex items-center gap-2 font-mono text-[11px] text-dim">
+                        <span className="h-1 w-1 shrink-0 bg-faint" />
+                        {c}
+                      </li>
+                    ))}
+                  </ul>
                 )}
-              </div>
-              <p className="mt-2.5 text-sm leading-relaxed text-muted">{body}</p>
-              {checks.length > 0 && (
-                <ul className="mt-3 space-y-1 border-t border-line/70 pt-3">
-                  {checks.map((c) => (
-                    <li key={c} className="flex items-center gap-2 font-mono text-[11px] text-dim">
-                      <span className="h-1 w-1 shrink-0 bg-faint" />
-                      {c}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </li>
-          ))}
-        </ol>
+              </li>
+            ))}
+          </ol>
+        </Reveal>
       </section>
 
       {/* Costs - the honest section. Most bots pretend friction doesn't exist. */}
       <section id="costs" className="scroll-mt-20 grid items-start gap-10 lg:grid-cols-[1fr_0.9fr]">
-        <div>
+        <Reveal>
           <h2 className="eyebrow">Costs, modeled honestly</h2>
           <p className="mt-2 font-display text-2xl font-semibold tracking-tight">
             Every round trip on an Indian exchange costs about 1.5% before you earn a rupee.
           </p>
           <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted">
             Exchange fees on both legs, 18% GST on those fees, and 1% TDS on every sell. A
-            strategy that looks brilliant gross can be a slow bleed net - in our own multi-year
+            strategy that looks brilliant gross can be a slow bleed net. In our own multi-year
             backtests, some fast configurations paid more in friction than their starting
             capital. Frequency is the enemy: the more round trips, the more of your P&amp;L
             friction eats.
           </p>
           <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted">
             So every preview, backtest and DRY_RUN fill on Strattice is computed{" "}
-            <span className="text-fg">net of the full friction stack</span> - and the engine
+            <span className="text-fg">net of the full friction stack</span>, and the engine
             trades 15-minute bars, so this cost math matters here too. That is exactly why
             DRY_RUN is the default: watch fees as a share of P&amp;L in paper mode, and only go
             live if the numbers still work after friction.
           </p>
-        </div>
-        <div className="overflow-hidden rounded-lg border border-line bg-panel">
-          <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
-            <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-faint">
-              round_trip · ₹10,000
-            </span>
-            <span className="font-mono text-[11px] text-muted">INR pair</span>
-          </div>
-          <table className="w-full font-mono text-[13px]">
-            <tbody>
-              {COST_ROWS.map(([leg, what, amt], i) => (
-                <tr key={i} className="border-b border-line/70">
-                  <td className="w-14 px-4 py-2.5 text-[10px] uppercase tracking-wider text-faint">{leg}</td>
-                  <td className="py-2.5 pr-4 text-muted">{what}</td>
-                  <td className="tnum py-2.5 pr-4 text-right text-dim">₹{amt}</td>
+        </Reveal>
+        <Reveal>
+          <div className="card overflow-hidden">
+            <div className="flex items-center justify-between bg-white/[0.03] px-4 py-2.5">
+              <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-faint">
+                round_trip · ₹10,000
+              </span>
+              <span className="font-mono text-[11px] text-muted">INR pair</span>
+            </div>
+            <table className="w-full font-mono text-[13px]">
+              <tbody>
+                {COST_ROWS.map(([leg, what, amt], i) => (
+                  <tr key={i} className="odd:bg-white/[0.015]">
+                    <td className="w-14 px-4 py-2.5 text-[10px] uppercase tracking-wider text-faint">{leg}</td>
+                    <td className="py-2.5 pr-4 text-muted">{what}</td>
+                    <td className="tnum py-2.5 pr-4 text-right text-dim">₹{amt}</td>
+                  </tr>
+                ))}
+                <tr className="bg-loss/[0.06]">
+                  <td className="px-4 py-3 text-[10px] uppercase tracking-wider text-faint">total</td>
+                  <td className="py-3 pr-4 font-medium text-fg">friction paid</td>
+                  <td className="tnum py-3 pr-4 text-right font-semibold text-loss">₹147.20</td>
                 </tr>
-              ))}
-              <tr>
-                <td className="px-4 py-3 text-[10px] uppercase tracking-wider text-faint">total</td>
-                <td className="py-3 pr-4 font-medium text-fg">friction paid</td>
-                <td className="tnum py-3 pr-4 text-right font-semibold text-loss">₹147.20</td>
-              </tr>
-            </tbody>
-          </table>
-          <div className="border-t border-line px-4 py-2.5 font-mono text-[11px] text-faint">
-            ≈ 1.47% of notional. simulations here start from this number, not from zero.
+              </tbody>
+            </table>
+            <div className="bg-white/[0.03] px-4 py-2.5 font-mono text-[11px] text-faint">
+              ≈ 1.47% of notional. simulations here start from this number, not from zero.
+            </div>
           </div>
-        </div>
+        </Reveal>
       </section>
 
       {/* Everything included - pricing is off, the whole platform is free */}
       <section id="features" className="scroll-mt-20">
-        <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="font-display text-2xl font-semibold tracking-tight">
-              Free while we&rsquo;re in early access. Everything included.
-            </h2>
-            <p className="mt-1 text-sm text-muted">
-              No plans, no card, no trading fees from us - your exchange fees apply as usual.
-            </p>
-          </div>
-          <span className="rounded-md border border-gain/40 bg-gain/10 px-3 py-1 font-mono text-xs uppercase tracking-wider text-gain">
-            ₹0 / mo
-          </span>
-        </div>
-        <div className="grid gap-px overflow-hidden rounded-lg border border-line bg-line sm:grid-cols-2 lg:grid-cols-3">
-          {FEATURES.map(([title, body]) => (
-            <div key={title} className="bg-panel p-5">
-              <h3 className="flex items-center gap-2.5 font-display text-base font-semibold tracking-tight text-fg">
-                <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 bg-accent" />
-                {title}
-              </h3>
-              <p className="mt-1.5 text-sm leading-relaxed text-muted">{body}</p>
+        <Reveal>
+          <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="font-display text-2xl font-semibold tracking-tight">
+                Free while we&rsquo;re in early access. Everything included.
+              </h2>
+              <p className="mt-1 text-sm text-muted">
+                No plans, no card, no trading fees from us. Your exchange fees apply as usual.
+              </p>
             </div>
-          ))}
-        </div>
+            <span className="rounded-full bg-gain/10 px-3.5 py-1 font-mono text-xs uppercase tracking-wider text-gain">
+              ₹0 / mo
+            </span>
+          </div>
+        </Reveal>
+        <Reveal stagger>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {FEATURES.map(([title, body]) => (
+              <div key={title} className="card p-5">
+                <h3 className="flex items-center gap-2.5 font-display text-base font-semibold tracking-tight text-fg">
+                  <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 bg-accent" />
+                  {title}
+                </h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-muted">{body}</p>
+              </div>
+            ))}
+          </div>
+        </Reveal>
       </section>
 
       {/* FAQ - the questions a skeptical trader actually asks */}
       <section id="faq" className="scroll-mt-20 grid gap-10 lg:grid-cols-[0.8fr_1.2fr]">
-        <div>
+        <Reveal>
           <h2 className="eyebrow">Straight answers</h2>
           <p className="mt-2 font-display text-2xl font-semibold tracking-tight">
             The questions a skeptical trader should ask.
           </p>
           <p className="mt-3 max-w-sm text-sm leading-relaxed text-muted">
-            If yours isn&rsquo;t here, the footer disclaimer is the fine print - there is no other
+            If yours isn&rsquo;t here, the footer disclaimer is the fine print. There is no other
             fine print.
           </p>
-        </div>
-        <div className="divide-y divide-line rounded-lg border border-line bg-panel">
-          {FAQ.map(([question, answer]) => (
-            <details key={question} className="group px-5 py-4">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-medium text-fg [&::-webkit-details-marker]:hidden">
-                {question}
-                <span aria-hidden="true" className="shrink-0 font-mono text-faint transition-transform group-open:rotate-90">▸</span>
-              </summary>
-              <p className="mt-2.5 max-w-xl text-sm leading-relaxed text-muted">{answer}</p>
-            </details>
-          ))}
-        </div>
+        </Reveal>
+        <Reveal stagger>
+          <div className="space-y-2">
+            {FAQ.map(([question, answer]) => (
+              <details key={question} className="card group px-5 py-4">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-medium text-fg [&::-webkit-details-marker]:hidden">
+                  {question}
+                  <span aria-hidden="true" className="shrink-0 font-mono text-faint transition-transform group-open:rotate-90">▸</span>
+                </summary>
+                <p className="mt-2.5 max-w-xl text-sm leading-relaxed text-muted">{answer}</p>
+              </details>
+            ))}
+          </div>
+        </Reveal>
       </section>
 
-      {/* Final CTA - one bordered band, no fireworks */}
-      <section className="rounded-lg border border-line bg-panel px-6 py-10 text-center sm:px-10">
-        <p className="eyebrow">Start in DRY_RUN</p>
-        <h2 className="mx-auto mt-3 max-w-xl font-display text-3xl font-bold leading-tight tracking-tight">
-          Watch a strategy trade your account without spending a rupee.
-        </h2>
-        <p className="mx-auto mt-3 max-w-md text-sm text-muted">
-          Link a key, add a template, and let the paper trades convince you - or not. Either
-          answer costs nothing.
-        </p>
-        <div className="flex justify-center">
-          <HeroCta />
-        </div>
-      </section>
+      {/* Final CTA - one quiet band with a faint gold glow, no fireworks */}
+      <Reveal>
+        <section className="card relative overflow-hidden px-6 py-12 text-center sm:px-10">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(560px_200px_at_50%_-60px,rgba(201,162,75,0.10),transparent)]"
+          />
+          <div className="relative">
+            <p className="eyebrow">Start in DRY_RUN</p>
+            <h2 className="mx-auto mt-3 max-w-xl font-display text-3xl font-bold leading-tight tracking-tight">
+              Watch a strategy trade your account without spending a rupee.
+            </h2>
+            <p className="mx-auto mt-3 max-w-md text-sm text-muted">
+              Link a key, add a template, and let the paper trades convince you, or not. Either
+              answer costs nothing.
+            </p>
+            <div className="flex justify-center">
+              <HeroCta />
+            </div>
+          </div>
+        </section>
+      </Reveal>
     </div>
   );
 }

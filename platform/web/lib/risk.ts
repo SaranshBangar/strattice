@@ -1,6 +1,6 @@
 // The guardrails the engine actually enforces, surfaced verbatim in the UI so users
 // see the real numbers, not adjectives. MUST stay in sync with worker/config_gen.py
-// (_BASE.risk / TEMPLATE_DEFAULTS) — these are disclosures of enforced behavior.
+// (_BASE.risk / TEMPLATE_DEFAULTS) - these are disclosures of enforced behavior.
 
 /** Typed confirmation required to arm live trading (see goLiveAction). */
 export const GO_LIVE_PHRASE = "GO LIVE";
@@ -12,7 +12,7 @@ export const DAILY_LOSS_HALT_PCT = 10;
 /** Candle interval the live engine trades on (worker/config_gen.py _BASE.engine). */
 export const ENGINE_INTERVAL = "15m";
 
-/** What stands between a signal and your balance — shown wherever the user is about
+/** What stands between a signal and your balance - shown wherever the user is about
  *  to arm real money. Every line is enforced in code, none of it is marketing. */
 export const GUARDRAILS: [string, string][] = [
   ["Hard stop-loss", "Every strategy carries a per-position stop (2–4%), checked on every poll and overriding the strategy's own signal."],

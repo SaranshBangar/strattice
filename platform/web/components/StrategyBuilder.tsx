@@ -58,7 +58,7 @@ function RuleCard({ rule, onChange, onRemove }: {
   const spec = RULE_SPEC[rule.kind];
   if (!spec) return null;
   return (
-    <div className="rounded-lg border border-line bg-inset p-3">
+    <div className="rounded-lg bg-inset p-3">
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="text-xs font-medium text-fg">{spec.label}</div>
@@ -98,7 +98,7 @@ function RuleCard({ rule, onChange, onRemove }: {
           ))}
         </div>
       )}
-      <p className="mt-2 border-t border-line/60 pt-2 font-mono text-[11px] text-accent">
+      <p className="mt-2 pt-2 font-mono text-[11px] text-accent">
         → {describeRule(rule)}
       </p>
     </div>
@@ -208,7 +208,7 @@ export function StrategyBuilder() {
           onChange={(e) => setDef((d) => ({ ...d, name: e.target.value.slice(0, 60) }))}
           placeholder="Name your strategy"
           aria-label="Strategy name"
-          className="min-w-48 flex-1 rounded-md border border-line bg-panel px-3 py-2 font-display text-base font-semibold tracking-tight text-fg placeholder-faint focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="min-w-48 flex-1 rounded-md bg-white/5 px-3 py-2 font-display text-base font-semibold tracking-tight text-fg placeholder-faint focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         />
         <Select
           ariaLabel="Market"
@@ -232,9 +232,9 @@ export function StrategyBuilder() {
       <div className="grid gap-4 lg:grid-cols-[380px_1fr]">
         {/* ---- left: the builder ---- */}
         <div className="space-y-4">
-          <section className="rounded-lg border border-line bg-panel">
-            <div className="flex items-center justify-between border-b border-line px-4 py-3">
-              <h2 className="eyebrow">Entry conditions — all must be true</h2>
+          <section className="card">
+            <div className="flex items-center justify-between px-4 py-3">
+              <h2 className="eyebrow">Entry conditions - all must be true</h2>
               <span className="font-mono text-[11px] text-faint">{def.rules.length}/{MAX_RULES}</span>
             </div>
             <div className="space-y-2 p-3">
@@ -262,7 +262,7 @@ export function StrategyBuilder() {
                   + Add condition
                 </button>
                 {addOpen && (
-                  <ul className="absolute z-50 mt-1 max-h-72 w-full overflow-auto rounded-md border border-line bg-panel py-1 shadow-xl shadow-black/40" role="menu">
+                  <ul className="absolute z-50 mt-1 max-h-72 w-full overflow-auto rounded-md bg-white/5 py-1 shadow-xl shadow-black/40" role="menu">
                     {RULE_CATALOG.map((spec) => (
                       <li key={spec.kind} role="none">
                         <button
@@ -282,9 +282,9 @@ export function StrategyBuilder() {
             </div>
           </section>
 
-          <section className="rounded-lg border border-line bg-panel">
-            <div className="border-b border-line px-4 py-3">
-              <h2 className="eyebrow">Exits — how every trade ends</h2>
+          <section className="card">
+            <div className="px-4 py-3">
+              <h2 className="eyebrow">Exits - how every trade ends</h2>
             </div>
             <div className="space-y-1 p-3">
               {EXIT_FIELDS.map((f) => (
@@ -298,7 +298,7 @@ export function StrategyBuilder() {
                   />
                 </div>
               ))}
-              <p className="border-t border-line/60 pt-2 text-[11px] leading-relaxed text-faint">
+              <p className="pt-2 text-[11px] leading-relaxed text-faint">
                 The hard stop is mandatory - it caps the worst case. Add a take-profit, trail or
                 time-stop so winners and stalled trades also have a way out.
               </p>
@@ -325,7 +325,7 @@ export function StrategyBuilder() {
 
         {/* ---- right: live preview + analysis ---- */}
         <div className="space-y-4">
-          <section className="rounded-lg border border-line bg-panel p-4">
+          <section className="card p-4">
             {cleanDef ? (
               <StrategyPreview custom={cleanDef} market={market} />
             ) : (
@@ -336,9 +336,9 @@ export function StrategyBuilder() {
           </section>
 
           {/* historic analysis across windows */}
-          <section className="overflow-hidden rounded-lg border border-line bg-panel">
-            <div className="flex items-center justify-between border-b border-line px-4 py-3">
-              <h2 className="eyebrow">Historic analysis — every window, net of fees</h2>
+          <section className="overflow-hidden card">
+            <div className="flex items-center justify-between px-4 py-3">
+              <h2 className="eyebrow">Historic analysis - every window, net of fees</h2>
               {windowsLoading && <Spinner className="h-4 w-4" />}
             </div>
             <div className="overflow-x-auto">
@@ -353,16 +353,16 @@ export function StrategyBuilder() {
                     <th className="px-3 py-1.5 text-right font-medium uppercase tracking-wider">Exposure</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-line/60">
+                <tbody className="[&>tr:nth-child(odd)]:bg-white/[0.015]">
                   {historic.map(({ iv, span, sim }) => (
                     <tr key={iv}>
                       <td className="px-3 py-1.5 text-dim">{iv} <span className="text-faint">· {span}</span></td>
                       {sim ? (
                         <>
                           <td className="px-3 py-1.5 text-right tnum text-dim">{sim.trades.length}</td>
-                          <td className="px-3 py-1.5 text-right tnum text-dim">{sim.winRate === null ? "—" : `${sim.winRate.toFixed(0)}%`}</td>
+                          <td className="px-3 py-1.5 text-right tnum text-dim">{sim.winRate === null ? "-" : `${sim.winRate.toFixed(0)}%`}</td>
                           <td className={`px-3 py-1.5 text-right tnum ${sim.closed === 0 ? "text-muted" : sim.totalNetPct >= 0 ? "text-gain" : "text-loss"}`}>
-                            {sim.closed ? pct(sim.totalNetPct) : "—"}
+                            {sim.closed ? pct(sim.totalNetPct) : "-"}
                           </td>
                           <td className={`px-3 py-1.5 text-right tnum ${sim.buyHoldPct >= 0 ? "text-gain" : "text-loss"}`}>{pct(sim.buyHoldPct)}</td>
                           <td className="px-3 py-1.5 text-right tnum text-muted">{sim.exposurePct.toFixed(0)}%</td>
@@ -378,9 +378,9 @@ export function StrategyBuilder() {
           </section>
 
           {/* head-to-head vs the stock templates */}
-          <section className="overflow-hidden rounded-lg border border-line bg-panel">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
-              <h2 className="eyebrow">Vs the stock templates — same market &amp; window</h2>
+          <section className="overflow-hidden card">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+              <h2 className="eyebrow">Vs the stock templates - same market &amp; window</h2>
               <Select
                 size="sm"
                 ariaLabel="Comparison window"
@@ -399,7 +399,7 @@ export function StrategyBuilder() {
                     <th className="px-3 py-1.5 text-right font-medium uppercase tracking-wider">Net</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-line/60">
+                <tbody className="[&>tr:nth-child(odd)]:bg-white/[0.015]">
                   {compare.map((row) => (
                     <tr key={row.name} className={row.you ? "bg-accent/5" : ""}>
                       <td className="px-3 py-1.5 text-dim">
@@ -407,9 +407,9 @@ export function StrategyBuilder() {
                         {row.name}
                       </td>
                       <td className="px-3 py-1.5 text-right tnum text-dim">{row.sim.trades.length}</td>
-                      <td className="px-3 py-1.5 text-right tnum text-dim">{row.sim.winRate === null ? "—" : `${row.sim.winRate.toFixed(0)}%`}</td>
+                      <td className="px-3 py-1.5 text-right tnum text-dim">{row.sim.winRate === null ? "-" : `${row.sim.winRate.toFixed(0)}%`}</td>
                       <td className={`px-3 py-1.5 text-right tnum ${row.sim.closed === 0 ? "text-muted" : row.sim.totalNetPct >= 0 ? "text-gain" : "text-loss"}`}>
-                        {row.sim.closed ? pct(row.sim.totalNetPct) : "—"}
+                        {row.sim.closed ? pct(row.sim.totalNetPct) : "-"}
                       </td>
                     </tr>
                   ))}
