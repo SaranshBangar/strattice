@@ -2,15 +2,19 @@
 // assets are needed; Windows renders them as "IN"/"US" letter pairs, which is
 // an acceptable fallback.
 export const CURRENCIES = [
-  { code: "INR", flag: "🇮🇳", name: "Indian Rupee" },
-  { code: "USD", flag: "🇺🇸", name: "US Dollar" },
-  { code: "EUR", flag: "🇪🇺", name: "Euro" },
-  { code: "GBP", flag: "🇬🇧", name: "British Pound" },
-  { code: "JPY", flag: "🇯🇵", name: "Japanese Yen" },
-  { code: "AUD", flag: "🇦🇺", name: "Australian Dollar" },
-  { code: "SGD", flag: "🇸🇬", name: "Singapore Dollar" },
-  { code: "AED", flag: "🇦🇪", name: "UAE Dirham" },
+  { code: "INR", flag: "🇮🇳", name: "Indian Rupee", symbol: "₹" },
+  { code: "USD", flag: "🇺🇸", name: "US Dollar", symbol: "$" },
+  { code: "EUR", flag: "🇪🇺", name: "Euro", symbol: "€" },
+  { code: "GBP", flag: "🇬🇧", name: "British Pound", symbol: "£" },
+  { code: "JPY", flag: "🇯🇵", name: "Japanese Yen", symbol: "¥" },
+  { code: "AUD", flag: "🇦🇺", name: "Australian Dollar", symbol: "A$" },
+  { code: "SGD", flag: "🇸🇬", name: "Singapore Dollar", symbol: "S$" },
+  { code: "AED", flag: "🇦🇪", name: "UAE Dirham", symbol: "AED " },
 ] as const;
+
+export function currencySymbol(code: string): string {
+  return CURRENCIES.find((c) => c.code === code)?.symbol ?? "$";
+}
 
 export type CurrencyCode = (typeof CURRENCIES)[number]["code"];
 

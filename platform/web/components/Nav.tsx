@@ -142,7 +142,7 @@ export function Nav() {
 
       {/* Mobile dropdown panel */}
       {signedIn && open && (
-        <div className="bg-bg/95 shadow-[0_28px_44px_-24px_rgba(0,0,0,0.85)] backdrop-blur-md sm:hidden">
+        <div className="bg-bg shadow-[0_28px_44px_-24px_rgba(0,0,0,0.85)] sm:hidden">
           <div className="mx-auto flex max-w-5xl flex-col gap-1 px-4 py-3">
             {LINKS.map(([href, label]) => (
               <Link

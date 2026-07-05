@@ -45,7 +45,15 @@ function label(pair: string) {
 const fmt = (n: number) =>
   n.toLocaleString("en-US", { maximumFractionDigits: n < 10 ? 4 : 2 });
 
-export function PriceChart({ markets }: { markets?: string[] }) {
+export function PriceChart({
+  markets,
+  fx = { symbol: "$", rate: 1 },
+}: {
+  markets?: string[];
+  // Display conversion from the USD(T) prices Binance streams. rate=1, symbol=$
+  // when the user prefers USD or the FX lookup failed.
+  fx?: { symbol: string; rate: number };
+}) {
   const pairs = useMemo(
     () => Array.from(new Set([...(markets ?? []), ...DEFAULT_MARKETS])),
     [markets],
@@ -196,7 +204,8 @@ export function PriceChart({ markets }: { markets?: string[] }) {
             {status === "ok" && (
               <>
                 <span className="font-mono text-lg font-semibold tnum text-fg">
-                  ${fmt(last)}
+                  {fx.symbol}
+                  {fmt(last * fx.rate)}
                 </span>
                 <Delta value={change} suffix="%" className="text-xs" />
               </>
@@ -248,7 +257,8 @@ export function PriceChart({ markets }: { markets?: string[] }) {
                   className="absolute right-2 -translate-y-1/2 whitespace-nowrap font-mono text-[10px] leading-none tabular-nums text-faint"
                   style={{ top: `${(i / N) * 100}%` }}
                 >
-                  ${fmt(v)}
+                  {fx.symbol}
+                  {fmt(v * fx.rate)}
                 </span>
               ))}
             </div>
@@ -371,7 +381,10 @@ export function PriceChart({ markets }: { markets?: string[] }) {
               </div>
               {hoverCandle && (
                 <div className="pointer-events-none absolute left-2 top-2 rounded-md bg-panel/95 px-2.5 py-1.5 font-mono text-[11px] shadow-xl backdrop-blur">
-                  <div className="tnum text-fg">${fmt(hoverCandle.c)}</div>
+                  <div className="tnum text-fg">
+                    {fx.symbol}
+                    {fmt(hoverCandle.c * fx.rate)}
+                  </div>
                   <div className="mt-0.5 text-faint">
                     {new Date(hoverCandle.t).toLocaleString("en-IN", {
                       dateStyle: "short",
