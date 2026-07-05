@@ -24,7 +24,9 @@ export function ProToggle() {
 
   return (
     <label className="inline-flex cursor-pointer select-none items-center gap-2">
-      <span className="font-mono text-[11px] uppercase tracking-wider text-muted">Pro view</span>
+      <span className="font-mono text-[11px] uppercase tracking-wider text-muted">
+        Pro view
+      </span>
       <button
         type="button"
         role="switch"

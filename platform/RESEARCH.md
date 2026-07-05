@@ -1,6 +1,6 @@
 # CoinDCX Bot → SaaS Platform: Research & Architecture
 
-Companion to `IMPLEMENTATION_PROMPT.md`. Read this first; it explains *why* the prompt
+Companion to `IMPLEMENTATION_PROMPT.md`. Read this first; it explains _why_ the prompt
 is shaped the way it is. Two product decisions are already locked (see §2).
 
 ---
@@ -9,16 +9,16 @@ is shaped the way it is. Two product decisions are already locked (see §2).
 
 The repo is a **single-tenant** Python trading bot:
 
-| Piece | File | Reality for SaaS |
-|-------|------|------------------|
-| Config + secrets | `bot/config.py`, `config.yaml`, `.env` | **One** user's keys/strategies. Global env vars. |
-| Engine loop | `bot/engine.py` | Iterates strategies, re-reads `config.yaml` each poll (live toggles). One process = one user. |
-| Exchange client | `bot/client.py` | Signs with `config.API_KEY/SECRET_KEY` (module globals). |
-| Risk gate | `bot/risk.py` | `max_trades_per_day`, loss breaker, exposure caps — read from config. |
-| Persistence | `data/bot.db` (SQLite) | Positions/orders/signals keyed by `(strategy, market)` — **no user_id**. |
-| Status API | `bot/server.py` | stdlib HTTP, one token, reads the single DB. |
-| Strategies | `bot/strategies/*.py` | Pure functions: candles in → BUY/SELL/HOLD out. 9 modules. |
-| Dashboard | `web/` (Next.js) | Single-user PWA hitting `bot/server.py`. **Leave untouched.** |
+| Piece            | File                                   | Reality for SaaS                                                                              |
+| ---------------- | -------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Config + secrets | `bot/config.py`, `config.yaml`, `.env` | **One** user's keys/strategies. Global env vars.                                              |
+| Engine loop      | `bot/engine.py`                        | Iterates strategies, re-reads `config.yaml` each poll (live toggles). One process = one user. |
+| Exchange client  | `bot/client.py`                        | Signs with `config.API_KEY/SECRET_KEY` (module globals).                                      |
+| Risk gate        | `bot/risk.py`                          | `max_trades_per_day`, loss breaker, exposure caps — read from config.                         |
+| Persistence      | `data/bot.db` (SQLite)                 | Positions/orders/signals keyed by `(strategy, market)` — **no user_id**.                      |
+| Status API       | `bot/server.py`                        | stdlib HTTP, one token, reads the single DB.                                                  |
+| Strategies       | `bot/strategies/*.py`                  | Pure functions: candles in → BUY/SELL/HOLD out. 9 modules.                                    |
+| Dashboard        | `web/` (Next.js)                       | Single-user PWA hitting `bot/server.py`. **Leave untouched.**                                 |
 
 **The hard part is NOT Next.js or Cashfree.** It is making this single-tenant bot
 multi-tenant: per-user keys, per-user isolation, per-user trade caps, per-user DB rows.
@@ -33,7 +33,7 @@ set without losing positions (`engine._reconcile`). That same pattern extends cl
 ## 2. Locked decisions
 
 1. **No custody.** Trading capital stays in each user's **own CoinDCX account**; the bot
-   trades via *their* API keys. The platform never holds user trading money. Cashfree
+   trades via _their_ API keys. The platform never holds user trading money. Cashfree
    collects **only the subscription fee**. → Avoids PPI/RBI custody licensing, escrow, and
    the AML burden of pooling customer funds. "Add money to their wallets" therefore means
    the user funds their **own CoinDCX wallet directly** (we link out / show balance), not us.
@@ -52,22 +52,23 @@ set without losing positions (`engine._reconcile`). That same pattern extends cl
 
 ## 3. Tier → entitlement mapping (single source of truth)
 
-| Tier | ₹/mo | Trades/day | Strategy access | Custom strats | Dashboard |
-|------|-----:|-----------:|-----------------|:-------------:|:---------:|
-| **Free** | 0 | **5** | 1 default strategy only | ✗ | basic |
-| **Starter** | 299 | **50** | 1 default strategy only | ✗ | basic |
-| **Plus** | 499 | **50** | any **3** of our strategies | ✗ | ✓ |
-| **Pro** | 749 | **75** | **all** our strategies | ✗ | ✓ |
-| **Max** | 999 | **100** | all our strategies | ✓ | ✓ |
+| Tier        | ₹/mo | Trades/day | Strategy access             | Custom strats | Dashboard |
+| ----------- | ---: | ---------: | --------------------------- | :-----------: | :-------: |
+| **Free**    |    0 |      **5** | 1 default strategy only     |       ✗       |   basic   |
+| **Starter** |  299 |     **50** | 1 default strategy only     |       ✗       |   basic   |
+| **Plus**    |  499 |     **50** | any **3** of our strategies |       ✗       |     ✓     |
+| **Pro**     |  749 |     **75** | **all** our strategies      |       ✗       |     ✓     |
+| **Max**     |  999 |    **100** | all our strategies          |       ✓       |     ✓     |
 
 **Three enforcement points (defense in depth):**
+
 - **`trades/day`** → maps directly onto the existing `risk.max_trades_per_day`. Set it from
   the user's tier when building their engine config. This is the hard ceiling — already
   implemented in `bot/risk.py:52`.
 - **Strategy access** → which strategy templates a user may enable. Gate in the UI **and**
   validate server-side **and** the Python supervisor only loads allowed strategies for the
   tier. Never trust the client.
-- **Custom strategies (Max only)** → see §6 security. MVP = *parameterized templates*, not
+- **Custom strategies (Max only)** → see §6 security. MVP = _parameterized templates_, not
   arbitrary user Python.
 
 ---
@@ -99,8 +100,8 @@ already available in this environment via MCP, gives you Auth + Postgres + RLS i
 ```
 
 **The database is the only integration boundary.** Next.js never calls Python and vice
-versa. Next.js writes *desired state* (tier, enabled strategies, active flag); Python reads
-it each poll (exactly like today's `_reconcile`), runs the bots, and writes *observed state*
+versa. Next.js writes _desired state_ (tier, enabled strategies, active flag); Python reads
+it each poll (exactly like today's `_reconcile`), runs the bots, and writes _observed state_
 (trades, positions, equity) back. The dashboard reads observed state. This keeps the two
 runtimes fully decoupled and independently deployable.
 
@@ -122,6 +123,7 @@ billing_events(id, user_id, cashfree_event_id, type, raw jsonb, ts)   -- webhook
 ```
 
 Notes:
+
 - `trades/positions/signals` = the current SQLite `audit` tables **+ a `user_id` column**.
   Migrate `bot/audit.py` to write these (Postgres) scoped by user_id.
 - `subscriptions.current_period_end` is the access truth. Tier entitlements derive from
@@ -157,6 +159,7 @@ Notes:
 `x-client-id`, `x-client-secret`, `x-api-version` (e.g. `2023-08-01` / `2025-01-01`).
 
 **Flow:**
+
 1. **Create a Plan per tier once** (₹299/₹499/₹749/₹999, monthly). Store `plan_id`.
 2. **Create a Subscription** for the user against a plan → returns an authorization link /
    `subscription_session_id`.
@@ -180,6 +183,7 @@ subscription cancelled/expired (downgrade to Free). Make all handlers idempotent
 UPI Autopay debit limit is ₹15,000/cycle without re-auth — all tiers are well under it.
 
 **Sources:**
+
 - [Subscription APIs Overview](https://www.cashfree.com/docs/api-reference/payments/latest/subscription/overview)
 - [Cashfree Docs](https://www.cashfree.com/docs)
 - [cashfree-pg Node SDK](https://github.com/cashfree/cashfree-pg-sdk-nodejs)

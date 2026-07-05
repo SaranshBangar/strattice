@@ -9,7 +9,10 @@ export async function POST(req: Request) {
   const base = process.env.BOT_API_URL;
   const token = process.env.BOT_API_TOKEN;
   if (!base || !token) {
-    return NextResponse.json({ error: "BOT_API_URL/TOKEN not set" }, { status: 500 });
+    return NextResponse.json(
+      { error: "BOT_API_URL/TOKEN not set" },
+      { status: 500 },
+    );
   }
   try {
     const r = await fetch(`${base}/api/strategy`, {

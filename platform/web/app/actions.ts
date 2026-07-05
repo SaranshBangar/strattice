@@ -3,8 +3,19 @@ import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { getUser, requireUserId, requireAdmin } from "@/lib/session";
 import * as q from "@/lib/queries";
-import { createSubscription, cancelSubscription, cashfreeMode } from "@/lib/cashfree";
-import { PAID_TIERS, TIERS, BUILTIN_TEMPLATES, type TierName, type BuiltinTemplate } from "@/lib/entitlements";
+import {
+  createSubscription,
+  cancelSubscription,
+  cashfreeMode,
+} from "@/lib/cashfree";
+import {
+  PAID_TIERS,
+  TIERS,
+  BUILTIN_TEMPLATES,
+  EXPERIMENTAL_TEMPLATES,
+  type TierName,
+  type PickableTemplate,
+} from "@/lib/entitlements";
 import { sanitizeParams } from "@/lib/strategy-sim";
 import { GO_LIVE_PHRASE } from "@/lib/risk";
 import { sanitizeCustomDef } from "@/lib/custom-strategy";
@@ -26,8 +37,11 @@ export async function saveCredentialsAction(formData: FormData) {
 export async function addStrategyAction(formData: FormData) {
   const userId = await requireUserId();
   const template = String(formData.get("template"));
-  const market = String(formData.get("market") || "").trim().toUpperCase();
-  if (!/^[A-Z0-9_-]{3,24}$/.test(market)) throw new Error("Enter a valid market id, e.g. I-BTC_INR");
+  const market = String(formData.get("market") || "")
+    .trim()
+    .toUpperCase();
+  if (!/^[A-Z0-9_-]{3,24}$/.test(market))
+    throw new Error("Enter a valid market id, e.g. I-BTC_INR");
 
   // params are user input: re-validate server-side regardless of what the UI enforced.
   const raw = formData.get("params");
@@ -35,10 +49,18 @@ export async function addStrategyAction(formData: FormData) {
   if (template === "custom") {
     paramsJson = JSON.stringify(sanitizeCustomDef(String(raw ?? "")));
   } else if (raw) {
-    if (!(BUILTIN_TEMPLATES as readonly string[]).includes(template)) throw new Error("unknown template");
+    if (
+      !(BUILTIN_TEMPLATES as readonly string[]).includes(template) &&
+      !(EXPERIMENTAL_TEMPLATES as readonly string[]).includes(template)
+    )
+      throw new Error("unknown template");
     let parsed: unknown;
-    try { parsed = JSON.parse(String(raw)); } catch { throw new Error("Invalid strategy parameters."); }
-    const clean = sanitizeParams(template as BuiltinTemplate, parsed);
+    try {
+      parsed = JSON.parse(String(raw));
+    } catch {
+      throw new Error("Invalid strategy parameters.");
+    }
+    const clean = sanitizeParams(template as PickableTemplate, parsed);
     paramsJson = clean ? JSON.stringify(clean) : null;
   }
 
@@ -63,12 +85,17 @@ export async function removeStrategyAction(id: string) {
 // therefore goes through goLiveAction (typed confirmation + preconditions); this action
 // only turns things ON with linked keys, and always allows turning things OFF -
 // the off direction is a safety control and must never be gated.
-export async function setBotAction(patch: { active?: boolean; live?: boolean }) {
+export async function setBotAction(patch: {
+  active?: boolean;
+  live?: boolean;
+}) {
   const userId = await requireUserId();
-  if (patch.live === true) throw new Error("Enabling live trading requires confirmation.");
+  if (patch.live === true)
+    throw new Error("Enabling live trading requires confirmation.");
   if (patch.active === true) {
     const creds = await q.credentialsLinked(userId);
-    if (!creds.linked) throw new Error("Link your CoinDCX API keys before turning the bot on.");
+    if (!creds.linked)
+      throw new Error("Link your CoinDCX API keys before turning the bot on.");
   }
   await q.setBotState(userId, patch);
   revalidatePath("/account");
@@ -83,9 +110,11 @@ export async function goLiveAction(confirmPhrase: string) {
   if (confirmPhrase.trim().toUpperCase() !== GO_LIVE_PHRASE)
     throw new Error(`Type "${GO_LIVE_PHRASE}" to confirm.`);
   const [creds, strategies] = await Promise.all([
-    q.credentialsLinked(userId), q.listStrategies(userId),
+    q.credentialsLinked(userId),
+    q.listStrategies(userId),
   ]);
-  if (!creds.linked) throw new Error("Link your CoinDCX API keys before going live.");
+  if (!creds.linked)
+    throw new Error("Link your CoinDCX API keys before going live.");
   if (!strategies.some((s) => s.enabled))
     throw new Error("Enable at least one strategy before going live.");
   await q.setBotState(userId, { live: true });
@@ -113,26 +142,42 @@ export async function setEmailNotificationsAction(enabled: boolean) {
 
 /** Save (and enable) a Telegram chat id. Sends a confirmation message so the user gets
  *  immediate proof the id + bot chat are wired up; a failed send is reported, not fatal. */
-export async function saveTelegramNotificationsAction(chatId: string):
-  Promise<{ ok: true; test: "sent" | "failed" | "unconfigured" }> {
+export async function saveTelegramNotificationsAction(
+  chatId: string,
+): Promise<{ ok: true; test: "sent" | "failed" | "unconfigured" }> {
   const userId = await requireUserId();
   const id = chatId.trim();
   if (!/^-?\d{5,20}$/.test(id)) {
-    throw new Error("Enter the numeric chat id from @userinfobot (digits only).");
+    throw new Error(
+      "Enter the numeric chat id from @userinfobot (digits only).",
+    );
   }
-  await q.setNotificationPrefs(userId, { telegramEnabled: true, telegramChatId: id });
+  await q.setNotificationPrefs(userId, {
+    telegramEnabled: true,
+    telegramChatId: id,
+  });
   const res = await sendTelegram(
     id,
-    table("Strattice connected", [["Alerts", "on"], ["You'll get", "buy / sell fills"]]),
+    table("Strattice connected", [
+      ["Alerts", "on"],
+      ["You'll get", "buy / sell fills"],
+    ]),
   );
-  const test = res.ok ? "sent" : res.reason === "unconfigured" ? "unconfigured" : "failed";
+  const test = res.ok
+    ? "sent"
+    : res.reason === "unconfigured"
+      ? "unconfigured"
+      : "failed";
   revalidatePath("/account");
   return { ok: true, test };
 }
 
 export async function removeTelegramNotificationsAction() {
   const userId = await requireUserId();
-  await q.setNotificationPrefs(userId, { telegramEnabled: false, telegramChatId: null });
+  await q.setNotificationPrefs(userId, {
+    telegramEnabled: false,
+    telegramChatId: null,
+  });
   revalidatePath("/account");
 }
 
@@ -142,7 +187,10 @@ export async function removeTelegramNotificationsAction() {
 const PRICING_ENABLED = false;
 
 export async function startSubscriptionAction(tier: string, phone: string) {
-  if (!PRICING_ENABLED) throw new Error("Strattice is free right now - there is nothing to subscribe to.");
+  if (!PRICING_ENABLED)
+    throw new Error(
+      "Strattice is free right now - there is nothing to subscribe to.",
+    );
   const user = await getUser();
   if (!user) throw new Error("unauthorized");
   if (!PAID_TIERS.includes(tier as TierName)) throw new Error("invalid tier");

@@ -15,10 +15,17 @@ export function telegramConfigured(): boolean {
 
 export type TelegramResult =
   | { ok: true }
-  | { ok: false; reason: "unconfigured" | "no_chat" | "send_failed"; detail?: string };
+  | {
+      ok: false;
+      reason: "unconfigured" | "no_chat" | "send_failed";
+      detail?: string;
+    };
 
 /** Send one Markdown message to a chat. Reports the outcome; does not throw. */
-export async function sendTelegram(chatId: string | null | undefined, text: string): Promise<TelegramResult> {
+export async function sendTelegram(
+  chatId: string | null | undefined,
+  text: string,
+): Promise<TelegramResult> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) return { ok: false, reason: "unconfigured" };
   if (!chatId) return { ok: false, reason: "no_chat" };
@@ -51,13 +58,22 @@ export function table(title: string, rows: [string, string][]): string {
   return "```\n" + `${title}\n${body}` + "\n```";
 }
 
-const money = (n: number) => `₹${Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+const money = (n: number) =>
+  `₹${Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
 /** Format + send a trade fill. Best-effort; returns the result for logging. */
-export function sendTradeTelegram(chatId: string, t: {
-  side: string; market: string; qty: number; price: number; notional: number;
-  strategy?: string; dryRun?: boolean;
-}): Promise<TelegramResult> {
+export function sendTradeTelegram(
+  chatId: string,
+  t: {
+    side: string;
+    market: string;
+    qty: number;
+    price: number;
+    notional: number;
+    strategy?: string;
+    dryRun?: boolean;
+  },
+): Promise<TelegramResult> {
   const buy = t.side.toLowerCase() === "buy";
   const title = `${buy ? "BUY" : "SELL"} ${t.market}${t.dryRun ? " (dry run)" : ""}`;
   const rows: [string, string][] = [

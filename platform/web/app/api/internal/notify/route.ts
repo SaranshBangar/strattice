@@ -20,13 +20,20 @@ export async function POST(req: Request) {
   }
 
   let b: any;
-  try { b = await req.json(); } catch { return NextResponse.json({ error: "bad json" }, { status: 400 }); }
+  try {
+    b = await req.json();
+  } catch {
+    return NextResponse.json({ error: "bad json" }, { status: 400 });
+  }
 
   const userId = String(b.userId || "");
   const side = String(b.side || "");
   const market = String(b.market || "");
   if ((!userId && !b.email) || (side !== "buy" && side !== "sell") || !market) {
-    return NextResponse.json({ error: "need userId or email, side (buy|sell), market" }, { status: 400 });
+    return NextResponse.json(
+      { error: "need userId or email, side (buy|sell), market" },
+      { status: 400 },
+    );
   }
 
   const trade = {

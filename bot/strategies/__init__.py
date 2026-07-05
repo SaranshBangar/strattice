@@ -2,6 +2,7 @@
 from .bb_reversion import BBReversion
 from .custom import CustomRules
 from .fast_rsi import FastRSIReversion
+from .hf_forecast import HFForecast
 from .ma_crossover import MACrossover
 from .momentum import Momentum
 from .rsi import RSIMeanReversion
@@ -18,6 +19,7 @@ REGISTRY = {
     "bb_reversion": BBReversion,
     "squeeze_breakout": SqueezeBreakout,
     "tsmom": TSMomentum,
+    "hf_forecast": HFForecast,
     "custom": CustomRules,
 }
 

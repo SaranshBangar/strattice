@@ -18,7 +18,8 @@ export default function Login() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ passphrase: pass }),
       });
-      if (r.ok) router.replace("/"); // keep spinner up through the redirect
+      if (r.ok)
+        router.replace("/"); // keep spinner up through the redirect
       else {
         setErr("Wrong passphrase");
         setLoading(false);
@@ -40,7 +41,9 @@ export default function Login() {
         </div>
       </div>
       <form onSubmit={submit} className="card login-card">
-        <label className="login-label" htmlFor="pass">Passphrase</label>
+        <label className="login-label" htmlFor="pass">
+          Passphrase
+        </label>
         <input
           id="pass"
           className="pass"
@@ -54,7 +57,11 @@ export default function Login() {
         <button className="primary" type="submit" disabled={loading}>
           {loading ? <span className="spin" /> : "Unlock"}
         </button>
-        {err && <p className="login-err" role="alert">{err}</p>}
+        {err && (
+          <p className="login-err" role="alert">
+            {err}
+          </p>
+        )}
       </form>
       <p className="login-foot">bot status · positions · live market charts</p>
     </div>

@@ -26,13 +26,13 @@ stays as the legacy single-user dashboard.
 
 ## Tier entitlements (single source of truth — encode as one config object/table)
 
-| Tier | ₹/mo | Trades/day | Strategy access | Custom | Dashboard |
-|------|-----:|-----------:|-----------------|:------:|:---------:|
-| Free | 0 | 5 | 1 default strategy | ✗ | basic |
-| Starter | 299 | 50 | 1 default strategy | ✗ | basic |
-| Plus | 499 | 50 | any 3 of our strategies | ✗ | ✓ |
-| Pro | 749 | 75 | all our strategies | ✗ | ✓ |
-| Max | 999 | 100 | all our strategies | ✓ | ✓ |
+| Tier    | ₹/mo | Trades/day | Strategy access         | Custom | Dashboard |
+| ------- | ---: | ---------: | ----------------------- | :----: | :-------: |
+| Free    |    0 |          5 | 1 default strategy      |   ✗    |   basic   |
+| Starter |  299 |         50 | 1 default strategy      |   ✗    |   basic   |
+| Plus    |  499 |         50 | any 3 of our strategies |   ✗    |     ✓     |
+| Pro     |  749 |         75 | all our strategies      |   ✗    |     ✓     |
+| Max     |  999 |        100 | all our strategies      |   ✓    |     ✓     |
 
 Enforce in THREE places: UI gating, server-side validation on every mutation, AND the Python
 supervisor (re-validate tier caps before building each user's engine). Never trust the client.
@@ -61,8 +61,8 @@ DRY_RUN, writing to Postgres scoped by `user_id`. Prove with 2 fake users before
    `exchange_credentials` from Postgres; build/refresh one `Engine` per user (reuse the
    `_reconcile` change-detection pattern — add/remove engines as users activate/deactivate);
    run a poll cycle for each; write trades/positions/equity back; update `last_heartbeat` /
-   `last_error`. One process, N in-process engines (thread or asyncio task each). *Note in a
-   comment: per-user process isolation is the scale-up path; not needed for MVP.*
+   `last_error`. One process, N in-process engines (thread or asyncio task each). _Note in a
+   comment: per-user process isolation is the scale-up path; not needed for MVP._
 5. **Key decryption.** Read `api_key_enc/secret_enc`, decrypt with AES-256-GCM using a master
    key from env (shared with Next.js). Decrypt in memory at build time only; never log.
 6. **Keep DRY_RUN the per-user default.** Live trading requires an explicit per-user switch

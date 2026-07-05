@@ -31,7 +31,12 @@ export function Reveal({
   }, []);
 
   return (
-    <div ref={ref} className={["reveal", stagger ? "stagger" : "", className].filter(Boolean).join(" ")}>
+    <div
+      ref={ref}
+      className={["reveal", stagger ? "stagger" : "", className]
+        .filter(Boolean)
+        .join(" ")}
+    >
       {children}
     </div>
   );

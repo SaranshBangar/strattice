@@ -4,15 +4,25 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { resolveTier, type TierName } from "./entitlements";
 
-const MODE = process.env.CASHFREE_MODE === "production" ? "production" : "sandbox";
-const BASE = MODE === "production" ? "https://api.cashfree.com/pg" : "https://sandbox.cashfree.com/pg";
+const MODE =
+  process.env.CASHFREE_MODE === "production" ? "production" : "sandbox";
+const BASE =
+  MODE === "production"
+    ? "https://api.cashfree.com/pg"
+    : "https://sandbox.cashfree.com/pg";
 const API_VERSION = process.env.CASHFREE_API_VERSION || "2025-01-01";
 
 function headers() {
   const id = process.env.CASHFREE_APP_ID,
     secret = process.env.CASHFREE_SECRET_KEY;
-  if (!id || !secret) throw new Error("set CASHFREE_APP_ID, CASHFREE_SECRET_KEY");
-  return { "Content-Type": "application/json", "x-api-version": API_VERSION, "x-client-id": id, "x-client-secret": secret };
+  if (!id || !secret)
+    throw new Error("set CASHFREE_APP_ID, CASHFREE_SECRET_KEY");
+  return {
+    "Content-Type": "application/json",
+    "x-api-version": API_VERSION,
+    "x-client-id": id,
+    "x-client-secret": secret,
+  };
 }
 
 async function call(method: string, path: string, body?: unknown) {
@@ -23,7 +33,8 @@ async function call(method: string, path: string, body?: unknown) {
     cache: "no-store",
   });
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(`cashfree ${path} ${r.status}: ${JSON.stringify(data)}`);
+  if (!r.ok)
+    throw new Error(`cashfree ${path} ${r.status}: ${JSON.stringify(data)}`);
   return data;
 }
 
@@ -53,12 +64,19 @@ export async function createSubscription(a: CreateSubArgs) {
       plan_interval_type: "MONTH",
       plan_currency: "INR",
     },
-    authorization_details: { authorization_amount: 1, authorization_amount_refund: true },
+    authorization_details: {
+      authorization_amount: 1,
+      authorization_amount_refund: true,
+    },
     subscription_meta: { return_url: a.returnUrl },
     subscription_note: t.name,
   });
   // response carries subscription_id + subscription_session_id for the JS checkout
-  return res as { subscription_id: string; subscription_session_id: string; subscription_status: string };
+  return res as {
+    subscription_id: string;
+    subscription_session_id: string;
+    subscription_status: string;
+  };
 }
 
 export async function getSubscription(id: string) {
@@ -70,7 +88,11 @@ export async function cancelSubscription(id: string) {
 }
 
 /** Verify a Cashfree webhook. Signature = base64(HMAC_SHA256(timestamp + rawBody, secret)). */
-export function verifyWebhook(rawBody: string, signature: string, timestamp: string): boolean {
+export function verifyWebhook(
+  rawBody: string,
+  signature: string,
+  timestamp: string,
+): boolean {
   const secret = process.env.CASHFREE_SECRET_KEY;
   if (!secret || !signature) return false;
   const expected = createHmac("sha256", secret)

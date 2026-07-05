@@ -10,17 +10,20 @@ export default async function StrategiesPage() {
   if (!user) redirect("/sign-in");
 
   const [tier, strategies] = await Promise.all([
-    q.effectiveTier(user.id), q.listStrategies(user.id),
+    q.effectiveTier(user.id),
+    q.listStrategies(user.id),
   ]);
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-semibold tracking-tight">Strategies</h1>
+          <h1 className="font-display text-2xl font-semibold tracking-tight">
+            Strategies
+          </h1>
           <p className="mt-1 max-w-2xl text-sm text-muted">
-            Pick a template - or build your own - preview exactly where it would have entered and
-            exited on live market data, then add it.
+            Pick a template - or build your own - preview exactly where it would
+            have entered and exited on live market data, then add it.
           </p>
         </div>
         <div className="flex items-center gap-2">

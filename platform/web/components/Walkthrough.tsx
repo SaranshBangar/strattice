@@ -9,7 +9,13 @@ import { useSession } from "@/lib/auth-client";
 const SEEN_KEY = "strattice.tour.v1";
 export const TOUR_EVENT = "strattice:tour";
 
-type Step = { icon: React.ReactNode; title: string; body: string; href?: string; cta?: string };
+type Step = {
+  icon: React.ReactNode;
+  title: string;
+  body: string;
+  href?: string;
+  cta?: string;
+};
 
 const STEPS: Step[] = [
   {
@@ -63,7 +69,9 @@ export function Walkthrough() {
 
   const close = useCallback((markSeen: boolean) => {
     if (markSeen) {
-      try { localStorage.setItem(SEEN_KEY, "1"); } catch {}
+      try {
+        localStorage.setItem(SEEN_KEY, "1");
+      } catch {}
     }
     setOpen(false);
   }, []);
@@ -77,7 +85,9 @@ export function Walkthrough() {
   useEffect(() => {
     if (!signedIn) return;
     let seen = false;
-    try { seen = localStorage.getItem(SEEN_KEY) === "1"; } catch {}
+    try {
+      seen = localStorage.getItem(SEEN_KEY) === "1";
+    } catch {}
     if (!seen) {
       const t = setTimeout(start, 500);
       return () => clearTimeout(t);
@@ -97,7 +107,8 @@ export function Walkthrough() {
     nextRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") close(true);
-      else if (e.key === "ArrowRight") setI((v) => Math.min(v + 1, STEPS.length - 1));
+      else if (e.key === "ArrowRight")
+        setI((v) => Math.min(v + 1, STEPS.length - 1));
       else if (e.key === "ArrowLeft") setI((v) => Math.max(v - 1, 0));
     };
     window.addEventListener("keydown", onKey);
@@ -133,7 +144,14 @@ export function Walkthrough() {
             className="rounded-md p-1 text-faint transition-colors hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             aria-label="Skip tour"
           >
-            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+            <svg
+              viewBox="0 0 20 20"
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              aria-hidden="true"
+            >
               <path strokeLinecap="round" d="m5 5 10 10M15 5 5 15" />
             </svg>
           </button>
@@ -143,7 +161,10 @@ export function Walkthrough() {
           <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-faint">
             Step {i + 1} of {STEPS.length}
           </div>
-          <h2 id="tour-title" className="mt-1.5 font-display text-lg font-semibold tracking-tight text-fg">
+          <h2
+            id="tour-title"
+            className="mt-1.5 font-display text-lg font-semibold tracking-tight text-fg"
+          >
             {step.title}
           </h2>
           <p className="mt-2 text-sm leading-relaxed text-dim">{step.body}</p>
@@ -211,14 +232,61 @@ export function Walkthrough() {
 // ---------- icons (inline, 20px stroke) ----------
 function svg(children: React.ReactNode) {
   return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       {children}
     </svg>
   );
 }
-function IconSpark() { return svg(<><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2 2M16 16l2 2M18 6l-2 2M8 16l-2 2" /></>); }
-function IconKey() { return svg(<><circle cx="8" cy="8" r="4" /><path d="m11 11 8 8M16 16l2-2M19 19l2-2" /></>); }
-function IconLayers() { return svg(<><path d="m12 3 9 5-9 5-9-5 9-5Z" /><path d="m3 13 9 5 9-5" /></>); }
-function IconPower() { return svg(<><path d="M12 4v8M7.5 7a7 7 0 1 0 9 0" /></>); }
-function IconChart() { return svg(<><path d="M4 20V4M4 20h16M8 16l3-4 3 2 4-6" /></>); }
-function IconBell() { return svg(<><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M10.5 20a2 2 0 0 0 3 0" /></>); }
+function IconSpark() {
+  return svg(
+    <>
+      <path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2 2M16 16l2 2M18 6l-2 2M8 16l-2 2" />
+    </>,
+  );
+}
+function IconKey() {
+  return svg(
+    <>
+      <circle cx="8" cy="8" r="4" />
+      <path d="m11 11 8 8M16 16l2-2M19 19l2-2" />
+    </>,
+  );
+}
+function IconLayers() {
+  return svg(
+    <>
+      <path d="m12 3 9 5-9 5-9-5 9-5Z" />
+      <path d="m3 13 9 5 9-5" />
+    </>,
+  );
+}
+function IconPower() {
+  return svg(
+    <>
+      <path d="M12 4v8M7.5 7a7 7 0 1 0 9 0" />
+    </>,
+  );
+}
+function IconChart() {
+  return svg(
+    <>
+      <path d="M4 20V4M4 20h16M8 16l3-4 3 2 4-6" />
+    </>,
+  );
+}
+function IconBell() {
+  return svg(
+    <>
+      <path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M10.5 20a2 2 0 0 0 3 0" />
+    </>,
+  );
+}

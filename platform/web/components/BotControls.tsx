@@ -31,14 +31,21 @@ export function BotControls({
         await setBotAction(patch);
         toast(
           patch.active !== undefined
-            ? patch.active ? "Bot turned on" : "Bot turned off"
+            ? patch.active
+              ? "Bot turned on"
+              : "Bot turned off"
             : "Switched to dry run",
           "success",
         );
       } catch (e) {
         setActive(prev.active);
         setLive(prev.live);
-        toast(e instanceof Error && e.message ? e.message : "Couldn't update bot settings. Please try again.", "error");
+        toast(
+          e instanceof Error && e.message
+            ? e.message
+            : "Couldn't update bot settings. Please try again.",
+          "error",
+        );
       }
     });
   }
@@ -53,7 +60,12 @@ export function BotControls({
         setPhrase("");
         toast("Live trading enabled", "success");
       } catch (e) {
-        toast(e instanceof Error && e.message ? e.message : "Couldn't enable live trading.", "error");
+        toast(
+          e instanceof Error && e.message
+            ? e.message
+            : "Couldn't enable live trading.",
+          "error",
+        );
       }
     });
   }
@@ -62,7 +74,9 @@ export function BotControls({
 
   return (
     <div className="card p-5">
-      <h2 className="font-display text-sm font-semibold tracking-tight text-dim">Bot controls</h2>
+      <h2 className="font-display text-sm font-semibold tracking-tight text-dim">
+        Bot controls
+      </h2>
 
       {!linked && (
         <p className="mt-3 rounded-md bg-inset px-3 py-2 text-sm text-muted">
@@ -74,7 +88,9 @@ export function BotControls({
         <div className="flex items-center justify-between gap-4">
           <div>
             <div className="text-sm font-medium text-fg">Bot active</div>
-            <div className="text-sm text-muted">Run subscribed strategies on a schedule.</div>
+            <div className="text-sm text-muted">
+              Run subscribed strategies on a schedule.
+            </div>
           </div>
           <Toggle
             checked={active}
@@ -100,15 +116,19 @@ export function BotControls({
                 </span>
               </div>
               <div className="text-sm text-muted">
-                {live ? "Placing real orders on your account." : "Simulated - no real orders are sent."}
+                {live
+                  ? "Placing real orders on your account."
+                  : "Simulated - no real orders are sent."}
               </div>
             </div>
             <Toggle
               checked={live}
               disabled={pending || !linked || (!live && confirming)}
               onClick={() => {
-                if (live) { update({ live: false }); setConfirming(false); }
-                else setConfirming(true);
+                if (live) {
+                  update({ live: false });
+                  setConfirming(false);
+                } else setConfirming(true);
               }}
               label="Toggle live trading"
               accent="warn"
@@ -121,15 +141,26 @@ export function BotControls({
           {!live && confirming && (
             <div className="mt-3 space-y-3 rounded-md border border-warn/30 bg-warn/5 p-4">
               <p className="text-sm text-fg">
-                <span className="font-semibold text-warn">You are about to trade real money.</span>{" "}
-                Bots will place real buy/sell orders against your CoinDCX balance from the next poll.
-                Simulated results never guarantee live ones.
+                <span className="font-semibold text-warn">
+                  You are about to trade real money.
+                </span>{" "}
+                Bots will place real buy/sell orders against your CoinDCX
+                balance from the next poll. Simulated results never guarantee
+                live ones.
               </p>
               <ul className="space-y-1.5">
                 {GUARDRAILS.map(([k, v]) => (
-                  <li key={k} className="flex gap-2 text-xs leading-relaxed text-muted">
-                    <span aria-hidden="true" className="mt-1.5 h-1 w-1 shrink-0 bg-warn/70" />
-                    <span><span className="font-medium text-dim">{k}.</span> {v}</span>
+                  <li
+                    key={k}
+                    className="flex gap-2 text-xs leading-relaxed text-muted"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="mt-1.5 h-1 w-1 shrink-0 bg-warn/70"
+                    />
+                    <span>
+                      <span className="font-medium text-dim">{k}.</span> {v}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -156,7 +187,11 @@ export function BotControls({
                 />
                 <button
                   type="button"
-                  disabled={pending || !canGoLive || phrase.trim().toUpperCase() !== GO_LIVE_PHRASE}
+                  disabled={
+                    pending ||
+                    !canGoLive ||
+                    phrase.trim().toUpperCase() !== GO_LIVE_PHRASE
+                  }
                   onClick={confirmGoLive}
                   className="rounded-md bg-warn px-3 py-1.5 text-sm font-semibold text-bg transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warn"
                 >
@@ -165,7 +200,10 @@ export function BotControls({
                 <button
                   type="button"
                   disabled={pending}
-                  onClick={() => { setConfirming(false); setPhrase(""); }}
+                  onClick={() => {
+                    setConfirming(false);
+                    setPhrase("");
+                  }}
                   className="rounded-md bg-white/5 px-3 py-1.5 text-sm text-muted transition-colors hover:bg-white/10 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 >
                   Stay in DRY_RUN
@@ -179,8 +217,9 @@ export function BotControls({
               role="alert"
               className="mt-3 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-sm text-warn"
             >
-              <span className="font-semibold">Live mode is on.</span> Bots will place real buy/sell
-              orders using your CoinDCX balance. Turning live off is instant and never asks questions.
+              <span className="font-semibold">Live mode is on.</span> Bots will
+              place real buy/sell orders using your CoinDCX balance. Turning
+              live off is instant and never asks questions.
             </p>
           )}
         </div>
@@ -214,7 +253,9 @@ function Toggle({
       className={[
         "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-panel",
         checked ? on : "bg-line",
-        accent === "warn" ? "focus-visible:ring-warn" : "focus-visible:ring-gain",
+        accent === "warn"
+          ? "focus-visible:ring-warn"
+          : "focus-visible:ring-gain",
         disabled ? "cursor-not-allowed opacity-50" : "",
       ].join(" ")}
     >

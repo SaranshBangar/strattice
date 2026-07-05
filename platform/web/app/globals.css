@@ -53,8 +53,14 @@ body {
 
 /* landing-page hero entrance: one subtle rise on load */
 @keyframes rise {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 .rise {
   animation: rise 0.5s ease-out both;
@@ -65,7 +71,9 @@ body {
   .reveal {
     opacity: 0;
     transform: translateY(16px);
-    transition: opacity 0.7s ease, transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+    transition:
+      opacity 0.7s ease,
+      transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
   }
   .reveal.is-in {
     opacity: 1;
@@ -79,32 +87,62 @@ body {
   .stagger > * {
     opacity: 0;
     transform: translateY(12px);
-    transition: opacity 0.55s ease, transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+    transition:
+      opacity 0.55s ease,
+      transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
   }
   .stagger.is-in > * {
     opacity: 1;
     transform: none;
   }
-  .stagger > :nth-child(2) { transition-delay: 70ms; }
-  .stagger > :nth-child(3) { transition-delay: 140ms; }
-  .stagger > :nth-child(4) { transition-delay: 210ms; }
-  .stagger > :nth-child(5) { transition-delay: 280ms; }
-  .stagger > :nth-child(6) { transition-delay: 350ms; }
-  .stagger > :nth-child(7) { transition-delay: 420ms; }
-  .stagger > :nth-child(8) { transition-delay: 490ms; }
+  .stagger > :nth-child(2) {
+    transition-delay: 70ms;
+  }
+  .stagger > :nth-child(3) {
+    transition-delay: 140ms;
+  }
+  .stagger > :nth-child(4) {
+    transition-delay: 210ms;
+  }
+  .stagger > :nth-child(5) {
+    transition-delay: 280ms;
+  }
+  .stagger > :nth-child(6) {
+    transition-delay: 350ms;
+  }
+  .stagger > :nth-child(7) {
+    transition-delay: 420ms;
+  }
+  .stagger > :nth-child(8) {
+    transition-delay: 490ms;
+  }
 
   /* hero ledger "boots" on load, one row at a time, like a terminal readout */
   .boot > * {
     opacity: 0;
     animation: rise 0.4s ease-out forwards;
   }
-  .boot > :nth-child(1) { animation-delay: 0.20s; }
-  .boot > :nth-child(2) { animation-delay: 0.28s; }
-  .boot > :nth-child(3) { animation-delay: 0.36s; }
-  .boot > :nth-child(4) { animation-delay: 0.44s; }
-  .boot > :nth-child(5) { animation-delay: 0.52s; }
-  .boot > :nth-child(6) { animation-delay: 0.60s; }
-  .boot > :nth-child(7) { animation-delay: 0.68s; }
+  .boot > :nth-child(1) {
+    animation-delay: 0.2s;
+  }
+  .boot > :nth-child(2) {
+    animation-delay: 0.28s;
+  }
+  .boot > :nth-child(3) {
+    animation-delay: 0.36s;
+  }
+  .boot > :nth-child(4) {
+    animation-delay: 0.44s;
+  }
+  .boot > :nth-child(5) {
+    animation-delay: 0.52s;
+  }
+  .boot > :nth-child(6) {
+    animation-delay: 0.6s;
+  }
+  .boot > :nth-child(7) {
+    animation-delay: 0.68s;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .rise {
@@ -114,7 +152,9 @@ body {
 
 /* blinking terminal caret, used once in the hero ledger footer */
 @keyframes blink {
-  50% { opacity: 0; }
+  50% {
+    opacity: 0;
+  }
 }
 .caret::after {
   content: "▍";
@@ -130,6 +170,12 @@ body {
 
 /* toast entrance */
 @keyframes toastIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }

@@ -15,40 +15,47 @@
 # =============================================================================
 
 engine:
-  poll_seconds: 300         # re-check every 5 min so the engine acts within minutes of each
-                            #   daily bar CLOSE. Entries AND protective exits key off closed
-                            #   bars only (no repainting) — exact backtest parity
-  candle_interval: "1d"     # DAILY bars (was 15m). CoinDCX supports [1m,15m,1h,1d]; 1d is the
-                            #   only altitude that survived the friction study (see header)
-  candle_limit: 400         # > regime_period(100) + slow MA(25) + ATR warmup, with margin.
-                            #   400 daily bars = ~13 months of history
+  poll_seconds:
+    300 # re-check every 5 min so the engine acts within minutes of each
+    #   daily bar CLOSE. Entries AND protective exits key off closed
+    #   bars only (no repainting) — exact backtest parity
+  candle_interval:
+    "1d" # DAILY bars (was 15m). CoinDCX supports [1m,15m,1h,1d]; 1d is the
+    #   only altitude that survived the friction study (see header)
+  candle_limit:
+    400 # > regime_period(100) + slow MA(25) + ATR warmup, with margin.
+    #   400 daily bars = ~13 months of history
 
 # --- wallet sizing (constraint B/D) ---
-starting_equity: 1000.0     # DRY_RUN simulated wallet. Live ignores this, reads exchange.
-allocation_frac: 0.97       # TOTAL fraction of equity deployable across ALL sleeves (the cap).
-quote_currency: "INR"       # wallet currency the bot sizes/trades in; must match every market's quote side
+starting_equity: 1000.0 # DRY_RUN simulated wallet. Live ignores this, reads exchange.
+allocation_frac: 0.97 # TOTAL fraction of equity deployable across ALL sleeves (the cap).
+quote_currency: "INR" # wallet currency the bot sizes/trades in; must match every market's quote side
 
 # --- friction: single source of truth (bot/costs.py) ---
 costs:
-  fee_rate: 0.002           # 0.2% per side (CoinDCX maker == taker)
-  gst_on_fee: 0.18          # 18% GST on the fee
-  tds_rate: 0.01            # 1% TDS on SELL consideration (India VDA)
-  slippage_bps: 5.0         # modelled in BACKTEST only (5 bps = 0.05% per fill)
-  edge_margin_pct: 0.002    # extra move a signal must clear beyond round-trip fee+gst
+  fee_rate: 0.002 # 0.2% per side (CoinDCX maker == taker)
+  gst_on_fee: 0.18 # 18% GST on the fee
+  tds_rate: 0.01 # 1% TDS on SELL consideration (India VDA)
+  slippage_bps: 5.0 # modelled in BACKTEST only (5 bps = 0.05% per fill)
+  edge_margin_pct: 0.002 # extra move a signal must clear beyond round-trip fee+gst
 
 # Hard risk ceilings — FRACTIONS of live equity, computed at check-time (constraint C).
 risk:
-  max_position_frac: 1.0              # max single-trade notional as a fraction of equity.
-                                      #   Sleeves (~0.32 each) are tighter, so this is a backstop.
-  max_total_capital_at_risk_frac: 1.0 # max summed open exposure as a fraction of equity.
-                                      #   Sleeves sum to allocation_frac(0.97) < 1.0, so no breach.
-  daily_loss_frac: 0.5                # RUNAWAY-BUG circuit breaker (NOT a market-risk cap):
-                                      #   halt the day if realized loss > 50% of start-of-day equity
-  max_trades_per_day: 6               # churn ceiling on NEW ENTRIES only (position-closing sells —
-                                      #   stops/chandeliers — are never blocked by this cap; see
-                                      #   bot/risk.py). Daily strategies average ~7 trades per YEAR
-                                      #   each; 6/day is pure runaway protection, not a target
-  kill_switch_file: "KILL"            # presence of this file => cancel open orders + halt
+  max_position_frac:
+    1.0 # max single-trade notional as a fraction of equity.
+    #   Sleeves (~0.32 each) are tighter, so this is a backstop.
+  max_total_capital_at_risk_frac:
+    1.0 # max summed open exposure as a fraction of equity.
+    #   Sleeves sum to allocation_frac(0.97) < 1.0, so no breach.
+  daily_loss_frac:
+    0.5 # RUNAWAY-BUG circuit breaker (NOT a market-risk cap):
+    #   halt the day if realized loss > 50% of start-of-day equity
+  max_trades_per_day:
+    6 # churn ceiling on NEW ENTRIES only (position-closing sells —
+    #   stops/chandeliers — are never blocked by this cap; see
+    #   bot/risk.py). Daily strategies average ~7 trades per YEAR
+    #   each; 6/day is pure runaway protection, not a target
+  kill_switch_file: "KILL" # presence of this file => cancel open orders + halt
 
 # Each strategy: its own market + params + position tracking + capital sleeve `weight`.
 # `weight` is RELATIVE (default 1.0 => equal split). sleeve_frac = allocation_frac*weight/sum(weights).
@@ -69,24 +76,24 @@ risk:
 #   ma_cross @ XRP +187.7% (PF 2.25, 6 trades) | USDT twin +109.8%
 #   volexp @ BNB +143.6% (PF 2.75, 6 trades)   | USDT twin +171.9%
 strategies:
-  - name: "tsmom_eth"               # time-series momentum: buy strength near its highs
+  - name: "tsmom_eth" # time-series momentum: buy strength near its highs
     module: "tsmom"
     enabled: true
     weight: 1.0
     market: "I-ETH_INR"
-    stop_loss_pct: 0.07             # 7% disaster stop (daily bars need room to breathe)
-    take_profit_pct: 0.0            # never cap a trend winner
-    chandelier_k: 3.5               # exit at peak - 3.5*ATR (3.5 beat 3.0 across the whole grid)
+    stop_loss_pct: 0.07 # 7% disaster stop (daily bars need room to breathe)
+    take_profit_pct: 0.0 # never cap a trend winner
+    chandelier_k: 3.5 # exit at peak - 3.5*ATR (3.5 beat 3.0 across the whole grid)
     atr_period: 14
-    max_hold_bars: 0                # no time-stop for trend followers
+    max_hold_bars: 0 # no time-stop for trend followers
     params:
-      lookback: 30                  # 30-day return window (robust across 20/30/40)
-      min_return: 0.10              # require +10% over the window (robust across 0.07-0.15)
-      near_high_frac: 0.02          # close within 2% of the 30d high — don't buy a fading spike
-      regime_period: 50             # 50d SMA uptrend gate
+      lookback: 30 # 30-day return window (robust across 20/30/40)
+      min_return: 0.10 # require +10% over the window (robust across 0.07-0.15)
+      near_high_frac: 0.02 # close within 2% of the 30d high — don't buy a fading spike
+      regime_period: 50 # 50d SMA uptrend gate
       expected_move_pct: 0.08
 
-  - name: "breakout_btc"            # Donchian breakout with volume + volatility confirmation
+  - name: "breakout_btc" # Donchian breakout with volume + volatility confirmation
     module: "momentum"
     enabled: true
     weight: 1.0
@@ -97,17 +104,17 @@ strategies:
     atr_period: 14
     max_hold_bars: 0
     params:
-      lookback: 20                  # break of the prior 20-DAY high (classic Donchian 20)
+      lookback: 20 # break of the prior 20-DAY high (classic Donchian 20)
       atr_period: 14
       vol_period: 20
-      min_atr_frac: 0.01            # vol floor: ATR >= 1% of price (no breakouts in dead chop)
-      vol_mult: 1.0                 # last closed day's volume >= its 20d average
-      buffer: 0.002                 # 0.2% entry buffer over the high
-      max_chase: 0.05               # skip if already >5% past the level (daily gaps are bigger)
+      min_atr_frac: 0.01 # vol floor: ATR >= 1% of price (no breakouts in dead chop)
+      vol_mult: 1.0 # last closed day's volume >= its 20d average
+      buffer: 0.002 # 0.2% entry buffer over the high
+      max_chase: 0.05 # skip if already >5% past the level (daily gaps are bigger)
       regime_period: 50
       expected_move_pct: 0.08
 
-  - name: "ma_xrp"                  # fast/slow daily MA cross with gap + slope confirmation
+  - name: "ma_xrp" # fast/slow daily MA cross with gap + slope confirmation
     module: "ma_crossover"
     enabled: true
     weight: 1.0
@@ -118,15 +125,15 @@ strategies:
     atr_period: 14
     max_hold_bars: 0
     params:
-      fast: 8                       # 8/25 daily cross (best of the tested grid, 7/7 pairs positive)
+      fast: 8 # 8/25 daily cross (best of the tested grid, 7/7 pairs positive)
       slow: 25
       atr_period: 14
-      k_atr: 0.2                    # fast-slow gap >= 0.2*ATR before entry
-      confirm_bars: 3               # cross must be within the last 3 days
-      regime_period: 100            # 100d SMA regime gate (slower, matches the slower signal)
+      k_atr: 0.2 # fast-slow gap >= 0.2*ATR before entry
+      confirm_bars: 3 # cross must be within the last 3 days
+      regime_period: 100 # 100d SMA regime gate (slower, matches the slower signal)
       expected_move_pct: 0.08
 
-  - name: "volexp_bnb"              # ATR-expansion breakout: vol pop + new local-high close
+  - name: "volexp_bnb" # ATR-expansion breakout: vol pop + new local-high close
     module: "vol_expansion"
     enabled: true
     weight: 1.0
@@ -137,10 +144,10 @@ strategies:
     atr_period: 14
     max_hold_bars: 0
     params:
-      short_atr: 5                  # 5d ATR vs 20d ATR
+      short_atr: 5 # 5d ATR vs 20d ATR
       long_atr: 20
-      expansion_mult: 1.3           # short ATR >= 1.3x long ATR (78/81 combos positive — plateau)
-      breakout_lookback: 10         # close must be the 10d high
+      expansion_mult: 1.3 # short ATR >= 1.3x long ATR (78/81 combos positive — plateau)
+      breakout_lookback: 10 # close must be the 10d high
       regime_period: 50
       expected_move_pct: 0.06
 
@@ -149,7 +156,7 @@ strategies:
   #     (bot/engine.py builds disabled-but-open strategies exit-only). While such a position is
   #     open, the no-dup-asset rule correctly holds the new strategy on that market out until
   #     the old position closes. Delete these two blocks once `python -m bot.status` shows flat.
-  - name: "ma_btc"                  # v2 15m trend follower (retired — see study below)
+  - name: "ma_btc" # v2 15m trend follower (retired — see study below)
     module: "ma_crossover"
     enabled: false
     weight: 1.0
@@ -168,7 +175,7 @@ strategies:
       regime_period: 192
       expected_move_pct: 0.05
 
-  - name: "rsi_eth"                 # v2 15m mean reversion (retired — see study below)
+  - name: "rsi_eth" # v2 15m mean reversion (retired — see study below)
     module: "rsi"
     enabled: false
     weight: 1.0

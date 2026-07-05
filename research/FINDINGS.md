@@ -10,13 +10,13 @@ volatility-expansion @ BNB).**
 Fetched by CI (`.github/workflows/fetch-market-data.yml` → `scripts/fetch_history.py`)
 into `research/data/`, because market APIs are unreachable from the dev sandbox:
 
-| Slice | Source | Coverage |
-|---|---|---|
-| `I-*_INR` 1d (7 pairs) | CoinDCX public API (the real venue) | 2023-09 → 2026-07 (~1000 bars) |
-| `I-*_INR` 1h / 15m | CoinDCX public API | latest 1000 bars (API depth cap) |
-| `B-*_USDT` 1h | Binance public archive | 2023-07 → 2026-05 (~25,600 bars) |
-| `B-*_USDT` 15m | Binance public archive | 2025-05 → 2026-05 (~38,000 bars) |
-| `B-*_USDT` 1d | CoinDCX public API | 2023-10 → 2026-07 |
+| Slice                  | Source                              | Coverage                         |
+| ---------------------- | ----------------------------------- | -------------------------------- |
+| `I-*_INR` 1d (7 pairs) | CoinDCX public API (the real venue) | 2023-09 → 2026-07 (~1000 bars)   |
+| `I-*_INR` 1h / 15m     | CoinDCX public API                  | latest 1000 bars (API depth cap) |
+| `B-*_USDT` 1h          | Binance public archive              | 2023-07 → 2026-05 (~25,600 bars) |
+| `B-*_USDT` 15m         | Binance public archive              | 2025-05 → 2026-05 (~38,000 bars) |
+| `B-*_USDT` 1d          | CoinDCX public API                  | 2023-10 → 2026-07                |
 
 Assets: BTC, ETH, XRP, SOL, DOGE, BNB, ADA (all 14 pairs confirmed listed with ₹100
 min-notional via `markets_details.json.gz`).
@@ -37,15 +37,15 @@ min-notional via `markets_details.json.gz`).
 
 Median net return across all 14 markets (deep windows), net of all costs:
 
-| Candidate | Interval | Median net | Markets positive | Avg fees, % of capital |
-|---|---|---:|---:|---:|
-| tsmom | 1d | **+76.6%** | 12/14 | ~18 |
-| momentum (Donchian) | 1d | **+69.9%** | 11/14 | ~26 |
-| ma_crossover | 1d | **+47.4%** | 10/14 | ~10 |
-| rsi (incl. Connors RSI-2) | 1d | 0 trades | — | — |
-| ma_crossover / rsi / tsmom / momentum | 4h | -0.4% … -5.0% | ≤5/14 | 10-25 |
-| all candidates | 1h | -5.6% … -50.4% | ≤4/14 | 30-125 |
-| **the entire current 15m lineup** | 15m | **-3.5% … -54.2%** | ~0/14 | 20-100 |
+| Candidate                             | Interval |         Median net | Markets positive | Avg fees, % of capital |
+| ------------------------------------- | -------- | -----------------: | ---------------: | ---------------------: |
+| tsmom                                 | 1d       |         **+76.6%** |            12/14 |                    ~18 |
+| momentum (Donchian)                   | 1d       |         **+69.9%** |            11/14 |                    ~26 |
+| ma_crossover                          | 1d       |         **+47.4%** |            10/14 |                    ~10 |
+| rsi (incl. Connors RSI-2)             | 1d       |           0 trades |                — |                      — |
+| ma_crossover / rsi / tsmom / momentum | 4h       |      -0.4% … -5.0% |            ≤5/14 |                  10-25 |
+| all candidates                        | 1h       |     -5.6% … -50.4% |            ≤4/14 |                 30-125 |
+| **the entire current 15m lineup**     | 15m      | **-3.5% … -54.2%** |            ~0/14 |                 20-100 |
 
 The 1h/15m strategies didn't lose because the signals were wrong — they lost because
 87-125% of starting capital went to fees+TDS over the window. A 1% TDS per sell plus
@@ -80,12 +80,12 @@ Markets were assigned where the strategy was profitable on **both** the INR pair
 USDT twin — a guard against pair lottery (e.g. tsmom made +120% on I-BTC_INR but lost
 -6% on B-BTC_USDT, so tsmom did not get BTC):
 
-| Strategy | Market | Net (2023-09→2026-07) | PF | Trades | Max DD | USDT twin |
-|---|---|---:|---:|---:|---:|---:|
-| tsmom 30d/+10% | I-ETH_INR | **+207.6%** | 2.58 | 7 | 38% | +18.3% |
-| Donchian 20d | I-BTC_INR | **+108.7%** | 2.75 | 8 | 32% | +9.2% |
-| MA 8/25 | I-XRP_INR | **+187.7%** | 2.25 | 6 | 48% | +109.8% |
-| Vol-expansion 5/20d | I-BNB_INR | **+143.6%** | 2.75 | 6 | 36% | +171.9% |
+| Strategy            | Market    | Net (2023-09→2026-07) |   PF | Trades | Max DD | USDT twin |
+| ------------------- | --------- | --------------------: | ---: | -----: | -----: | --------: |
+| tsmom 30d/+10%      | I-ETH_INR |           **+207.6%** | 2.58 |      7 |    38% |    +18.3% |
+| Donchian 20d        | I-BTC_INR |           **+108.7%** | 2.75 |      8 |    32% |     +9.2% |
+| MA 8/25             | I-XRP_INR |           **+187.7%** | 2.25 |      6 |    48% |   +109.8% |
+| Vol-expansion 5/20d | I-BNB_INR |           **+143.6%** | 2.75 |      6 |    36% |   +171.9% |
 
 Equal-sleeve portfolio: **~+162%** over ~2.8 years, net of all friction, at 18-62%
 market exposure (buy-and-hold median was +117% at 100% exposure with deeper drawdowns).
@@ -116,5 +116,5 @@ are disabled in `config.yaml` with the evidence inline.
 - CoinDCX INR books are thin; 5 bps modelled slippage is optimistic for size. At ₹1000
   total it is fine; re-validate before scaling past ~₹1L per sleeve.
 - Because signals fire on closed daily bars, live entries execute within one poll
-  (~5 min) *after* the daily close at the then-current market price; the modelled
+  (~5 min) _after_ the daily close at the then-current market price; the modelled
   5 bps slippage absorbs small drift between the bar close and the fill.

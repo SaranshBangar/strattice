@@ -2,7 +2,7 @@
 
 The bot's status server listens on `127.0.0.1:8787`. Vercel can't reach a bare VPS port,
 so we expose it over HTTPS. ngrok's **free** plan gives **one permanent static URL**
-(e.g. `https://coindcx-bangar.ngrok-free.app`) — unlike a Cloudflare *quick* tunnel, the
+(e.g. `https://coindcx-bangar.ngrok-free.app`) — unlike a Cloudflare _quick_ tunnel, the
 URL never changes, and running it as a service means it survives reboots and VPS sleep.
 
 > Why not Cloudflare? A named Cloudflare tunnel needs a domain you own. A `*.vercel.app`

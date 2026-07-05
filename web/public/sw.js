@@ -7,10 +7,12 @@ self.addEventListener("activate", (e) =>
   e.waitUntil(
     (async () => {
       const keys = await caches.keys();
-      await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)));
+      await Promise.all(
+        keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)),
+      );
       await self.clients.claim();
-    })()
-  )
+    })(),
+  ),
 );
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
@@ -28,11 +30,13 @@ self.addEventListener("fetch", (e) => {
     caches.match(e.request).then(
       (hit) =>
         hit ||
-        fetch(e.request).then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(e.request, copy));
-          return res;
-        }).catch(() => hit)
-    )
+        fetch(e.request)
+          .then((res) => {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(e.request, copy));
+            return res;
+          })
+          .catch(() => hit),
+    ),
   );
 });

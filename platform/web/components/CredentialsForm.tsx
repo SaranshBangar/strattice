@@ -19,7 +19,10 @@ export function CredentialsForm({ linked }: { linked: boolean }) {
     start(async () => {
       try {
         await saveCredentialsAction(fd);
-        toast(linked ? "API keys replaced" : "CoinDCX account linked", "success");
+        toast(
+          linked ? "API keys replaced" : "CoinDCX account linked",
+          "success",
+        );
         formRef.current?.reset();
       } catch (err: any) {
         toast(err?.message ?? "Couldn't save keys. Please try again.", "error");
@@ -30,17 +33,44 @@ export function CredentialsForm({ linked }: { linked: boolean }) {
   return (
     <form ref={formRef} onSubmit={submit} className="mt-4 max-w-md space-y-4">
       <div className="space-y-1.5">
-        <label htmlFor="ak-label" className={labelClass}>Label</label>
-        <input id="ak-label" name="label" placeholder="My CoinDCX key" className={inputClass} />
+        <label htmlFor="ak-label" className={labelClass}>
+          Label
+        </label>
+        <input
+          id="ak-label"
+          name="label"
+          placeholder="My CoinDCX key"
+          className={inputClass}
+        />
       </div>
       <div className="space-y-1.5">
-        <label htmlFor="ak-key" className={labelClass}>API key</label>
-        <input id="ak-key" name="apiKey" required autoComplete="off" className={`${inputClass} font-mono`} />
+        <label htmlFor="ak-key" className={labelClass}>
+          API key
+        </label>
+        <input
+          id="ak-key"
+          name="apiKey"
+          required
+          autoComplete="off"
+          className={`${inputClass} font-mono`}
+        />
       </div>
       <div className="space-y-1.5">
-        <label htmlFor="ak-secret" className={labelClass}>API secret</label>
-        <input id="ak-secret" name="secret" required type="password" autoComplete="off" placeholder="••••••••••••••••" className={`${inputClass} font-mono`} />
-        <p className="text-xs text-muted">Stored encrypted. We never display your secret back to you.</p>
+        <label htmlFor="ak-secret" className={labelClass}>
+          API secret
+        </label>
+        <input
+          id="ak-secret"
+          name="secret"
+          required
+          type="password"
+          autoComplete="off"
+          placeholder="••••••••••••••••"
+          className={`${inputClass} font-mono`}
+        />
+        <p className="text-xs text-muted">
+          Stored encrypted. We never display your secret back to you.
+        </p>
       </div>
       <button
         disabled={pending}

@@ -61,7 +61,9 @@ export function ChartFrame({
       <div />
       <div className="flex justify-between gap-1 overflow-hidden pt-1.5 font-mono text-[10px] tabular-nums text-faint">
         {xTicks.map((t, i) => (
-          <span key={i} className="shrink-0 whitespace-nowrap">{t}</span>
+          <span key={i} className="shrink-0 whitespace-nowrap">
+            {t}
+          </span>
         ))}
       </div>
     </div>
@@ -85,7 +87,8 @@ export function EquityCurve({
   fmt?: (n: number) => string;
   xTicks?: string[]; // time labels sampled left → right under the plot
 }) {
-  if (points.length < 2) return <ChartEmpty height={height} label="Not enough history yet." />;
+  if (points.length < 2)
+    return <ChartEmpty height={height} label="Not enough history yet." />;
   const W = 1000;
   const H = 300;
   const N = 4; // gridline / tick count
@@ -99,7 +102,11 @@ export function EquityCurve({
   const span = hi - lo;
   const x = (i: number) => (i / (points.length - 1)) * W;
   const y = (v: number) => ((hi - v) / span) * H;
-  const path = points.map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ");
+  const path = points
+    .map(
+      (v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`,
+    )
+    .join(" ");
   const area = `${path} L${W} ${H} L0 ${H} Z`;
   const up = points[points.length - 1] >= points[0];
   const stroke = up ? C.gain : C.loss;
@@ -107,14 +114,46 @@ export function EquityCurve({
 
   return (
     <ChartFrame height={height} yTicks={yTicks} xTicks={xTicks} fmtY={fmt}>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" width="100%" style={{ height, display: "block" }} role="img" aria-label="Equity over time">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="none"
+        width="100%"
+        style={{ height, display: "block" }}
+        role="img"
+        aria-label="Equity over time"
+      >
         {yTicks.map((_, i) => {
           const gy = (i / N) * H;
-          return <line key={i} x1={0} x2={W} y1={gy} y2={gy} stroke={C.line} strokeWidth={1} vectorEffect="non-scaling-stroke" />;
+          return (
+            <line
+              key={i}
+              x1={0}
+              x2={W}
+              y1={gy}
+              y2={gy}
+              stroke={C.line}
+              strokeWidth={1}
+              vectorEffect="non-scaling-stroke"
+            />
+          );
         })}
         <path d={area} fill={stroke} fillOpacity={0.08} />
-        <path d={path} fill="none" stroke={stroke} strokeWidth={2} vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
-        <circle cx={x(points.length - 1)} cy={y(points[points.length - 1])} r={3.5} fill={stroke} vectorEffect="non-scaling-stroke" />
+        <path
+          d={path}
+          fill="none"
+          stroke={stroke}
+          strokeWidth={2}
+          vectorEffect="non-scaling-stroke"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+        <circle
+          cx={x(points.length - 1)}
+          cy={y(points[points.length - 1])}
+          r={3.5}
+          fill={stroke}
+          vectorEffect="non-scaling-stroke"
+        />
       </svg>
     </ChartFrame>
   );
@@ -130,7 +169,8 @@ export function PnlBars({
   height?: number;
   fmt?: (n: number) => string;
 }) {
-  if (data.length === 0) return <ChartEmpty height={height} label="No closed trades yet." />;
+  if (data.length === 0)
+    return <ChartEmpty height={height} label="No closed trades yet." />;
   const W = 1000;
   const H = 300;
   const N = 4; // gridline / tick count
@@ -147,23 +187,63 @@ export function PnlBars({
   // X labels: up to 6 evenly-sampled day labels, endpoints included.
   const k = Math.min(6, n);
   const xTicks =
-    k <= 1 ? [data[0].label] : Array.from({ length: k }, (_, j) => data[Math.round((j * (n - 1)) / (k - 1))].label);
+    k <= 1
+      ? [data[0].label]
+      : Array.from(
+          { length: k },
+          (_, j) => data[Math.round((j * (n - 1)) / (k - 1))].label,
+        );
 
   return (
     <ChartFrame height={height} yTicks={yTicks} xTicks={xTicks} fmtY={fmt}>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" width="100%" style={{ height, display: "block" }} role="img" aria-label="Daily profit and loss">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="none"
+        width="100%"
+        style={{ height, display: "block" }}
+        role="img"
+        aria-label="Daily profit and loss"
+      >
         {yTicks.map((v, i) => {
           const gy = (i / N) * H;
           // Zero baseline drawn brighter than the other gridlines.
-          return <line key={i} x1={0} x2={W} y1={gy} y2={gy} stroke={Math.abs(v) < 1e-9 ? C.faint : C.line} strokeWidth={1} vectorEffect="non-scaling-stroke" />;
+          return (
+            <line
+              key={i}
+              x1={0}
+              x2={W}
+              y1={gy}
+              y2={gy}
+              stroke={Math.abs(v) < 1e-9 ? C.faint : C.line}
+              strokeWidth={1}
+              vectorEffect="non-scaling-stroke"
+            />
+          );
         })}
-        <line x1={0} x2={W} y1={zeroY} y2={zeroY} stroke={C.faint} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        <line
+          x1={0}
+          x2={W}
+          y1={zeroY}
+          y2={zeroY}
+          stroke={C.faint}
+          strokeWidth={1}
+          vectorEffect="non-scaling-stroke"
+        />
         {data.map((d, i) => {
           const cx = i * slot + slot / 2;
           const top = d.value >= 0 ? y(d.value) : zeroY;
           const h = Math.max(1, Math.abs(zeroY - y(d.value)));
           return (
-            <rect key={i} x={cx - bw / 2} y={top} width={bw} height={h} fill={d.value >= 0 ? C.gain : C.loss} fillOpacity={0.85} rx={1}>
+            <rect
+              key={i}
+              x={cx - bw / 2}
+              y={top}
+              width={bw}
+              height={h}
+              fill={d.value >= 0 ? C.gain : C.loss}
+              fillOpacity={0.85}
+              rx={1}
+            >
               <title>{`${d.label}: ${fmt(d.value)}`}</title>
             </rect>
           );
@@ -174,7 +254,15 @@ export function PnlBars({
 }
 
 /** Donut for a two-part ratio (wins vs losses). Pure stroke arcs, no gradient. */
-export function WinRateDonut({ wins, losses, size = 132 }: { wins: number; losses: number; size?: number }) {
+export function WinRateDonut({
+  wins,
+  losses,
+  size = 132,
+}: {
+  wins: number;
+  losses: number;
+  size?: number;
+}) {
   const total = wins + losses;
   const r = 54;
   const circ = 2 * Math.PI * r;
@@ -184,7 +272,15 @@ export function WinRateDonut({ wins, losses, size = 132 }: { wins: number; losse
     <div className="flex items-center gap-4">
       <div className="relative shrink-0" style={{ width: size, height: size }}>
         <svg viewBox="0 0 132 132" width={size} height={size}>
-          <circle cx={66} cy={66} r={r} fill="none" stroke={C.loss} strokeOpacity={total ? 0.5 : 0.25} strokeWidth={14} />
+          <circle
+            cx={66}
+            cy={66}
+            r={r}
+            fill="none"
+            stroke={C.loss}
+            strokeOpacity={total ? 0.5 : 0.25}
+            strokeWidth={14}
+          />
           {total > 0 && (
             <circle
               cx={66}
@@ -201,19 +297,29 @@ export function WinRateDonut({ wins, losses, size = 132 }: { wins: number; losse
         </svg>
         <div className="absolute inset-0 grid place-items-center">
           <div className="text-center">
-            <div className="font-mono text-xl font-semibold tabular-nums text-fg">{total ? `${pct}%` : "-"}</div>
-            <div className="font-mono text-[10px] uppercase tracking-wider text-faint">win rate</div>
+            <div className="font-mono text-xl font-semibold tabular-nums text-fg">
+              {total ? `${pct}%` : "-"}
+            </div>
+            <div className="font-mono text-[10px] uppercase tracking-wider text-faint">
+              win rate
+            </div>
           </div>
         </div>
       </div>
       <dl className="space-y-1.5 text-sm">
         <div className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-sm" style={{ background: C.gain }} />
+          <span
+            className="h-2.5 w-2.5 rounded-sm"
+            style={{ background: C.gain }}
+          />
           <dt className="text-muted">Wins</dt>
           <dd className="ml-auto font-mono tabular-nums text-dim">{wins}</dd>
         </div>
         <div className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-sm" style={{ background: C.loss }} />
+          <span
+            className="h-2.5 w-2.5 rounded-sm"
+            style={{ background: C.loss }}
+          />
           <dt className="text-muted">Losses</dt>
           <dd className="ml-auto font-mono tabular-nums text-dim">{losses}</dd>
         </div>
@@ -237,7 +343,8 @@ export function DrawdownCurve({
   height?: number;
   xTicks?: string[];
 }) {
-  if (points.length < 2) return <ChartEmpty height={height} label="Not enough history yet." />;
+  if (points.length < 2)
+    return <ChartEmpty height={height} label="Not enough history yet." />;
   const W = 1000;
   const H = 300;
   const N = 4;
@@ -245,24 +352,72 @@ export function DrawdownCurve({
   const hi = maxDD * 1.08; // headroom below the deepest trough
   const y = (v: number) => (v / hi) * H;
   const x = (i: number) => (i / (points.length - 1)) * W;
-  const path = points.map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ");
+  const path = points
+    .map(
+      (v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`,
+    )
+    .join(" ");
   const area = `M0 0 ${points.map((v, i) => `L${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ")} L${W} 0 Z`;
   const yTicks = Array.from({ length: N + 1 }, (_, i) => (i / N) * hi);
   // deepest point, direct-labeled
   let troughIdx = 0;
-  for (let i = 1; i < points.length; i++) if (points[i] > points[troughIdx]) troughIdx = i;
+  for (let i = 1; i < points.length; i++)
+    if (points[i] > points[troughIdx]) troughIdx = i;
 
   return (
-    <ChartFrame height={height} yTicks={yTicks} xTicks={xTicks} fmtY={(v) => (v === 0 ? "0%" : `-${v.toFixed(1)}%`)}>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" width="100%" style={{ height, display: "block" }} role="img" aria-label="Drawdown from peak over time">
+    <ChartFrame
+      height={height}
+      yTicks={yTicks}
+      xTicks={xTicks}
+      fmtY={(v) => (v === 0 ? "0%" : `-${v.toFixed(1)}%`)}
+    >
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="none"
+        width="100%"
+        style={{ height, display: "block" }}
+        role="img"
+        aria-label="Drawdown from peak over time"
+      >
         {yTicks.map((_, i) => (
-          <line key={i} x1={0} x2={W} y1={(i / N) * H} y2={(i / N) * H} stroke={C.line} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+          <line
+            key={i}
+            x1={0}
+            x2={W}
+            y1={(i / N) * H}
+            y2={(i / N) * H}
+            stroke={C.line}
+            strokeWidth={1}
+            vectorEffect="non-scaling-stroke"
+          />
         ))}
-        <line x1={0} x2={W} y1={0} y2={0} stroke={C.faint} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        <line
+          x1={0}
+          x2={W}
+          y1={0}
+          y2={0}
+          stroke={C.faint}
+          strokeWidth={1}
+          vectorEffect="non-scaling-stroke"
+        />
         <path d={area} fill={C.loss} fillOpacity={0.12} />
-        <path d={path} fill="none" stroke={C.loss} strokeWidth={1.75} vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+        <path
+          d={path}
+          fill="none"
+          stroke={C.loss}
+          strokeWidth={1.75}
+          vectorEffect="non-scaling-stroke"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
         {points[troughIdx] > 0.05 && (
-          <circle cx={x(troughIdx)} cy={y(points[troughIdx])} r={3.5} fill={C.loss} vectorEffect="non-scaling-stroke">
+          <circle
+            cx={x(troughIdx)}
+            cy={y(points[troughIdx])}
+            r={3.5}
+            fill={C.loss}
+            vectorEffect="non-scaling-stroke"
+          >
             <title>{`Max drawdown -${points[troughIdx].toFixed(1)}%`}</title>
           </circle>
         )}
@@ -282,17 +437,22 @@ export function PnlHistogram({
   height?: number;
   fmt?: (n: number) => string;
 }) {
-  if (values.length < 3) return <ChartEmpty height={height} label="Not enough closed days yet." />;
+  if (values.length < 3)
+    return <ChartEmpty height={height} label="Not enough closed days yet." />;
   const W = 1000;
   const H = 300;
   const N = 4;
   const lo = Math.min(...values, 0);
   const hi = Math.max(...values, 0);
   const span = hi - lo || 1;
-  const bins = Math.min(13, Math.max(5, Math.ceil(Math.sqrt(values.length)) | 1)); // odd → a bin brackets 0
+  const bins = Math.min(
+    13,
+    Math.max(5, Math.ceil(Math.sqrt(values.length)) | 1),
+  ); // odd → a bin brackets 0
   const w = span / bins;
   const counts = new Array(bins).fill(0);
-  for (const v of values) counts[Math.min(bins - 1, Math.max(0, Math.floor((v - lo) / w)))]++;
+  for (const v of values)
+    counts[Math.min(bins - 1, Math.max(0, Math.floor((v - lo) / w)))]++;
   const maxC = Math.max(...counts, 1);
   const yTicks = Array.from({ length: N + 1 }, (_, i) => maxC - (i / N) * maxC);
   const slot = W / bins;
@@ -301,10 +461,31 @@ export function PnlHistogram({
   const xTicks = [fmt(lo), "0", fmt(hi)];
 
   return (
-    <ChartFrame height={height} yTicks={yTicks} xTicks={xTicks} fmtY={(v) => `${Math.round(v)}`}>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" width="100%" style={{ height, display: "block" }} role="img" aria-label="Distribution of daily profit and loss">
+    <ChartFrame
+      height={height}
+      yTicks={yTicks}
+      xTicks={xTicks}
+      fmtY={(v) => `${Math.round(v)}`}
+    >
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="none"
+        width="100%"
+        style={{ height, display: "block" }}
+        role="img"
+        aria-label="Distribution of daily profit and loss"
+      >
         {yTicks.map((_, i) => (
-          <line key={i} x1={0} x2={W} y1={(i / N) * H} y2={(i / N) * H} stroke={C.line} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+          <line
+            key={i}
+            x1={0}
+            x2={W}
+            y1={(i / N) * H}
+            y2={(i / N) * H}
+            stroke={C.line}
+            strokeWidth={1}
+            vectorEffect="non-scaling-stroke"
+          />
         ))}
         {counts.map((c, i) => {
           if (c === 0) return null;
@@ -325,25 +506,61 @@ export function PnlHistogram({
             </rect>
           );
         })}
-        <line x1={zeroX} x2={zeroX} y1={0} y2={H} stroke={C.faint} strokeWidth={1} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
+        <line
+          x1={zeroX}
+          x2={zeroX}
+          y1={0}
+          y2={H}
+          stroke={C.faint}
+          strokeWidth={1}
+          strokeDasharray="4 3"
+          vectorEffect="non-scaling-stroke"
+        />
       </svg>
     </ChartFrame>
   );
 }
 
 /** Tiny inline trend line for stat cards. */
-export function Sparkline({ data, width = 120, height = 32, color }: { data: number[]; width?: number; height?: number; color?: string }) {
+export function Sparkline({
+  data,
+  width = 120,
+  height = 32,
+  color,
+}: {
+  data: number[];
+  width?: number;
+  height?: number;
+  color?: string;
+}) {
   if (data.length < 2) return <div style={{ height }} />;
   const min = Math.min(...data);
   const max = Math.max(...data);
   const span = max - min || 1;
   const x = (i: number) => (i / (data.length - 1)) * width;
   const y = (v: number) => height - 2 - ((v - min) / span) * (height - 4);
-  const path = data.map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ");
+  const path = data
+    .map(
+      (v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`,
+    )
+    .join(" ");
   const stroke = color ?? (data[data.length - 1] >= data[0] ? C.gain : C.loss);
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} preserveAspectRatio="none" aria-hidden="true">
-      <path d={path} fill="none" stroke={stroke} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      width={width}
+      height={height}
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      <path
+        d={path}
+        fill="none"
+        stroke={stroke}
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }

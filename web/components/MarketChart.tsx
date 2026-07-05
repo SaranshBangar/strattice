@@ -13,11 +13,34 @@ import {
 } from "chart.js";
 import { Line, Bar } from "react-chartjs-2";
 
-ChartJS.register(LineElement, BarElement, PointElement, LinearScale, TimeScale, CategoryScale, Filler, Tooltip);
+ChartJS.register(
+  LineElement,
+  BarElement,
+  PointElement,
+  LinearScale,
+  TimeScale,
+  CategoryScale,
+  Filler,
+  Tooltip,
+);
 
-type Candle = { open: number; high: number; low: number; close: number; time: number };
+type Candle = {
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  time: number;
+};
 
-const PAIRS = ["I-BTC_INR", "I-ETH_INR", "I-XRP_INR", "I-BNB_INR", "I-SOL_INR", "I-DOGE_INR", "I-ADA_INR"];
+const PAIRS = [
+  "I-BTC_INR",
+  "I-ETH_INR",
+  "I-XRP_INR",
+  "I-BNB_INR",
+  "I-SOL_INR",
+  "I-DOGE_INR",
+  "I-ADA_INR",
+];
 const INTERVALS = ["15m", "1h", "1d"];
 const CHART_TYPES = ["Area", "Bar"] as const;
 type ChartType = (typeof CHART_TYPES)[number];
@@ -29,11 +52,25 @@ const IST = "Asia/Kolkata";
 const axisLabel = (t: number, interval: string) => {
   const d = asDate(t);
   return interval === "1d"
-    ? d.toLocaleDateString("en-IN", { timeZone: IST, day: "2-digit", month: "short" })
-    : d.toLocaleTimeString("en-IN", { timeZone: IST, hour: "2-digit", minute: "2-digit" });
+    ? d.toLocaleDateString("en-IN", {
+        timeZone: IST,
+        day: "2-digit",
+        month: "short",
+      })
+    : d.toLocaleTimeString("en-IN", {
+        timeZone: IST,
+        hour: "2-digit",
+        minute: "2-digit",
+      });
 };
 const fullLabel = (t: number) =>
-  asDate(t).toLocaleString("en-IN", { timeZone: IST, day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  asDate(t).toLocaleString("en-IN", {
+    timeZone: IST,
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
 export default function MarketChart() {
   const [pair, setPair] = useState(PAIRS[0]);
@@ -53,14 +90,65 @@ export default function MarketChart() {
         setLoading(false);
       })
       .catch(() => live && setLoading(false));
-    return () => { live = false; };
+
+    // Live tick: Binance trade stream folds the latest price into the current
+    // candle twice a second, so the last point moves in real time.
+    let ws: WebSocket | null = null;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const liveRef = { price: null as number | null };
+    function connect() {
+      ws = new WebSocket(
+        `wss://stream.binance.com:9443/ws/${label(pair).toLowerCase()}usdt@trade`,
+      );
+      ws.onmessage = (e) => {
+        try {
+          const p = Number(JSON.parse(e.data as string).p);
+          if (Number.isFinite(p)) liveRef.price = p;
+        } catch {}
+      };
+      ws.onclose = () => {
+        if (live) retry = setTimeout(connect, 2000);
+      };
+    }
+    connect();
+    const tick = window.setInterval(() => {
+      const p = liveRef.price;
+      if (p == null) return;
+      liveRef.price = null;
+      setData((prev) => {
+        if (!prev.length) return prev;
+        const lastC = prev[prev.length - 1];
+        if (p === lastC.close) return prev;
+        return [
+          ...prev.slice(0, -1),
+          {
+            ...lastC,
+            close: p,
+            high: Math.max(lastC.high, p),
+            low: Math.min(lastC.low, p),
+          },
+        ];
+      });
+    }, 500);
+
+    return () => {
+      live = false;
+      window.clearInterval(tick);
+      clearTimeout(retry);
+      if (ws) {
+        ws.onclose = null;
+        ws.close();
+      }
+    };
   }, [pair, interval]);
 
   const up = data.length > 1 && data[data.length - 1].close >= data[0].close;
   const color = up ? "#16B97D" : "#F0584F";
   const last = data.at(-1)?.close;
   const chgPct =
-    data.length > 1 ? ((data.at(-1)!.close - data[0].close) / data[0].close) * 100 : 0;
+    data.length > 1
+      ? ((data.at(-1)!.close - data[0].close) / data[0].close) * 100
+      : 0;
   const hi = data.length ? Math.max(...data.map((c) => c.high)) : null;
   const lo = data.length ? Math.min(...data.map((c) => c.low)) : null;
 
@@ -74,7 +162,7 @@ export default function MarketChart() {
           borderWidth: 2,
           pointRadius: 0,
           pointHoverRadius: 4,
-          pointHitRadius: 24,        // big touch target for mobile taps
+          pointHitRadius: 24, // big touch target for mobile taps
           pointHoverBackgroundColor: color,
           tension: 0.25,
           fill: true,
@@ -83,7 +171,7 @@ export default function MarketChart() {
         },
       ],
     }),
-    [data, color, up, interval, ctype]
+    [data, color, up, interval, ctype],
   );
 
   const Plot = ctype === "Bar" ? Bar : Line;
@@ -91,27 +179,57 @@ export default function MarketChart() {
   return (
     <div className="card">
       <div className="chart-head">
-        <select className="sel" value={pair} onChange={(e) => setPair(e.target.value)}>
+        <select
+          className="sel"
+          value={pair}
+          onChange={(e) => setPair(e.target.value)}
+        >
           {PAIRS.map((p) => (
-            <option key={p} value={p}>{label(p)}</option>
+            <option key={p} value={p}>
+              {label(p)}
+            </option>
           ))}
         </select>
-        <select className="sel" value={ctype} onChange={(e) => setCtype(e.target.value as ChartType)}>
+        <select
+          className="sel"
+          value={ctype}
+          onChange={(e) => setCtype(e.target.value as ChartType)}
+        >
           {CHART_TYPES.map((t) => (
-            <option key={t} value={t}>{t}</option>
+            <option key={t} value={t}>
+              {t}
+            </option>
           ))}
         </select>
       </div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          gap: 10,
+          marginBottom: 6,
+          flexWrap: "wrap",
+        }}
+      >
         <span className="mono" style={{ fontSize: 22, fontWeight: 700 }}>
-          {last ? `₹${last.toLocaleString("en-IN")}` : "—"}
+          {last ? `$${last.toLocaleString("en-US")}` : "—"}
         </span>
         <span className={up ? "green" : "red"} style={{ fontWeight: 600 }}>
-          {chgPct >= 0 ? "+" : ""}{chgPct.toFixed(2)}%
+          {chgPct >= 0 ? "+" : ""}
+          {chgPct.toFixed(2)}%
+        </span>
+        <span
+          className="green mono"
+          style={{ fontSize: 10, letterSpacing: 1.5, opacity: 0.9 }}
+        >
+          ● LIVE · BINANCE
         </span>
         {hi !== null && lo !== null && (
-          <span className="mono muted" style={{ marginLeft: "auto", fontSize: 11 }}>
-            H ₹{hi.toLocaleString("en-IN")} · L ₹{lo.toLocaleString("en-IN")}
+          <span
+            className="mono muted"
+            style={{ marginLeft: "auto", fontSize: 11 }}
+          >
+            H ${hi.toLocaleString("en-US")} · L ${lo.toLocaleString("en-US")}
           </span>
         )}
       </div>
@@ -136,8 +254,10 @@ export default function MarketChart() {
                   displayColors: false,
                   padding: 8,
                   callbacks: {
-                    title: (items: any) => fullLabel(data[items[0].dataIndex].time),
-                    label: (item: any) => "₹" + item.parsed.y.toLocaleString("en-IN"),
+                    title: (items: any) =>
+                      fullLabel(data[items[0].dataIndex].time),
+                    label: (item: any) =>
+                      "$" + item.parsed.y.toLocaleString("en-US"),
                   },
                 },
               },
@@ -145,7 +265,13 @@ export default function MarketChart() {
                 x: {
                   type: "category",
                   grid: { display: false },
-                  ticks: { color: "#828AA0", maxRotation: 0, autoSkip: true, maxTicksLimit: 6, font: { size: 10 } },
+                  ticks: {
+                    color: "#828AA0",
+                    maxRotation: 0,
+                    autoSkip: true,
+                    maxTicksLimit: 6,
+                    font: { size: 10 },
+                  },
                 },
                 y: {
                   position: "right",
@@ -154,7 +280,8 @@ export default function MarketChart() {
                     color: "#828AA0",
                     maxTicksLimit: 5,
                     font: { size: 10 },
-                    callback: (v: any) => "₹" + Number(v).toLocaleString("en-IN"),
+                    callback: (v: any) =>
+                      "$" + Number(v).toLocaleString("en-US"),
                   },
                 },
               },
@@ -164,7 +291,11 @@ export default function MarketChart() {
       </div>
       <div className="tabs" style={{ marginTop: 10, marginBottom: 0 }}>
         {INTERVALS.map((iv) => (
-          <button key={iv} className={`tab ${iv === interval ? "active" : ""}`} onClick={() => setInterval(iv)}>
+          <button
+            key={iv}
+            className={`tab ${iv === interval ? "active" : ""}`}
+            onClick={() => setInterval(iv)}
+          >
             {iv}
           </button>
         ))}

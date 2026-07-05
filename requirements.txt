@@ -1,3 +1,8 @@
 requests>=2.31
 python-dotenv>=1.0
 pyyaml>=6.0
+
+# Optional: hf_forecast strategy (Hugging Face Chronos). Heavy (torch); install only
+# on runners that enable it. Without these the strategy safely HOLDs forever.
+# chronos-forecasting>=1.4
+# torch>=2.2

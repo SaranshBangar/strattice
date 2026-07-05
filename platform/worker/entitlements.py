@@ -17,7 +17,7 @@ from dataclasses import dataclass
 # and is interpreted by bot/strategies/custom.py.
 ALL_TEMPLATES = (
     "ma_crossover", "rsi", "momentum", "vol_expansion",
-    "fast_rsi", "bb_reversion", "squeeze_breakout", "custom",
+    "fast_rsi", "bb_reversion", "squeeze_breakout", "hf_forecast", "custom",
 )
 DEFAULT_TEMPLATE = "ma_crossover"  # the starting template new users see first
 

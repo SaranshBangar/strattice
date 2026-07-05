@@ -33,8 +33,10 @@ export function Nav() {
 
   const linkClass = (href: string) =>
     [
-      "rounded-full px-3.5 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-      pathname === href ? "bg-white/[0.07] text-fg" : "text-muted hover:text-fg",
+      "rounded-md px-3.5 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+      pathname === href
+        ? "bg-white/[0.07] text-fg"
+        : "text-muted hover:text-fg",
     ].join(" ");
 
   return (
@@ -46,8 +48,16 @@ export function Nav() {
           className="flex items-center gap-2.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           {/* eslint-disable-next-line @next/next/no-img-element -- static SVG, no optimization needed */}
-          <img src="/strattice-logo-transparent.svg" alt="Strattice" className="h-7 w-7" width={28} height={28} />
-          <span className="font-display text-sm font-semibold tracking-tight text-fg">stra<span className="text-accent">tt</span>ice</span>
+          <img
+            src="/strattice-logo-transparent.svg"
+            alt="Strattice"
+            className="h-7 w-7"
+            width={28}
+            height={28}
+          />
+          <span className="font-display text-sm font-semibold tracking-tight text-fg">
+            stra<span className="text-accent">tt</span>ice
+          </span>
         </Link>
 
         {signedIn ? (
@@ -76,7 +86,14 @@ export function Nav() {
               onClick={() => setOpen((v) => !v)}
               className="grid h-9 w-9 place-items-center rounded-full bg-white/5 text-dim transition-colors hover:bg-white/10 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:hidden"
             >
-              <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+              <svg
+                viewBox="0 0 20 20"
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                aria-hidden="true"
+              >
                 {open ? (
                   <path strokeLinecap="round" d="m5 5 10 10M15 5 5 15" />
                 ) : (
@@ -89,11 +106,13 @@ export function Nav() {
           <div className="flex items-center gap-2">
             {pathname === "/" && (
               <div className="mr-2 hidden items-center gap-1 md:flex">
-                {([
-                  ["#templates", "Templates"],
-                  ["#costs", "Costs"],
-                  ["#faq", "FAQ"],
-                ] as const).map(([href, label]) => (
+                {(
+                  [
+                    ["#templates", "Templates"],
+                    ["#costs", "Costs"],
+                    ["#faq", "FAQ"],
+                  ] as const
+                ).map(([href, label]) => (
                   <a
                     key={href}
                     href={href}
@@ -131,7 +150,9 @@ export function Nav() {
                 onClick={() => setOpen(false)}
                 className={[
                   "rounded-lg px-3 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-                  pathname === href ? "bg-white/[0.07] text-fg" : "text-muted hover:bg-white/5 hover:text-fg",
+                  pathname === href
+                    ? "bg-white/[0.07] text-fg"
+                    : "text-muted hover:bg-white/5 hover:text-fg",
                 ].join(" ")}
               >
                 {label}

@@ -28,7 +28,9 @@ export function DataTable({ title, head, rows, empty, align }: DataTableProps) {
     <section className="card">
       {title && (
         <div className="px-4 py-3">
-          <h3 className="font-display text-sm font-semibold tracking-tight text-dim">{title}</h3>
+          <h3 className="font-display text-sm font-semibold tracking-tight text-dim">
+            {title}
+          </h3>
         </div>
       )}
 
@@ -58,9 +60,13 @@ export function DataTable({ title, head, rows, empty, align }: DataTableProps) {
               {rows.map((row, i) => (
                 <tr key={i} className="odd:bg-white/[0.015] hover:bg-inset/60">
                   {row.map((cell, j) => {
-                    const obj = typeof cell === "object" && cell !== null ? cell : null;
-                    const value: string | number = obj ? obj.v : (cell as string | number);
-                    const tone: CellTone = obj?.tone ?? (j === 0 ? "fg" : "default");
+                    const obj =
+                      typeof cell === "object" && cell !== null ? cell : null;
+                    const value: string | number = obj
+                      ? obj.v
+                      : (cell as string | number);
+                    const tone: CellTone =
+                      obj?.tone ?? (j === 0 ? "fg" : "default");
                     const cellAlign = obj?.align ?? align?.[j] ?? "left";
                     return (
                       <td

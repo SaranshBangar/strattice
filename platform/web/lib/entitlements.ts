@@ -7,14 +7,31 @@
 
 /** The stock strategy templates that ship with the bot. */
 export const BUILTIN_TEMPLATES = [
-  "ma_crossover", "rsi", "momentum", "vol_expansion",
-  "fast_rsi", "bb_reversion", "squeeze_breakout",
+  "ma_crossover",
+  "rsi",
+  "momentum",
+  "vol_expansion",
+  "fast_rsi",
+  "bb_reversion",
+  "squeeze_breakout",
 ] as const;
-/** Everything a user may run: builtins + "custom" (user-built rule strategies,
- *  interpreted by bot/strategies/custom.py; the rule JSON lives in user_strategies.params). */
-export const ALL_TEMPLATES = [...BUILTIN_TEMPLATES, "custom"] as const;
+/** Experimental templates: run in the bot's Python engine only (ML model
+ *  inference is server-side), so the browser cannot simulate/backtest them.
+ *  Kept out of BUILTIN_TEMPLATES so the TS sim never tries. */
+export const EXPERIMENTAL_TEMPLATES = ["hf_forecast"] as const;
+/** Everything a user may run: builtins + experimental + "custom" (user-built rule
+ *  strategies, interpreted by bot/strategies/custom.py; the rule JSON lives in
+ *  user_strategies.params). */
+export const ALL_TEMPLATES = [
+  ...BUILTIN_TEMPLATES,
+  ...EXPERIMENTAL_TEMPLATES,
+  "custom",
+] as const;
 export type Template = (typeof ALL_TEMPLATES)[number];
 export type BuiltinTemplate = (typeof BUILTIN_TEMPLATES)[number];
+export type ExperimentalTemplate = (typeof EXPERIMENTAL_TEMPLATES)[number];
+/** Templates pickable from the template cards (everything except "custom"). */
+export type PickableTemplate = BuiltinTemplate | ExperimentalTemplate;
 export const DEFAULT_TEMPLATE: Template = "ma_crossover";
 
 export type TierName = "free" | "starter" | "plus" | "pro" | "max";
@@ -31,11 +48,51 @@ export interface Tier {
 
 export const TIERS: Record<TierName, Tier> = {
   // Everything free while pricing is off: all templates, no active cap, full dashboard.
-  free:    { name: "free",    priceInr: 0,   tradesPerDay: 100, maxActive: null, allowed: ALL_TEMPLATES, custom: true, dashboard: "full" },
-  starter: { name: "starter", priceInr: 0,   tradesPerDay: 100, maxActive: null, allowed: ALL_TEMPLATES, custom: true, dashboard: "full" },
-  plus:    { name: "plus",    priceInr: 0,   tradesPerDay: 100, maxActive: null, allowed: ALL_TEMPLATES, custom: true, dashboard: "full" },
-  pro:     { name: "pro",     priceInr: 0,   tradesPerDay: 100, maxActive: null, allowed: ALL_TEMPLATES, custom: true, dashboard: "full" },
-  max:     { name: "max",     priceInr: 0,   tradesPerDay: 100, maxActive: null, allowed: ALL_TEMPLATES, custom: true, dashboard: "full" },
+  free: {
+    name: "free",
+    priceInr: 0,
+    tradesPerDay: 100,
+    maxActive: null,
+    allowed: ALL_TEMPLATES,
+    custom: true,
+    dashboard: "full",
+  },
+  starter: {
+    name: "starter",
+    priceInr: 0,
+    tradesPerDay: 100,
+    maxActive: null,
+    allowed: ALL_TEMPLATES,
+    custom: true,
+    dashboard: "full",
+  },
+  plus: {
+    name: "plus",
+    priceInr: 0,
+    tradesPerDay: 100,
+    maxActive: null,
+    allowed: ALL_TEMPLATES,
+    custom: true,
+    dashboard: "full",
+  },
+  pro: {
+    name: "pro",
+    priceInr: 0,
+    tradesPerDay: 100,
+    maxActive: null,
+    allowed: ALL_TEMPLATES,
+    custom: true,
+    dashboard: "full",
+  },
+  max: {
+    name: "max",
+    priceInr: 0,
+    tradesPerDay: 100,
+    maxActive: null,
+    allowed: ALL_TEMPLATES,
+    custom: true,
+    dashboard: "full",
+  },
 };
 
 export function resolveTier(name?: string | null): Tier {

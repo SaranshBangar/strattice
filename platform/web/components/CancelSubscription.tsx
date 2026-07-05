@@ -15,11 +15,19 @@ export function CancelSubscription() {
       type="button"
       disabled={pending}
       onClick={() => {
-        if (!confirm("Cancel your subscription? Everything stays unlocked - the platform is free.")) return;
+        if (
+          !confirm(
+            "Cancel your subscription? Everything stays unlocked - the platform is free.",
+          )
+        )
+          return;
         start(async () => {
           try {
             await cancelSubscriptionAction();
-            toast("Subscription cancelled. Everything stays unlocked.", "success");
+            toast(
+              "Subscription cancelled. Everything stays unlocked.",
+              "success",
+            );
           } catch (e: any) {
             toast(e.message ?? "Couldn't cancel. Please try again.", "error");
           }

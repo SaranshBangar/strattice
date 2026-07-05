@@ -24,7 +24,8 @@ export const auth = betterAuth({
         after: async (session: { userId: string }) => {
           const u = await getUserContact(session.userId);
           if (!u) return;
-          const fresh = u.created_at != null && Date.now() / 1000 - u.created_at < 60;
+          const fresh =
+            u.created_at != null && Date.now() / 1000 - u.created_at < 60;
           if (!fresh) await sendSignInEmail(u.email, u.name);
         },
       },

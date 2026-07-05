@@ -25,10 +25,14 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
     e.preventDefault();
     setErr(null);
     setBusy(true);
-    const res = mode === "sign-up" ? await signUp.email({ email, password, name: name || email }) : await signIn.email({ email, password });
+    const res =
+      mode === "sign-up"
+        ? await signUp.email({ email, password, name: name || email })
+        : await signIn.email({ email, password });
     setBusy(false);
     if (res.error) {
-      const msg = res.error.message ?? "Something went wrong. Please try again.";
+      const msg =
+        res.error.message ?? "Something went wrong. Please try again.";
       setErr(msg);
       toast(msg, "error");
       return;
@@ -50,9 +54,13 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
 
   return (
     <div className="mx-auto w-full max-w-md card p-6">
-      <h1 className="font-display text-xl font-semibold tracking-tight text-fg">{mode === "sign-up" ? "Create your account" : "Sign in"}</h1>
+      <h1 className="font-display text-xl font-semibold tracking-tight text-fg">
+        {mode === "sign-up" ? "Create your account" : "Sign in"}
+      </h1>
       <p className="mt-1 text-sm text-muted">
-        {mode === "sign-up" ? "Start running strategies on your own CoinDCX account." : "Welcome back to Strattice."}
+        {mode === "sign-up"
+          ? "Start running strategies on your own CoinDCX account."
+          : "Welcome back to Strattice."}
       </p>
 
       <form onSubmit={submit} className="mt-5 space-y-4">
@@ -96,7 +104,9 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
               className={`${inputClass} pr-16`}
               type={showPw ? "text" : "password"}
               placeholder="••••••••"
-              autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
+              autoComplete={
+                mode === "sign-up" ? "new-password" : "current-password"
+              }
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -111,7 +121,9 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
               {showPw ? "Hide" : "Show"}
             </button>
           </div>
-          {mode === "sign-up" && <p className="text-xs text-faint">At least 8 characters.</p>}
+          {mode === "sign-up" && (
+            <p className="text-xs text-faint">At least 8 characters.</p>
+          )}
         </div>
         {err && (
           <p role="alert" className="text-sm text-loss">
@@ -148,14 +160,20 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
         {mode === "sign-up" ? (
           <>
             Have an account?{" "}
-            <Link href="/sign-in" className="text-accent underline-offset-2 hover:underline">
+            <Link
+              href="/sign-in"
+              className="text-accent underline-offset-2 hover:underline"
+            >
               Sign in
             </Link>
           </>
         ) : (
           <>
             New here?{" "}
-            <Link href="/sign-up" className="text-accent underline-offset-2 hover:underline">
+            <Link
+              href="/sign-up"
+              className="text-accent underline-offset-2 hover:underline"
+            >
               Create one
             </Link>
           </>
@@ -169,10 +187,22 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
 function GoogleIcon() {
   return (
     <svg viewBox="0 0 18 18" className="h-4 w-4 shrink-0" aria-hidden="true">
-      <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615Z" />
-      <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18Z" />
-      <path fill="#FBBC05" d="M3.964 10.706A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.997 8.997 0 0 0 0 9c0 1.452.348 2.827.957 4.038l3.007-2.332Z" />
-      <path fill="#EA4335" d="M9 3.582c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.962L3.964 7.294C4.672 5.168 6.656 3.582 9 3.582Z" />
+      <path
+        fill="#4285F4"
+        d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615Z"
+      />
+      <path
+        fill="#34A853"
+        d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M3.964 10.706A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.997 8.997 0 0 0 0 9c0 1.452.348 2.827.957 4.038l3.007-2.332Z"
+      />
+      <path
+        fill="#EA4335"
+        d="M9 3.582c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.962L3.964 7.294C4.672 5.168 6.656 3.582 9 3.582Z"
+      />
     </svg>
   );
 }

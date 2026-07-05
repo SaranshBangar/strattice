@@ -7,12 +7,18 @@ export const revalidate = 0;
 export async function GET(req: Request) {
   const action = new URL(req.url).searchParams.get("action");
   if (action !== "buy" && action !== "sell") {
-    return NextResponse.json({ error: "action must be 'buy' or 'sell'" }, { status: 400 });
+    return NextResponse.json(
+      { error: "action must be 'buy' or 'sell'" },
+      { status: 400 },
+    );
   }
   const base = process.env.BOT_API_URL;
   const token = process.env.BOT_API_TOKEN;
   if (!base || !token) {
-    return NextResponse.json({ error: "BOT_API_URL/TOKEN not set" }, { status: 500 });
+    return NextResponse.json(
+      { error: "BOT_API_URL/TOKEN not set" },
+      { status: 500 },
+    );
   }
   try {
     const r = await fetch(`${base}/api/signals?action=${action}`, {

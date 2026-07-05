@@ -24,16 +24,27 @@ export function Select({
   size?: "sm" | "md";
 }) {
   const [open, setOpen] = useState(false);
-  const [active, setActive] = useState(() => Math.max(0, options.findIndex((o) => o.value === value)));
+  const [active, setActive] = useState(() =>
+    Math.max(
+      0,
+      options.findIndex((o) => o.value === value),
+    ),
+  );
   const ref = useRef<HTMLDivElement>(null);
   const listId = useId();
   const current = options.find((o) => o.value === value) ?? options[0];
 
   useEffect(() => {
     if (!open) return;
-    setActive(Math.max(0, options.findIndex((o) => o.value === value)));
+    setActive(
+      Math.max(
+        0,
+        options.findIndex((o) => o.value === value),
+      ),
+    );
     const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
     };
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
@@ -53,10 +64,19 @@ export function Select({
       }
       return;
     }
-    if (e.key === "Escape") { e.preventDefault(); setOpen(false); }
-    else if (e.key === "ArrowDown") { e.preventDefault(); setActive((i) => Math.min(options.length - 1, i + 1)); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); setActive((i) => Math.max(0, i - 1)); }
-    else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(active); }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      setOpen(false);
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActive((i) => Math.min(options.length - 1, i + 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActive((i) => Math.max(0, i - 1));
+    } else if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      pick(active);
+    }
   }
 
   const pad = size === "sm" ? "px-2.5 py-1.5 text-xs" : "px-3 py-2 text-sm";
@@ -79,8 +99,23 @@ export function Select({
         ].join(" ")}
       >
         <span className="truncate">{current?.label}</span>
-        <svg viewBox="0 0 20 20" className={["shrink-0 text-muted transition-transform", size === "sm" ? "h-3.5 w-3.5" : "h-4 w-4", open ? "rotate-180" : ""].join(" ")} fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" d="m5 7.5 5 5 5-5" />
+        <svg
+          viewBox="0 0 20 20"
+          className={[
+            "shrink-0 text-muted transition-transform",
+            size === "sm" ? "h-3.5 w-3.5" : "h-4 w-4",
+            open ? "rotate-180" : "",
+          ].join(" ")}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          aria-hidden="true"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="m5 7.5 5 5 5-5"
+          />
         </svg>
       </button>
 
@@ -106,8 +141,17 @@ export function Select({
               >
                 <span className="flex-1 truncate">{o.label}</span>
                 {selected && (
-                  <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 shrink-0 text-accent" fill="currentColor" aria-hidden="true">
-                    <path fillRule="evenodd" d="M16.7 5.3a1 1 0 0 1 0 1.4l-7.5 7.5a1 1 0 0 1-1.4 0l-3.5-3.5a1 1 0 1 1 1.4-1.4l2.8 2.79 6.8-6.79a1 1 0 0 1 1.4 0Z" clipRule="evenodd" />
+                  <svg
+                    viewBox="0 0 20 20"
+                    className="h-3.5 w-3.5 shrink-0 text-accent"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M16.7 5.3a1 1 0 0 1 0 1.4l-7.5 7.5a1 1 0 0 1-1.4 0l-3.5-3.5a1 1 0 1 1 1.4-1.4l2.8 2.79 6.8-6.79a1 1 0 0 1 1.4 0Z"
+                      clipRule="evenodd"
+                    />
                   </svg>
                 )}
               </li>

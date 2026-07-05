@@ -65,6 +65,17 @@ TEMPLATE_DEFAULTS: dict[str, dict] = {
                    "max_chase": 0.02, "min_atr_frac": 0.005,
                    "regime_period": 96, "expected_move_pct": 0.03},
     },
+    # EXPERIMENTAL: Hugging Face Chronos forecast (bot/strategies/hf_forecast.py).
+    # Needs `pip install chronos-forecasting torch` on the runner; without them the
+    # strategy logs once and HOLDs forever (never crashes the engine). Tight stop,
+    # take-profit and time-stop because model edge is unproven on crypto.
+    "hf_forecast": {
+        "market": "I-BTC_INR",
+        "stop_loss_pct": 0.03, "take_profit_pct": 0.04, "chandelier_k": 0.0,
+        "atr_period": 16, "max_hold_bars": 32,
+        "params": {"model": "amazon/chronos-bolt-tiny", "context": 384, "horizon": 8,
+                   "min_forecast_pct": 1.0, "regime_period": 192, "expected_move_pct": 0.04},
+    },
     # User-built rule strategies (bot/strategies/custom.py). The rule JSON travels in the
     # row's params; exits come from the def's "exits" (clamped in _strategy_spec). These
     # baseline exits apply only when the def carries none.

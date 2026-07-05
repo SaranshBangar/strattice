@@ -8,7 +8,10 @@ export async function GET() {
   const base = process.env.BOT_API_URL; // e.g. https://vps.example.com:8787
   const token = process.env.BOT_API_TOKEN;
   if (!base || !token) {
-    return NextResponse.json({ error: "BOT_API_URL/TOKEN not set" }, { status: 500 });
+    return NextResponse.json(
+      { error: "BOT_API_URL/TOKEN not set" },
+      { status: 500 },
+    );
   }
   try {
     const r = await fetch(`${base}/api/status`, {

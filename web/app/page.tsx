@@ -4,14 +4,44 @@ import MarketChart from "../components/MarketChart";
 
 type Strat = { name: string; market: string; enabled: boolean };
 type Pos = { strategy: string; market: string; qty: number; avg_price: number };
-type Trade = { ts: string; market: string; side: string; qty: number; price: number; status: string; dry_run: number; realized_pnl: number };
-type Signal = { ts: string; strategy: string; market: string; action: string; price: number; meta: string };
+type Trade = {
+  ts: string;
+  market: string;
+  side: string;
+  qty: number;
+  price: number;
+  status: string;
+  dry_run: number;
+  realized_pnl: number;
+};
+type Signal = {
+  ts: string;
+  strategy: string;
+  market: string;
+  action: string;
+  price: number;
+  meta: string;
+};
 type Status = {
-  mode: string; quote: string; inr_per_usdt: number | null; equity_basis: string; kill_switch: boolean;
-  equity: number; free: number; trades_today: number; max_trades_per_day: number;
-  realized_today: number; loss_limit: number; tds_today: number;
-  capital_at_risk: number; cap_ceiling: number; total_realized: number;
-  strategies: Strat[]; positions: Pos[]; trades: Trade[]; signals: Signal[];
+  mode: string;
+  quote: string;
+  inr_per_usdt: number | null;
+  equity_basis: string;
+  kill_switch: boolean;
+  equity: number;
+  free: number;
+  trades_today: number;
+  max_trades_per_day: number;
+  realized_today: number;
+  loss_limit: number;
+  tds_today: number;
+  capital_at_risk: number;
+  cap_ceiling: number;
+  total_realized: number;
+  strategies: Strat[];
+  positions: Pos[];
+  trades: Trade[];
+  signals: Signal[];
 };
 
 const inr = (n: number) =>
@@ -21,15 +51,20 @@ const mkt = (m: string) => m.replace("I-", "").replace("_INR", "");
 const ts = (t: string) =>
   new Date(t).toLocaleString("en-IN", {
     timeZone: "Asia/Kolkata",
-    day: "2-digit", month: "short",
-    hour: "2-digit", minute: "2-digit", hour12: true,
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
   });
 
 export default function Dashboard() {
   const [s, setS] = useState<Status | null>(null);
   const [err, setErr] = useState("");
   const [prices, setPrices] = useState<Record<string, number>>({});
-  const [toasts, setToasts] = useState<{ id: number; msg: string; kind: string }[]>([]);
+  const [toasts, setToasts] = useState<
+    { id: number; msg: string; kind: string }[]
+  >([]);
   const [busy, setBusy] = useState(false);
   const [lastAt, setLastAt] = useState<Date | null>(null);
   // Track last-seen counts to spot new trades/positions between polls (skip first load).
@@ -54,18 +89,27 @@ export default function Dashboard() {
       if (seen.current) {
         if (data.trades.length > seen.current.trades) {
           const t = data.trades[0];
-          toast(`Trade executed: ${t.side.toUpperCase()} ${mkt(t.market)}`, "good");
+          toast(
+            `Trade executed: ${t.side.toUpperCase()} ${mkt(t.market)}`,
+            "good",
+          );
         }
-        if (data.positions.length > seen.current.positions) toast("Position opened", "good");
+        if (data.positions.length > seen.current.positions)
+          toast("Position opened", "good");
       }
-      seen.current = { trades: data.trades.length, positions: data.positions.length };
+      seen.current = {
+        trades: data.trades.length,
+        positions: data.positions.length,
+      };
       // fetch last price per held market for unrealized P&L
       const held = [...new Set(data.positions.map((p) => p.market))];
       const entries = await Promise.all(
         held.map(async (m) => {
-          const c = await fetch(`/api/candles?pair=${m}&interval=15m&limit=1`).then((r) => r.json());
+          const c = await fetch(
+            `/api/candles?pair=${m}&interval=15m&limit=1`,
+          ).then((r) => r.json());
           return [m, Array.isArray(c) && c[0] ? c[0].close : 0] as const;
-        })
+        }),
       );
       setPrices(Object.fromEntries(entries));
     } catch (e: any) {
@@ -79,7 +123,14 @@ export default function Dashboard() {
   // /api/status re-reads config.yaml each poll, so the next load() confirms server truth.
   async function toggle(name: string, enabled: boolean) {
     setS((cur) =>
-      cur ? { ...cur, strategies: cur.strategies.map((g) => (g.name === name ? { ...g, enabled } : g)) } : cur
+      cur
+        ? {
+            ...cur,
+            strategies: cur.strategies.map((g) =>
+              g.name === name ? { ...g, enabled } : g,
+            ),
+          }
+        : cur,
     );
     try {
       const r = await fetch("/api/strategy", {
@@ -88,11 +139,21 @@ export default function Dashboard() {
         body: JSON.stringify({ name, enabled }),
       });
       if (!r.ok) throw new Error((await r.json()).error ?? r.statusText);
-      toast(`${name} turned ${enabled ? "on" : "off"}`, enabled ? "good" : "bad");
+      toast(
+        `${name} turned ${enabled ? "on" : "off"}`,
+        enabled ? "good" : "bad",
+      );
     } catch (e: any) {
       setErr(`toggle ${name}: ${e.message ?? e}`);
       setS((cur) =>
-        cur ? { ...cur, strategies: cur.strategies.map((g) => (g.name === name ? { ...g, enabled: !enabled } : g)) } : cur
+        cur
+          ? {
+              ...cur,
+              strategies: cur.strategies.map((g) =>
+                g.name === name ? { ...g, enabled: !enabled } : g,
+              ),
+            }
+          : cur,
       );
     }
   }
@@ -116,13 +177,25 @@ export default function Dashboard() {
     <div className="wrap">
       <header className="topbar">
         <h1>Dashboard</h1>
-        {s && <span className={`pill ${s.mode.toLowerCase().includes("live") ? "live" : "off"}`}>{s.mode}</span>}
+        {s && (
+          <span
+            className={`pill ${s.mode.toLowerCase().includes("live") ? "live" : "off"}`}
+          >
+            {s.mode}
+          </span>
+        )}
         {s?.kill_switch && <span className="pill off">KILL</span>}
         <div className="top-meta">
           {lastAt && !err && (
             <span className="updated">
               <span className="dot ok" aria-hidden="true" />
-              {lastAt.toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}
+              {lastAt.toLocaleTimeString("en-IN", {
+                timeZone: "Asia/Kolkata",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                hour12: false,
+              })}
             </span>
           )}
           {err && (
@@ -131,8 +204,22 @@ export default function Dashboard() {
               offline
             </span>
           )}
-          <button className={`refresh ${busy ? "busy" : ""}`} onClick={load} aria-label="Refresh" disabled={busy}>
-            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+          <button
+            className={`refresh ${busy ? "busy" : ""}`}
+            onClick={load}
+            aria-label="Refresh"
+            disabled={busy}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="17"
+              height="17"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              aria-hidden="true"
+            >
               <path d="M21 12a9 9 0 1 1-2.64-6.36" />
               <path d="M21 3v6h-6" />
             </svg>
@@ -140,7 +227,11 @@ export default function Dashboard() {
         </div>
       </header>
 
-      {err && <div className="card red" style={{ marginTop: 10 }}>{err}</div>}
+      {err && (
+        <div className="card red" style={{ marginTop: 10 }}>
+          {err}
+        </div>
+      )}
       {!s && !err && <p className="center muted">loading…</p>}
 
       {s && (
@@ -152,30 +243,49 @@ export default function Dashboard() {
               <span className="v">{inr(s.equity)}</span>
               <span className="sub">free {inr(s.free)}</span>
             </div>
-            <Stat l="Today" v={inr(s.realized_today)} cls={s.realized_today >= 0 ? "green" : "red"} />
-            <Stat l="Total P&L" v={inr(s.total_realized)} cls={s.total_realized >= 0 ? "green" : "red"} />
+            <Stat
+              l="Today"
+              v={inr(s.realized_today)}
+              cls={s.realized_today >= 0 ? "green" : "red"}
+            />
+            <Stat
+              l="Total P&L"
+              v={inr(s.total_realized)}
+              cls={s.total_realized >= 0 ? "green" : "red"}
+            />
           </div>
 
           {/* Chart — centerpiece */}
           <MarketChart />
 
-          <h2>Strategies <span className="count">{s.strategies?.filter((g) => g.enabled).length ?? 0}/{s.strategies?.length ?? 0} on</span></h2>
+          <h2>
+            Strategies{" "}
+            <span className="count">
+              {s.strategies?.filter((g) => g.enabled).length ?? 0}/
+              {s.strategies?.length ?? 0} on
+            </span>
+          </h2>
           <Strategies s={s} toggle={toggle} />
 
           <h2>
             Positions <span className="count">{s.positions.length}</span>
             {havePrices && unrealized !== 0 && (
               <span className={`chip ${unrealized >= 0 ? "green" : "red"}`}>
-                {unrealized >= 0 ? "+" : ""}{inr(unrealized)} unrealized
+                {unrealized >= 0 ? "+" : ""}
+                {inr(unrealized)} unrealized
               </span>
             )}
           </h2>
           <Positions s={s} prices={prices} />
 
-          <h2>Trades <span className="count">{s.trades.length}</span></h2>
+          <h2>
+            Trades <span className="count">{s.trades.length}</span>
+          </h2>
           <Trades s={s} />
 
-          <h2>Signals <span className="count">{s.signals?.length ?? 0}</span></h2>
+          <h2>
+            Signals <span className="count">{s.signals?.length ?? 0}</span>
+          </h2>
           <Signals s={s} />
 
           {/* Risk & limits — how much headroom is left on each guardrail */}
@@ -202,7 +312,9 @@ export default function Dashboard() {
             <div className="grid" style={{ marginTop: 14 }}>
               <Stat l="TDS today" v={inr(s.tds_today)} />
               <Stat l="Quote" v={s.quote} />
-              {s.inr_per_usdt != null && <Stat l="INR / USDT" v={inr(s.inr_per_usdt)} />}
+              {s.inr_per_usdt != null && (
+                <Stat l="INR / USDT" v={inr(s.inr_per_usdt)} />
+              )}
             </div>
             <div className="row" style={{ marginTop: 8 }}>
               <span className="sub">Equity basis</span>
@@ -210,7 +322,9 @@ export default function Dashboard() {
             </div>
             <div className="row" style={{ borderBottom: 0 }}>
               <span className="sub">P&amp;L basis</span>
-              <span className="sub">net of fees + GST · TDS tracked separately</span>
+              <span className="sub">
+                net of fees + GST · TDS tracked separately
+              </span>
             </div>
           </div>
         </>
@@ -218,7 +332,9 @@ export default function Dashboard() {
 
       <div className="toasts">
         {toasts.map((t) => (
-          <div key={t.id} className={`toast ${t.kind}`}>{t.msg}</div>
+          <div key={t.id} className={`toast ${t.kind}`}>
+            {t.msg}
+          </div>
         ))}
       </div>
     </div>
@@ -230,19 +346,33 @@ export default function Dashboard() {
 // field (status API doesn't return it); add a `module` to the API if names ever drift.
 function describe(name: string): string {
   const n = name.toLowerCase();
-  if (n.startsWith("ma")) return "Moving-average crossover. Buys when a fast SMA crosses above a slow SMA and rides the trend; a hard stop and ATR trail handle the exit.";
-  if (n.startsWith("rsi")) return "RSI mean-reversion. Buys oversold dips (RSI below threshold) inside an uptrend, expecting a bounce back toward the average; time-stop bails a stalled trade.";
-  if (n.startsWith("breakout") || n.startsWith("mom")) return "Momentum breakout. Buys when price closes above its recent N-bar high (Donchian channel) and trails the move.";
-  if (n.startsWith("vol")) return "Volatility expansion. Enters when the bar's range expands past the expected move, catching fresh bursts of momentum.";
+  if (n.startsWith("ma"))
+    return "Moving-average crossover. Buys when a fast SMA crosses above a slow SMA and rides the trend; a hard stop and ATR trail handle the exit.";
+  if (n.startsWith("rsi"))
+    return "RSI mean-reversion. Buys oversold dips (RSI below threshold) inside an uptrend, expecting a bounce back toward the average; time-stop bails a stalled trade.";
+  if (n.startsWith("breakout") || n.startsWith("mom"))
+    return "Momentum breakout. Buys when price closes above its recent N-bar high (Donchian channel) and trails the move.";
+  if (n.startsWith("vol"))
+    return "Volatility expansion. Enters when the bar's range expands past the expected move, catching fresh bursts of momentum.";
   return "Algorithmic, entry-only strategy. Exits are handled by the shared stop-loss / take-profit / trail layer.";
 }
 
-function Strategies({ s, toggle }: { s: Status; toggle: (name: string, enabled: boolean) => void }) {
+function Strategies({
+  s,
+  toggle,
+}: {
+  s: Status;
+  toggle: (name: string, enabled: boolean) => void;
+}) {
   const held = new Set(s.positions.map((p) => p.strategy));
   const rows = s.strategies ?? [];
   return (
     <div className="card">
-      {rows.length === 0 && <p className="center muted" style={{ padding: 14 }}>No strategies</p>}
+      {rows.length === 0 && (
+        <p className="center muted" style={{ padding: 14 }}>
+          No strategies
+        </p>
+      )}
       {rows.map((g) => {
         const exitOnly = !g.enabled && held.has(g.name); // disabled but still managing an open position
         return (
@@ -252,7 +382,9 @@ function Strategies({ s, toggle }: { s: Status; toggle: (name: string, enabled: 
                 <div>{g.name}</div>
                 <div className="sub">
                   {mkt(g.market)}
-                  {exitOnly && <span className="red"> · managing exit until flat</span>}
+                  {exitOnly && (
+                    <span className="red"> · managing exit until flat</span>
+                  )}
                 </div>
               </div>
               {/* stop summary toggling when the switch is clicked */}
@@ -273,10 +405,20 @@ function Strategies({ s, toggle }: { s: Status; toggle: (name: string, enabled: 
   );
 }
 
-function Positions({ s, prices }: { s: Status; prices: Record<string, number> }) {
+function Positions({
+  s,
+  prices,
+}: {
+  s: Status;
+  prices: Record<string, number>;
+}) {
   return (
     <div className="card">
-      {s.positions.length === 0 && <p className="center muted" style={{ padding: 14 }}>No open positions</p>}
+      {s.positions.length === 0 && (
+        <p className="center muted" style={{ padding: 14 }}>
+          No open positions
+        </p>
+      )}
       {s.positions.map((p, i) => {
         const px = prices[p.market];
         const pnl = px ? (px - p.avg_price) * p.qty : null;
@@ -285,15 +427,23 @@ function Positions({ s, prices }: { s: Status; prices: Record<string, number> })
           <div className="row" key={i}>
             <div>
               <div>{mkt(p.market)}</div>
-              <div className="sub">{p.strategy} · {p.qty} @ {inr(p.avg_price)}</div>
+              <div className="sub">
+                {p.strategy} · {p.qty} @ {inr(p.avg_price)}
+              </div>
             </div>
             <div style={{ textAlign: "right" }}>
               {pnl === null ? (
                 <span className="muted">—</span>
               ) : (
                 <>
-                  <div className={`mono ${pnl >= 0 ? "green" : "red"}`}>{pnl >= 0 ? "+" : ""}{inr(pnl)}</div>
-                  <div className={`sub ${pct! >= 0 ? "green" : "red"}`}>{pct! >= 0 ? "+" : ""}{pct!.toFixed(2)}%</div>
+                  <div className={`mono ${pnl >= 0 ? "green" : "red"}`}>
+                    {pnl >= 0 ? "+" : ""}
+                    {inr(pnl)}
+                  </div>
+                  <div className={`sub ${pct! >= 0 ? "green" : "red"}`}>
+                    {pct! >= 0 ? "+" : ""}
+                    {pct!.toFixed(2)}%
+                  </div>
                 </>
               )}
             </div>
@@ -307,22 +457,31 @@ function Positions({ s, prices }: { s: Status; prices: Record<string, number> })
 function Trades({ s }: { s: Status }) {
   return (
     <div className="card">
-      {s.trades.length === 0 && <p className="center muted" style={{ padding: 14 }}>No trades yet</p>}
+      {s.trades.length === 0 && (
+        <p className="center muted" style={{ padding: 14 }}>
+          No trades yet
+        </p>
+      )}
       {s.trades.map((t, i) => (
         <div className="row" key={i}>
           <div>
             <div>
-              <span className={t.side === "buy" ? "green" : "red"}>{t.side.toUpperCase()}</span>{" "}
+              <span className={t.side === "buy" ? "green" : "red"}>
+                {t.side.toUpperCase()}
+              </span>{" "}
               {mkt(t.market)}
               {t.dry_run ? <span className="sub"> (dry)</span> : null}
             </div>
             <div className="sub">{ts(t.ts)}</div>
           </div>
           <div style={{ textAlign: "right" }}>
-            <div className="mono">{t.qty} @ {inr(t.price)}</div>
+            <div className="mono">
+              {t.qty} @ {inr(t.price)}
+            </div>
             {t.realized_pnl !== 0 && (
               <div className={`sub ${t.realized_pnl >= 0 ? "green" : "red"}`}>
-                {t.realized_pnl >= 0 ? "+" : ""}{inr(t.realized_pnl)}
+                {t.realized_pnl >= 0 ? "+" : ""}
+                {inr(t.realized_pnl)}
               </div>
             )}
           </div>
@@ -364,11 +523,16 @@ function Signals({ s }: { s: Status }) {
     const load = () =>
       fetch(`/api/signals?action=${filter}`)
         .then((r) => r.json())
-        .then((d) => live && setFiltered(Array.isArray(d.signals) ? d.signals : []))
+        .then(
+          (d) => live && setFiltered(Array.isArray(d.signals) ? d.signals : []),
+        )
         .catch(() => {});
     load();
     const id = setInterval(load, 10000);
-    return () => { live = false; clearInterval(id); };
+    return () => {
+      live = false;
+      clearInterval(id);
+    };
   }, [filter]);
 
   useEffect(() => setPage(0), [filter]);
@@ -379,13 +543,19 @@ function Signals({ s }: { s: Status }) {
     <div className="card">
       <div className="tabs">
         {(["all", "buy", "sell"] as SignalFilter[]).map((f) => (
-          <button key={f} className={`tab ${f === filter ? "active" : ""}`} onClick={() => setFilter(f)}>
+          <button
+            key={f}
+            className={`tab ${f === filter ? "active" : ""}`}
+            onClick={() => setFilter(f)}
+          >
             {f === "all" ? "All" : f === "buy" ? "Buy" : "Sell"}
           </button>
         ))}
       </div>
       {rows.length === 0 ? (
-        <p className="center muted" style={{ padding: 14 }}>No signals yet</p>
+        <p className="center muted" style={{ padding: 14 }}>
+          No signals yet
+        </p>
       ) : (
         <SignalsTable rows={rows} page={page} setPage={setPage} />
       )}
@@ -393,7 +563,15 @@ function Signals({ s }: { s: Status }) {
   );
 }
 
-function SignalsTable({ rows, page, setPage }: { rows: Signal[]; page: number; setPage: (p: number) => void }) {
+function SignalsTable({
+  rows,
+  page,
+  setPage,
+}: {
+  rows: Signal[];
+  page: number;
+  setPage: (p: number) => void;
+}) {
   const pages = Math.ceil(rows.length / PAGE);
   const p = Math.min(page, pages - 1); // clamp if list shrank since last render
   const slice = rows.slice(p * PAGE, p * PAGE + PAGE);
@@ -402,24 +580,48 @@ function SignalsTable({ rows, page, setPage }: { rows: Signal[]; page: number; s
     <>
       <table className="tbl">
         <thead>
-          <tr><th>Date / Time</th><th>Coin</th><th style={{ textAlign: "right" }}>Price</th><th style={{ textAlign: "right" }}>Decision</th></tr>
+          <tr>
+            <th>Date / Time</th>
+            <th>Coin</th>
+            <th style={{ textAlign: "right" }}>Price</th>
+            <th style={{ textAlign: "right" }}>Decision</th>
+          </tr>
         </thead>
         <tbody>
           {slice.map((g, i) => (
             <tr key={i} className={rowCls(g.action)}>
-              <td className={cls(g.action)}>{ts(g.ts)}<div className="sub">{g.strategy}</div></td>
+              <td className={cls(g.action)}>
+                {ts(g.ts)}
+                <div className="sub">{g.strategy}</div>
+              </td>
               <td className={cls(g.action)}>{mkt(g.market)}</td>
-              <td className={`mono ${cls(g.action)}`} style={{ textAlign: "right" }}>{inr(g.price)}</td>
-              <td className={cls(g.action)} style={{ textAlign: "right", fontWeight: 600 }}>{g.action.toUpperCase()}</td>
+              <td
+                className={`mono ${cls(g.action)}`}
+                style={{ textAlign: "right" }}
+              >
+                {inr(g.price)}
+              </td>
+              <td
+                className={cls(g.action)}
+                style={{ textAlign: "right", fontWeight: 600 }}
+              >
+                {g.action.toUpperCase()}
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
       {pages > 1 && (
         <div className="pager">
-          <button onClick={() => setPage(p - 1)} disabled={p === 0}>‹ Prev</button>
-          <span className="sub">Page {p + 1} / {pages}</span>
-          <button onClick={() => setPage(p + 1)} disabled={p >= pages - 1}>Next ›</button>
+          <button onClick={() => setPage(p - 1)} disabled={p === 0}>
+            ‹ Prev
+          </button>
+          <span className="sub">
+            Page {p + 1} / {pages}
+          </span>
+          <button onClick={() => setPage(p + 1)} disabled={p >= pages - 1}>
+            Next ›
+          </button>
         </div>
       )}
     </>
@@ -427,7 +629,17 @@ function SignalsTable({ rows, page, setPage }: { rows: Signal[]; page: number; s
 }
 
 // Guardrail usage bar: green with headroom, amber past 70%, red past 90%.
-function Meter({ label, used, cap, text }: { label: string; used: number; cap: number; text: string }) {
+function Meter({
+  label,
+  used,
+  cap,
+  text,
+}: {
+  label: string;
+  used: number;
+  cap: number;
+  text: string;
+}) {
   const frac = cap > 0 ? Math.min(1, used / cap) : 0;
   const tone = frac >= 0.9 ? "red" : frac >= 0.7 ? "yellow" : "green";
   return (
@@ -436,8 +648,18 @@ function Meter({ label, used, cap, text }: { label: string; used: number; cap: n
         <span className="l">{label}</span>
         <span className={`mono t ${tone}`}>{text}</span>
       </div>
-      <div className="meter-track" role="progressbar" aria-valuenow={Math.round(frac * 100)} aria-valuemin={0} aria-valuemax={100} aria-label={label}>
-        <div className={`meter-fill ${tone}`} style={{ width: `${Math.max(frac * 100, used > 0 ? 2 : 0)}%` }} />
+      <div
+        className="meter-track"
+        role="progressbar"
+        aria-valuenow={Math.round(frac * 100)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={label}
+      >
+        <div
+          className={`meter-fill ${tone}`}
+          style={{ width: `${Math.max(frac * 100, used > 0 ? 2 : 0)}%` }}
+        />
       </div>
     </div>
   );

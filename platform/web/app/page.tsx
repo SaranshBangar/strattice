@@ -1,4 +1,5 @@
 import { HeroCta } from "@/components/HeroCta";
+import { LiveChart } from "@/components/LiveChart";
 import { Reveal } from "@/components/Reveal";
 import { STRATEGY_META } from "@/lib/strategies";
 
@@ -21,27 +22,48 @@ const NUMBERS: [string, string][] = [
 ];
 
 const STEPS: [string, string][] = [
-  ["Link your keys", "Add a CoinDCX API key with trading on and withdrawals off. Stored encrypted; never shown back to anyone."],
-  ["Pick strategies", "Preview each template's entries and exits on live market data, tune the parameters, then add the ones you like."],
-  ["Let it run", "Bots trade on a schedule against your balance. Start in DRY_RUN, flip to live only when the numbers convince you."],
+  [
+    "Link your keys",
+    "Add a CoinDCX API key with trading on and withdrawals off. Stored encrypted; never shown back to anyone.",
+  ],
+  [
+    "Pick strategies",
+    "Preview each template's entries and exits on live market data, tune the parameters, then add the ones you like.",
+  ],
+  [
+    "Let it run",
+    "Bots trade on a schedule against your balance. Start in DRY_RUN, flip to live only when the numbers convince you.",
+  ],
 ];
 
 // The engine's order path, stage by stage. This mirrors what the code actually
 // does - signal, risk gate, executor, exchange - not marketing abstraction.
 const PIPELINE: [string, string, string[]][] = [
-  ["signal", "Each enabled strategy evaluates the latest candle and emits BUY, SELL or HOLD. Every decision is logged, including the boring ones.", []],
-  ["risk gate", "A blocked order is a normal outcome, not an error. Any breached limit stops the trade before it exists.", [
-    "position size cap",
-    "daily loss limit",
-    "trades-per-day cap",
-    "capital-at-risk ceiling",
-  ]],
-  ["executor", "One order path for everything. Idempotent order ids survive restarts; protective exits override the strategy's own signal.", [
-    "hard stop-loss",
-    "take-profit / ATR trail",
-    "DRY_RUN honored",
-  ]],
-  ["your exchange", "The order lands on your own CoinDCX account, placed with your key. Fills, P&L and TDS are persisted per trade.", []],
+  [
+    "signal",
+    "Each enabled strategy evaluates the latest candle and emits BUY, SELL or HOLD. Every decision is logged, including the boring ones.",
+    [],
+  ],
+  [
+    "risk gate",
+    "A blocked order is a normal outcome, not an error. Any breached limit stops the trade before it exists.",
+    [
+      "position size cap",
+      "daily loss limit",
+      "trades-per-day cap",
+      "capital-at-risk ceiling",
+    ],
+  ],
+  [
+    "executor",
+    "One order path for everything. Idempotent order ids survive restarts; protective exits override the strategy's own signal.",
+    ["hard stop-loss", "take-profit / ATR trail", "DRY_RUN honored"],
+  ],
+  [
+    "your exchange",
+    "The order lands on your own CoinDCX account, placed with your key. Fills, P&L and TDS are persisted per trade.",
+    [],
+  ],
 ];
 
 // One ₹10,000 round trip on an INR pair. These are the numbers most bots
@@ -55,12 +77,30 @@ const COST_ROWS: [string, string, string][] = [
 ];
 
 const FEATURES: [string, string][] = [
-  ["All 7 strategy templates", "Trend, momentum, mean-reversion, volatility and breakout systems - every template unlocked."],
-  ["Entry / exit previews", "Every strategy is simulated on real candles before you add it, with entries and exits marked on the chart."],
-  ["Build your own", "Compose entry rules from indicator blocks and backtest them across four history windows while you design."],
-  ["Full analytics dashboard", "Equity curve, drawdown, daily P&L, win rate and per-strategy breakdown - plus a pro view with technical metrics."],
-  ["Risk-managed executor", "Hard stops, take-profits, ATR trailing stops, daily loss limits and a kill switch on every strategy."],
-  ["DRY_RUN first", "Paper-trade any setup with realistic fills, fees and TDS before a single rupee goes live."],
+  [
+    "All 7 strategy templates",
+    "Trend, momentum, mean-reversion, volatility and breakout systems - every template unlocked.",
+  ],
+  [
+    "Entry / exit previews",
+    "Every strategy is simulated on real candles before you add it, with entries and exits marked on the chart.",
+  ],
+  [
+    "Build your own",
+    "Compose entry rules from indicator blocks and backtest them across four history windows while you design.",
+  ],
+  [
+    "Full analytics dashboard",
+    "Equity curve, drawdown, daily P&L, win rate and per-strategy breakdown - plus a pro view with technical metrics.",
+  ],
+  [
+    "Risk-managed executor",
+    "Hard stops, take-profits, ATR trailing stops, daily loss limits and a kill switch on every strategy.",
+  ],
+  [
+    "DRY_RUN first",
+    "Paper-trade any setup with realistic fills, fees and TDS before a single rupee goes live.",
+  ],
 ];
 
 const FAQ: [string, string][] = [
@@ -97,12 +137,13 @@ export default function Home() {
             Non-custodial · CoinDCX · Free during early access
           </div>
           <h1 className="mt-5 font-display text-4xl font-bold leading-[1.05] tracking-tight sm:text-5xl">
-            Algorithmic trading that runs on your <span className="text-accent">own</span> account.
+            Algorithmic trading that runs on your{" "}
+            <span className="text-accent">own</span> account.
           </h1>
           <p className="mt-5 max-w-lg text-lg text-muted">
-            Pick a strategy, see exactly where it would have entered and exited on real market
-            data, and let bots trade for you. Your funds never leave CoinDCX. We hold the keys
-            to run the strategies, nothing else.
+            Pick a strategy, see exactly where it would have entered and exited
+            on real market data, and let bots trade for you. Your funds never
+            leave CoinDCX. We hold the keys to run the strategies, nothing else.
           </p>
           <HeroCta />
           <p className="mt-4 font-mono text-[11px] uppercase tracking-wider text-faint">
@@ -116,7 +157,9 @@ export default function Home() {
             <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-faint">
               strategy_templates
             </span>
-            <span className="font-mono text-[11px] text-muted">{STRATS.length} shipped</span>
+            <span className="font-mono text-[11px] text-muted">
+              {STRATS.length} shipped
+            </span>
           </div>
           <ul className="boot">
             {STRATS.map(([name, market]) => (
@@ -134,18 +177,30 @@ export default function Home() {
             ))}
           </ul>
           <div className="flex items-center justify-between bg-white/[0.03] px-4 py-2.5 font-mono text-[11px] text-faint">
-            <span className="caret">exits: shared stop-loss / take-profit / ATR trail</span>
+            <span className="caret">
+              exits: shared stop-loss / take-profit / ATR trail
+            </span>
             <span className="text-accent">+ build your own</span>
           </div>
         </div>
       </section>
 
+      {/* Live tape - real trades streaming in, proof the market data is real */}
+      <Reveal>
+        <LiveChart />
+      </Reveal>
+
       {/* Numbers strip - four facts, no adjectives */}
       <Reveal stagger>
-        <section aria-label="Key numbers" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <section
+          aria-label="Key numbers"
+          className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+        >
           {NUMBERS.map(([n, body]) => (
             <div key={body} className="card px-5 py-4">
-              <div className="font-mono text-2xl font-semibold tnum tracking-tight text-fg">{n}</div>
+              <div className="font-mono text-2xl font-semibold tnum tracking-tight text-fg">
+                {n}
+              </div>
               <p className="mt-1 text-xs leading-relaxed text-muted">{body}</p>
             </div>
           ))}
@@ -162,8 +217,12 @@ export default function Home() {
             {STEPS.map(([title, body], i) => (
               <li key={title} className="card p-5">
                 <span className="font-mono text-sm text-accent">0{i + 1}</span>
-                <h3 className="mt-3 font-display text-base font-semibold tracking-tight text-fg">{title}</h3>
-                <p className="mt-1.5 text-sm leading-relaxed text-muted">{body}</p>
+                <h3 className="mt-3 font-display text-base font-semibold tracking-tight text-fg">
+                  {title}
+                </h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-muted">
+                  {body}
+                </p>
               </li>
             ))}
           </ol>
@@ -177,7 +236,8 @@ export default function Home() {
             <div>
               <h2 className="eyebrow">The execution path</h2>
               <p className="mt-2 max-w-2xl font-display text-2xl font-semibold tracking-tight">
-                Four stages between a signal and your exchange. Risk sits in the middle, always.
+                Four stages between a signal and your exchange. Risk sits in the
+                middle, always.
               </p>
             </div>
             <span className="font-mono text-[11px] uppercase tracking-wider text-faint">
@@ -190,16 +250,28 @@ export default function Home() {
             {PIPELINE.map(([title, body, checks], i) => (
               <li key={title} className="card relative p-5">
                 <div className="flex items-center justify-between">
-                  <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-accent">{title}</span>
+                  <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-accent">
+                    {title}
+                  </span>
                   {i < PIPELINE.length - 1 && (
-                    <span aria-hidden="true" className="font-mono text-sm text-faint">→</span>
+                    <span
+                      aria-hidden="true"
+                      className="font-mono text-sm text-faint"
+                    >
+                      →
+                    </span>
                   )}
                 </div>
-                <p className="mt-2.5 text-sm leading-relaxed text-muted">{body}</p>
+                <p className="mt-2.5 text-sm leading-relaxed text-muted">
+                  {body}
+                </p>
                 {checks.length > 0 && (
                   <ul className="mt-3 space-y-1 rounded-lg bg-inset/70 p-3">
                     {checks.map((c) => (
-                      <li key={c} className="flex items-center gap-2 font-mono text-[11px] text-dim">
+                      <li
+                        key={c}
+                        className="flex items-center gap-2 font-mono text-[11px] text-dim"
+                      >
                         <span className="h-1 w-1 shrink-0 bg-faint" />
                         {c}
                       </li>
@@ -213,25 +285,30 @@ export default function Home() {
       </section>
 
       {/* Costs - the honest section. Most bots pretend friction doesn't exist. */}
-      <section id="costs" className="scroll-mt-20 grid items-start gap-10 lg:grid-cols-[1fr_0.9fr]">
+      <section
+        id="costs"
+        className="scroll-mt-20 grid items-start gap-10 lg:grid-cols-[1fr_0.9fr]"
+      >
         <Reveal>
           <h2 className="eyebrow">Costs, modeled honestly</h2>
           <p className="mt-2 font-display text-2xl font-semibold tracking-tight">
-            Every round trip on an Indian exchange costs about 1.5% before you earn a rupee.
+            Every round trip on an Indian exchange costs about 1.5% before you
+            earn a rupee.
           </p>
           <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted">
-            Exchange fees on both legs, 18% GST on those fees, and 1% TDS on every sell. A
-            strategy that looks brilliant gross can be a slow bleed net. In our own multi-year
-            backtests, some fast configurations paid more in friction than their starting
-            capital. Frequency is the enemy: the more round trips, the more of your P&amp;L
-            friction eats.
+            Exchange fees on both legs, 18% GST on those fees, and 1% TDS on
+            every sell. A strategy that looks brilliant gross can be a slow
+            bleed net. In our own multi-year backtests, some fast configurations
+            paid more in friction than their starting capital. Frequency is the
+            enemy: the more round trips, the more of your P&amp;L friction eats.
           </p>
           <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted">
             So every preview, backtest and DRY_RUN fill on Strattice is computed{" "}
-            <span className="text-fg">net of the full friction stack</span>, and the engine
-            trades 15-minute bars, so this cost math matters here too. That is exactly why
-            DRY_RUN is the default: watch fees as a share of P&amp;L in paper mode, and only go
-            live if the numbers still work after friction.
+            <span className="text-fg">net of the full friction stack</span>, and
+            the engine trades 15-minute bars, so this cost math matters here
+            too. That is exactly why DRY_RUN is the default: watch fees as a
+            share of P&amp;L in paper mode, and only go live if the numbers
+            still work after friction.
           </p>
         </Reveal>
         <Reveal>
@@ -246,20 +323,31 @@ export default function Home() {
               <tbody>
                 {COST_ROWS.map(([leg, what, amt], i) => (
                   <tr key={i} className="odd:bg-white/[0.015]">
-                    <td className="w-14 px-4 py-2.5 text-[10px] uppercase tracking-wider text-faint">{leg}</td>
+                    <td className="w-14 px-4 py-2.5 text-[10px] uppercase tracking-wider text-faint">
+                      {leg}
+                    </td>
                     <td className="py-2.5 pr-4 text-muted">{what}</td>
-                    <td className="tnum py-2.5 pr-4 text-right text-dim">₹{amt}</td>
+                    <td className="tnum py-2.5 pr-4 text-right text-dim">
+                      ₹{amt}
+                    </td>
                   </tr>
                 ))}
                 <tr className="bg-loss/[0.06]">
-                  <td className="px-4 py-3 text-[10px] uppercase tracking-wider text-faint">total</td>
-                  <td className="py-3 pr-4 font-medium text-fg">friction paid</td>
-                  <td className="tnum py-3 pr-4 text-right font-semibold text-loss">₹147.20</td>
+                  <td className="px-4 py-3 text-[10px] uppercase tracking-wider text-faint">
+                    total
+                  </td>
+                  <td className="py-3 pr-4 font-medium text-fg">
+                    friction paid
+                  </td>
+                  <td className="tnum py-3 pr-4 text-right font-semibold text-loss">
+                    ₹147.20
+                  </td>
                 </tr>
               </tbody>
             </table>
             <div className="bg-white/[0.03] px-4 py-2.5 font-mono text-[11px] text-faint">
-              ≈ 1.47% of notional. simulations here start from this number, not from zero.
+              ≈ 1.47% of notional. simulations here start from this number, not
+              from zero.
             </div>
           </div>
         </Reveal>
@@ -274,7 +362,8 @@ export default function Home() {
                 Free while we&rsquo;re in early access. Everything included.
               </h2>
               <p className="mt-1 text-sm text-muted">
-                No plans, no card, no trading fees from us. Your exchange fees apply as usual.
+                No plans, no card, no trading fees from us. Your exchange fees
+                apply as usual.
               </p>
             </div>
             <span className="rounded-full bg-gain/10 px-3.5 py-1 font-mono text-xs uppercase tracking-wider text-gain">
@@ -287,10 +376,15 @@ export default function Home() {
             {FEATURES.map(([title, body]) => (
               <div key={title} className="card p-5">
                 <h3 className="flex items-center gap-2.5 font-display text-base font-semibold tracking-tight text-fg">
-                  <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 bg-accent" />
+                  <span
+                    aria-hidden="true"
+                    className="h-1.5 w-1.5 shrink-0 bg-accent"
+                  />
                   {title}
                 </h3>
-                <p className="mt-1.5 text-sm leading-relaxed text-muted">{body}</p>
+                <p className="mt-1.5 text-sm leading-relaxed text-muted">
+                  {body}
+                </p>
               </div>
             ))}
           </div>
@@ -298,15 +392,18 @@ export default function Home() {
       </section>
 
       {/* FAQ - the questions a skeptical trader actually asks */}
-      <section id="faq" className="scroll-mt-20 grid gap-10 lg:grid-cols-[0.8fr_1.2fr]">
+      <section
+        id="faq"
+        className="scroll-mt-20 grid gap-10 lg:grid-cols-[0.8fr_1.2fr]"
+      >
         <Reveal>
           <h2 className="eyebrow">Straight answers</h2>
           <p className="mt-2 font-display text-2xl font-semibold tracking-tight">
             The questions a skeptical trader should ask.
           </p>
           <p className="mt-3 max-w-sm text-sm leading-relaxed text-muted">
-            If yours isn&rsquo;t here, the footer disclaimer is the fine print. There is no other
-            fine print.
+            If yours isn&rsquo;t here, the footer disclaimer is the fine print.
+            There is no other fine print.
           </p>
         </Reveal>
         <Reveal stagger>
@@ -315,9 +412,16 @@ export default function Home() {
               <details key={question} className="card group px-5 py-4">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-medium text-fg [&::-webkit-details-marker]:hidden">
                   {question}
-                  <span aria-hidden="true" className="shrink-0 font-mono text-faint transition-transform group-open:rotate-90">▸</span>
+                  <span
+                    aria-hidden="true"
+                    className="shrink-0 font-mono text-faint transition-transform group-open:rotate-90"
+                  >
+                    ▸
+                  </span>
                 </summary>
-                <p className="mt-2.5 max-w-xl text-sm leading-relaxed text-muted">{answer}</p>
+                <p className="mt-2.5 max-w-xl text-sm leading-relaxed text-muted">
+                  {answer}
+                </p>
               </details>
             ))}
           </div>
@@ -337,8 +441,8 @@ export default function Home() {
               Watch a strategy trade your account without spending a rupee.
             </h2>
             <p className="mx-auto mt-3 max-w-md text-sm text-muted">
-              Link a key, add a template, and let the paper trades convince you, or not. Either
-              answer costs nothing.
+              Link a key, add a template, and let the paper trades convince you,
+              or not. Either answer costs nothing.
             </p>
             <div className="flex justify-center">
               <HeroCta />

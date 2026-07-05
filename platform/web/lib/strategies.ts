@@ -11,16 +11,21 @@ export interface StrategyMeta {
   exit: string; // how the engine's protective layer gets it out
   style: string; // holding style, one line
   explain: string[]; // long-form: how it works, why it works, when it struggles
+  /** Rendered as a prominent risk callout wherever the template is shown. */
+  warning?: string;
 }
 
 export const STRATEGY_META: Record<Template, StrategyMeta> = {
   ma_crossover: {
     label: "MA Crossover",
     kind: "TREND",
-    blurb: "Buys when a fast moving average crosses above a slow one; the trail takes care of the exit.",
-    entry: "Fast SMA(32) crosses above slow SMA(96) with the gap ≥ 0.5×ATR, the slow MA rising, and price above its 192-bar regime SMA.",
+    blurb:
+      "Buys when a fast moving average crosses above a slow one; the trail takes care of the exit.",
+    entry:
+      "Fast SMA(32) crosses above slow SMA(96) with the gap ≥ 0.5×ATR, the slow MA rising, and price above its 192-bar regime SMA.",
     exit: "ATR chandelier trail (3×ATR off the peak) plus a 4% hard stop. No take-profit - winners are left to run.",
-    style: "Patient trend-follower. Few entries; holds winners for days to weeks.",
+    style:
+      "Patient trend-follower. Few entries; holds winners for days to weeks.",
     explain: [
       "A moving average smooths price over a window: the 32-bar average reacts quickly, the 96-bar average slowly. When the fast average climbs above the slow one, recent prices are decisively higher than older prices - the classic definition of a new uptrend.",
       "The naive version of this strategy gets destroyed by whipsaws: in sideways chop the averages cross back and forth and every crossing pays fees. This template kills the churn three ways - the fast average must clear the slow one by at least half an ATR (a real gap, not a graze), the slow average itself must be rising, and price must sit above its long regime average so you only ever buy into strength.",
@@ -32,7 +37,8 @@ export const STRATEGY_META: Record<Template, StrategyMeta> = {
     label: "RSI Reversion",
     kind: "MEAN-REV",
     blurb: "Buys deeply oversold dips in an uptrend and sells the bounce.",
-    entry: "RSI(14) drops below 22 while price is above its 192-bar regime SMA, then a candle closes back above the prior bar's high (confirmation).",
+    entry:
+      "RSI(14) drops below 22 while price is above its 192-bar regime SMA, then a candle closes back above the prior bar's high (confirmation).",
     exit: "3% take-profit, 3% hard stop, or a 64-bar time-stop - whichever comes first.",
     style: "Conservative dip-buyer. Small, frequent-ish mean-reversion trades.",
     explain: [
@@ -46,7 +52,8 @@ export const STRATEGY_META: Record<Template, StrategyMeta> = {
     label: "Momentum Breakout",
     kind: "MOMENTUM",
     blurb: "Buys fresh breakouts of the recent high on real volume.",
-    entry: "Close breaks the prior 32-bar high by ≥ 0.2% (but < 2% - no chasing) on ≥ 1.2× average volume, with ATR above its volatility floor.",
+    entry:
+      "Close breaks the prior 32-bar high by ≥ 0.2% (but < 2% - no chasing) on ≥ 1.2× average volume, with ATR above its volatility floor.",
     exit: "ATR chandelier trail (3×ATR off the peak) plus a 4% hard stop. No take-profit.",
     style: "Breakout rider. Waits for participation, then follows the move.",
     explain: [
@@ -59,10 +66,13 @@ export const STRATEGY_META: Record<Template, StrategyMeta> = {
   vol_expansion: {
     label: "Volatility Expansion",
     kind: "VOLATILITY",
-    blurb: "Enters when volatility pops out of a quiet range at a new local high.",
-    entry: "8-bar ATR expands to ≥ 1.6× the 32-bar ATR and price prints a new 24-bar closing high, in an uptrend.",
+    blurb:
+      "Enters when volatility pops out of a quiet range at a new local high.",
+    entry:
+      "8-bar ATR expands to ≥ 1.6× the 32-bar ATR and price prints a new 24-bar closing high, in an uptrend.",
     exit: "ATR chandelier trail (2.5×ATR off the peak) plus a 2.5% hard stop.",
-    style: "Aggressive expansion trader. Fires on regime shifts from quiet to loud.",
+    style:
+      "Aggressive expansion trader. Fires on regime shifts from quiet to loud.",
     explain: [
       "Markets alternate between quiet and loud regimes, and the transition is tradeable: when the short-window ATR (8 bars) blows out to 1.6× the long-window ATR (32 bars), something just changed - news, a large buyer, a broken level. Volatility arriving is information.",
       "Direction comes from the second condition: the expansion must coincide with a new 24-bar closing high, in an uptrend. Volatility with an upward resolution is an entry; volatility alone is just noise.",
@@ -74,7 +84,8 @@ export const STRATEGY_META: Record<Template, StrategyMeta> = {
     label: "Fast RSI",
     kind: "MEAN-REV",
     blurb: "A quicker RSI dip-buyer for shorter, sharper reversion trades.",
-    entry: "RSI(7) drops below 25 in an uptrend, then a candle closes back above the prior bar's high (confirmation).",
+    entry:
+      "RSI(7) drops below 25 in an uptrend, then a candle closes back above the prior bar's high (confirmation).",
     exit: "2.5% take-profit, 2% hard stop, or a 12-bar time-stop - whichever comes first.",
     style: "Fast in, fast out. More entries, tighter exits than RSI Reversion.",
     explain: [
@@ -87,8 +98,10 @@ export const STRATEGY_META: Record<Template, StrategyMeta> = {
   bb_reversion: {
     label: "Bollinger Reversion",
     kind: "MEAN-REV",
-    blurb: "Fades ≥2σ stretches below the Bollinger band once price snaps back inside.",
-    entry: "Prior bar closes ≥ 2σ below the 20-bar Bollinger mid; the current bar closes back inside the band (buy the reversion, not the knife).",
+    blurb:
+      "Fades ≥2σ stretches below the Bollinger band once price snaps back inside.",
+    entry:
+      "Prior bar closes ≥ 2σ below the 20-bar Bollinger mid; the current bar closes back inside the band (buy the reversion, not the knife).",
     exit: "4% take-profit, 3% hard stop, or a 32-bar time-stop - whichever comes first.",
     style: "Dislocation fader. Rare, high-conviction snap-back entries.",
     explain: [
@@ -101,10 +114,13 @@ export const STRATEGY_META: Record<Template, StrategyMeta> = {
   squeeze_breakout: {
     label: "Squeeze Breakout",
     kind: "BREAKOUT",
-    blurb: "Waits for a volatility squeeze, then trades the breakout with volume.",
-    entry: "Bollinger bands compress inside the Keltner channel (squeeze), then price breaks the prior 20-bar high by ≥ 0.2% on ≥ 1.2× average volume.",
+    blurb:
+      "Waits for a volatility squeeze, then trades the breakout with volume.",
+    entry:
+      "Bollinger bands compress inside the Keltner channel (squeeze), then price breaks the prior 20-bar high by ≥ 0.2% on ≥ 1.2× average volume.",
     exit: "ATR chandelier trail (3×ATR off the peak) plus a 4% hard stop. No take-profit.",
-    style: "Coil-and-release. Low-volatility compression before the expansion move.",
+    style:
+      "Coil-and-release. Low-volatility compression before the expansion move.",
     explain: [
       "Volatility is cyclical: quiet periods are compressed springs. The TTM-squeeze idea detects the compression by comparing two envelopes - when the Bollinger bands (driven by close-to-close variance) squeeze inside the Keltner channel (driven by true range), the market is unusually coiled.",
       "The squeeze itself has no direction; it only says a move is loading. Direction comes from the breakout: within 6 bars of a squeeze, price must clear the prior 20-bar high with the same discipline as the Momentum template - 0.2% buffer, 2% chase cap, 1.2× volume, ATR floor.",
@@ -112,11 +128,32 @@ export const STRATEGY_META: Record<Template, StrategyMeta> = {
       "The failure mode is a squeeze that resolves downward or fizzles - the regime filter blocks most of the former, the stop and trail contain the rest. Like every breakout system, a handful of runners pays for the duds.",
     ],
   },
+  hf_forecast: {
+    label: "AI Forecast",
+    kind: "AI · EXPT",
+    blurb:
+      "Asks a pretrained Hugging Face time-series model (Amazon Chronos) whether the next few bars look up, and buys only on a confident yes.",
+    entry:
+      "Chronos-Bolt forecasts the next 8 bars from the last 384 closes. Buy when the forecast median is ≥ 1% above the current price, the forecast lower band (q10) is not below it, and the market is in an uptrend.",
+    exit: "4% take-profit, 3% hard stop, or a 32-bar time-stop - whichever comes first.",
+    style:
+      "Experimental ML signal. Trades rarely; every entry needs the model, the trend and the cost gate to agree.",
+    warning:
+      "Experimental — no proven edge. This strategy trades on a machine-learning forecast from a general-purpose model that was never trained on crypto markets. Crypto price at these horizons is close to a random walk: the model can be confidently wrong, especially around news, crashes and regime changes, and the backtest windows here are far too short to prove (or disprove) any edge. There is no browser preview because inference runs only inside the bot. Run it in DRY_RUN first, size it as a small slice of a portfolio, and never as your only strategy. The stop-loss and time-stop are the real safety net, not the model.",
+    explain: [
+      "Chronos (amazon/chronos-bolt-tiny on Hugging Face) is a time-series foundation model: a transformer pretrained on millions of series - sales, traffic, weather, markets - that produces a probabilistic forecast for any numeric sequence. The strategy feeds it the recent closes and reads back quantiles of where price might be a few bars ahead.",
+      "The entry demands agreement, not just a bullish median. The median forecast must clear a minimum move (default 1%, above round-trip friction), the pessimistic q10 band must not sit below the entry price (the model itself sees limited downside), and the shared regime gate must confirm an uptrend. Any single miss means HOLD.",
+      "Exits are deliberately conventional and tight - +4% target, -3% stop, 32-bar time-stop - because the forecast is only trusted for the horizon it was asked about. Nothing rides on the model being right for long.",
+      "Honest framing: published research finds pretrained forecasters rarely beat simple baselines on raw crypto prices. This template exists to let you test that claim safely on your own account, not because the edge is established. Watch its net numbers over weeks in DRY_RUN before giving it real capital.",
+    ],
+  },
   custom: {
     label: "Custom Strategy",
     kind: "CUSTOM",
-    blurb: "Your own entry rules and exits, built block by block in the strategy builder.",
-    entry: "Whatever conditions you compose in the builder - all must be true on the same bar.",
+    blurb:
+      "Your own entry rules and exits, built block by block in the strategy builder.",
+    entry:
+      "Whatever conditions you compose in the builder - all must be true on the same bar.",
     exit: "The stop-loss / take-profit / ATR trail / time-stop you configure.",
     style: "Yours. Backtest it across windows before enabling it live.",
     explain: [

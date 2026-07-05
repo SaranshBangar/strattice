@@ -18,7 +18,13 @@ export interface NotificationInitial {
 const inputClass =
   "w-full rounded-md bg-inset px-3 py-2 text-sm text-fg placeholder-faint focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
 
-export function NotificationSettings({ initial, email }: { initial: NotificationInitial; email: string }) {
+export function NotificationSettings({
+  initial,
+  email,
+}: {
+  initial: NotificationInitial;
+  email: string;
+}) {
   const toast = useToast();
   const [emailOn, setEmailOn] = useState(initial.emailEnabled);
   const [tgOn, setTgOn] = useState(initial.telegramEnabled);
@@ -49,11 +55,20 @@ export function NotificationSettings({ initial, email }: { initial: Notification
         setChatId(id);
         setTgOn(true);
         setDraft("");
-        if (res.test === "sent") toast("Telegram connected - check for our test message", "success");
-        else if (res.test === "unconfigured") toast("Telegram alerts saved (test message skipped)", "success");
-        else toast("Saved, but the test message failed. Have you messaged the bot first?", "info");
+        if (res.test === "sent")
+          toast("Telegram connected - check for our test message", "success");
+        else if (res.test === "unconfigured")
+          toast("Telegram alerts saved (test message skipped)", "success");
+        else
+          toast(
+            "Saved, but the test message failed. Have you messaged the bot first?",
+            "info",
+          );
       } catch (err: any) {
-        toast(err?.message ?? "Couldn't save Telegram. Please try again.", "error");
+        toast(
+          err?.message ?? "Couldn't save Telegram. Please try again.",
+          "error",
+        );
       }
     });
   }
@@ -73,8 +88,12 @@ export function NotificationSettings({ initial, email }: { initial: Notification
 
   return (
     <section className="card p-5" data-tour="notifications">
-      <h2 className="font-display text-sm font-semibold tracking-tight text-dim">Notifications</h2>
-      <p className="mt-1 text-sm text-muted">Get a message every time a strategy places a buy or sell.</p>
+      <h2 className="font-display text-sm font-semibold tracking-tight text-dim">
+        Notifications
+      </h2>
+      <p className="mt-1 text-sm text-muted">
+        Get a message every time a strategy places a buy or sell.
+      </p>
 
       <div className="mt-4 space-y-4">
         {/* Email */}
@@ -85,7 +104,12 @@ export function NotificationSettings({ initial, email }: { initial: Notification
               Sent to <span className="font-mono text-dim">{email}</span>
             </div>
           </div>
-          <Toggle checked={emailOn} disabled={pending} onClick={toggleEmail} label="Toggle email alerts" />
+          <Toggle
+            checked={emailOn}
+            disabled={pending}
+            onClick={toggleEmail}
+            label="Toggle email alerts"
+          />
         </div>
 
         {/* Telegram */}
@@ -103,13 +127,17 @@ export function NotificationSettings({ initial, email }: { initial: Notification
                   {tgOn ? "CONNECTED" : "OFF"}
                 </span>
               </div>
-              <div className="text-sm text-muted">Instant push to your phone, no inbox needed.</div>
+              <div className="text-sm text-muted">
+                Instant push to your phone, no inbox needed.
+              </div>
             </div>
           </div>
 
           {tgOn ? (
             <div className="mt-3 flex flex-wrap items-center gap-3 rounded-md bg-inset px-3 py-2.5">
-              <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-faint">chat_id</span>
+              <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-faint">
+                chat_id
+              </span>
               <span className="font-mono text-sm text-dim">{chatId}</span>
               <button
                 type="button"
@@ -137,7 +165,8 @@ export function NotificationSettings({ initial, email }: { initial: Notification
                   to get your numeric chat id.
                 </li>
                 <li>
-                  2. Say hi to our alerts bot so it&apos;s allowed to message you, then paste the id below.
+                  2. Say hi to our alerts bot so it&apos;s allowed to message
+                  you, then paste the id below.
                 </li>
               </ol>
               <div className="flex flex-wrap items-center gap-2">
@@ -162,7 +191,8 @@ export function NotificationSettings({ initial, email }: { initial: Notification
               </div>
               {!initial.telegramConfigured && (
                 <p className="text-xs text-faint">
-                  Telegram delivery isn&apos;t configured on the server yet - you can still save your id.
+                  Telegram delivery isn&apos;t configured on the server yet -
+                  you can still save your id.
                 </p>
               )}
             </div>

@@ -15,9 +15,24 @@ export const ENGINE_INTERVAL = "15m";
 /** What stands between a signal and your balance - shown wherever the user is about
  *  to arm real money. Every line is enforced in code, none of it is marketing. */
 export const GUARDRAILS: [string, string][] = [
-  ["Hard stop-loss", "Every strategy carries a per-position stop (2–4%), checked on every poll and overriding the strategy's own signal."],
-  ["ATR trail / take-profit", "Winners are exit-managed: chandelier trail or a fixed target, per template."],
-  [`Daily loss halt · −${DAILY_LOSS_HALT_PCT}%`, `If realized losses reach ${DAILY_LOSS_HALT_PCT}% of equity in a day, trading stops until the next day.`],
-  ["Trade cap", "A hard maximum number of orders per day; the risk gate blocks anything above it."],
-  ["Kill switch", "Turning the bot off stops new entries at the next poll; open positions are still managed to their exit."],
+  [
+    "Hard stop-loss",
+    "Every strategy carries a per-position stop (2–4%), checked on every poll and overriding the strategy's own signal.",
+  ],
+  [
+    "ATR trail / take-profit",
+    "Winners are exit-managed: chandelier trail or a fixed target, per template.",
+  ],
+  [
+    `Daily loss halt · −${DAILY_LOSS_HALT_PCT}%`,
+    `If realized losses reach ${DAILY_LOSS_HALT_PCT}% of equity in a day, trading stops until the next day.`,
+  ],
+  [
+    "Trade cap",
+    "A hard maximum number of orders per day; the risk gate blocks anything above it.",
+  ],
+  [
+    "Kill switch",
+    "Turning the bot off stops new entries at the next poll; open positions are still managed to their exit.",
+  ],
 ];

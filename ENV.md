@@ -109,12 +109,12 @@ trading. Update to the live FX rate when it drifts.
 
 ## Quick checklist
 
-| Variable | Required for | Leave blank to… |
-|---|---|---|
-| `COINDCX_API_KEY` / `COINDCX_SECRET_KEY` | live trading | stay in DRY_RUN |
-| `DRY_RUN` / `LIVE_TRADING_CONFIRM` | going live (both) | stay in DRY_RUN |
-| `TELEGRAM_*` | Telegram alerts | log-only alerts |
-| `INR_PER_USDT` | ₹ display | default to 85 |
+| Variable                                 | Required for      | Leave blank to… |
+| ---------------------------------------- | ----------------- | --------------- |
+| `COINDCX_API_KEY` / `COINDCX_SECRET_KEY` | live trading      | stay in DRY_RUN |
+| `DRY_RUN` / `LIVE_TRADING_CONFIRM`       | going live (both) | stay in DRY_RUN |
+| `TELEGRAM_*`                             | Telegram alerts   | log-only alerts |
+| `INR_PER_USDT`                           | ₹ display         | default to 85   |
 
 Verify it loaded correctly (no real orders placed):
 

@@ -14,11 +14,15 @@ export default async function BillingPage() {
   if (!user) redirect("/sign-in");
 
   const sub = await q.getSubscription(user.id);
-  const canCancel = !!sub?.cashfree_sub_id && (sub.status === "active" || sub.status === "pending");
+  const canCancel =
+    !!sub?.cashfree_sub_id &&
+    (sub.status === "active" || sub.status === "pending");
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <h1 className="font-display text-2xl font-semibold tracking-tight">Billing</h1>
+      <h1 className="font-display text-2xl font-semibold tracking-tight">
+        Billing
+      </h1>
 
       <section className="overflow-hidden card">
         <div className="flex items-center justify-between px-5 py-2.5">
@@ -33,19 +37,25 @@ export default async function BillingPage() {
             Everything is free right now.
           </h2>
           <p className="mt-2 text-sm leading-relaxed text-muted">
-            All strategy templates, unlimited active strategies, the full analytics dashboard and
-            100 trades a day - no plan, no card, no mandate. If we ever introduce paid plans,
-            you&rsquo;ll be told well in advance and nothing will be charged without your explicit consent.
+            All strategy templates, unlimited active strategies, the full
+            analytics dashboard and 100 trades a day - no plan, no card, no
+            mandate. If we ever introduce paid plans, you&rsquo;ll be told well
+            in advance and nothing will be charged without your explicit
+            consent.
           </p>
           <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {([
-              ["templates", "all 7"],
-              ["strategies", "no cap"],
-              ["trades / day", "100"],
-              ["analytics", "full + pro"],
-            ] as const).map(([k, v]) => (
+            {(
+              [
+                ["templates", "all 7"],
+                ["strategies", "no cap"],
+                ["trades / day", "100"],
+                ["analytics", "full + pro"],
+              ] as const
+            ).map(([k, v]) => (
               <div key={k} className="rounded-md bg-inset px-3 py-2.5">
-                <dt className="font-mono text-[10px] uppercase tracking-wider text-faint">{k}</dt>
+                <dt className="font-mono text-[10px] uppercase tracking-wider text-faint">
+                  {k}
+                </dt>
                 <dd className="mt-0.5 font-mono text-sm text-fg">{v}</dd>
               </div>
             ))}
@@ -61,12 +71,18 @@ export default async function BillingPage() {
 
       {canCancel && (
         <section className="card p-6">
-          <h2 className="font-display text-sm font-semibold tracking-tight text-dim">Legacy subscription</h2>
+          <h2 className="font-display text-sm font-semibold tracking-tight text-dim">
+            Legacy subscription
+          </h2>
           <p className="mt-2 text-sm text-muted">
-            You still have a <span className="font-medium capitalize text-fg">{sub!.tier}</span> subscription
-            ({sub!.status})
-            {sub!.period_end ? ` · renews ${new Date(sub!.period_end * 1000).toLocaleDateString()}` : ""}.
-            Since the platform is now free, we recommend cancelling it - you lose nothing.
+            You still have a{" "}
+            <span className="font-medium capitalize text-fg">{sub!.tier}</span>{" "}
+            subscription ({sub!.status})
+            {sub!.period_end
+              ? ` · renews ${new Date(sub!.period_end * 1000).toLocaleDateString()}`
+              : ""}
+            . Since the platform is now free, we recommend cancelling it - you
+            lose nothing.
           </p>
           <div className="mt-4">
             <CancelSubscription />
@@ -75,7 +91,8 @@ export default async function BillingPage() {
       )}
 
       <p className="text-xs text-faint">
-        Your trading capital always stays in your own CoinDCX account - Strattice never holds funds.
+        Your trading capital always stays in your own CoinDCX account -
+        Strattice never holds funds.
       </p>
     </div>
   );

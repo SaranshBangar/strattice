@@ -21,7 +21,10 @@ type Reply = { code: number; text: string };
 /** Reader for a lockstep SMTP dialogue. Handles multi-line replies (`250-...\r\n250 ...`). */
 function makeReader(sock: net.Socket) {
   let buf = "";
-  let pending: { resolve: (r: Reply) => void; reject: (e: Error) => void } | null = null;
+  let pending: {
+    resolve: (r: Reply) => void;
+    reject: (e: Error) => void;
+  } | null = null;
   const deliver = () => {
     if (!pending) return;
     const m = buf.match(/^(?:\d{3}-[^\r\n]*\r?\n)*(\d{3}) [^\r\n]*\r?\n/);
@@ -32,10 +35,17 @@ function makeReader(sock: net.Socket) {
     pending = null;
     p.resolve({ code, text: m[0] });
   };
-  sock.on("data", (d) => { buf += d.toString("utf8"); deliver(); });
+  sock.on("data", (d) => {
+    buf += d.toString("utf8");
+    deliver();
+  });
   sock.on("error", (e) => pending?.reject(e));
   sock.on("close", () => pending?.reject(new Error("SMTP connection closed")));
-  return () => new Promise<Reply>((resolve, reject) => { pending = { resolve, reject }; deliver(); });
+  return () =>
+    new Promise<Reply>((resolve, reject) => {
+      pending = { resolve, reject };
+      deliver();
+    });
 }
 
 function connectTls(opts: tls.ConnectionOptions): Promise<tls.TLSSocket> {
@@ -45,10 +55,16 @@ function connectTls(opts: tls.ConnectionOptions): Promise<tls.TLSSocket> {
   });
 }
 
-async function cmd(sock: net.Socket, read: () => Promise<Reply>, line: string, ok: number[]) {
+async function cmd(
+  sock: net.Socket,
+  read: () => Promise<Reply>,
+  line: string,
+  ok: number[],
+) {
   sock.write(line + "\r\n");
   const r = await read();
-  if (!ok.includes(r.code)) throw new Error(`SMTP "${line.split(" ")[0]}" -> ${r.text.trim()}`);
+  if (!ok.includes(r.code))
+    throw new Error(`SMTP "${line.split(" ")[0]}" -> ${r.text.trim()}`);
   return r;
 }
 
@@ -108,7 +124,8 @@ async function smtpSend(to: string, subject: string, html: string) {
   const body = html.replace(/\r?\n/g, "\r\n").replace(/\r\n\./g, "\r\n.."); // CRLF + dot-stuff
   sock.write(headers + "\r\n\r\n" + body + "\r\n.\r\n");
   const done = await read();
-  if (done.code !== 250) throw new Error(`SMTP body rejected -> ${done.text.trim()}`);
+  if (done.code !== 250)
+    throw new Error(`SMTP body rejected -> ${done.text.trim()}`);
   await cmd(sock, read, "QUIT", [221]).catch(() => {});
   sock.end();
 }
@@ -118,7 +135,10 @@ async function send(to: string, subject: string, html: string) {
   try {
     await smtpSend(to, subject, html);
   } catch (e) {
-    console.error(`[email] failed "${subject}" -> ${to}:`, (e as Error).message);
+    console.error(
+      `[email] failed "${subject}" -> ${to}:`,
+      (e as Error).message,
+    );
   }
 }
 
@@ -128,7 +148,11 @@ type Row = [string, string];
 // All layout inputs are plain text (some user-controlled: name, key label,
 // custom strategy name) - escape them so nothing injects HTML into emails.
 const esc = (s: string) =>
-  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 
 function layout(opts: {
   heading: string;
@@ -191,71 +215,119 @@ function layout(opts: {
 </body></html>`;
 }
 
-const money = (n: number) => `₹${Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+const money = (n: number) =>
+  `₹${Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 const first = (name?: string | null) => (name ? name.split(" ")[0] : "there");
 
 // ---------- typed senders ----------
 export function sendSignUpEmail(to: string, name?: string | null) {
-  return send(to, `Welcome to ${BRAND}`, layout({
-    heading: `Welcome, ${first(name)}.`,
-    lead: `Your ${BRAND} account is ready. Link your CoinDCX API keys and pick a strategy to get the bot running.`,
-    cta: { label: "Open dashboard", href: `${appUrl()}/dashboard` },
-  }));
+  return send(
+    to,
+    `Welcome to ${BRAND}`,
+    layout({
+      heading: `Welcome, ${first(name)}.`,
+      lead: `Your ${BRAND} account is ready. Link your CoinDCX API keys and pick a strategy to get the bot running.`,
+      cta: { label: "Open dashboard", href: `${appUrl()}/dashboard` },
+    }),
+  );
 }
 
 export function sendSignInEmail(to: string, name?: string | null) {
-  return send(to, `New sign-in to ${BRAND}`, layout({
-    heading: "New sign-in",
-    lead: `Hi ${first(name)}, your ${BRAND} account was just signed in.`,
-    rows: [["Time", new Date().toUTCString()]],
-    note: `If this wasn't you, change your password and remove your CoinDCX keys immediately.`,
-  }));
+  return send(
+    to,
+    `New sign-in to ${BRAND}`,
+    layout({
+      heading: "New sign-in",
+      lead: `Hi ${first(name)}, your ${BRAND} account was just signed in.`,
+      rows: [["Time", new Date().toUTCString()]],
+      note: `If this wasn't you, change your password and remove your CoinDCX keys immediately.`,
+    }),
+  );
 }
 
 export function sendApiKeyEmail(to: string, label: string) {
-  return send(to, `CoinDCX keys linked`, layout({
-    heading: "API keys linked",
-    lead: `New CoinDCX API keys were added to your ${BRAND} account. They're encrypted at rest and used only to run your strategies.`,
-    rows: [["Label", label]],
-    cta: { label: "Review account", href: `${appUrl()}/account` },
-    note: `If you didn't do this, remove the keys and revoke them in CoinDCX.`,
-  }));
+  return send(
+    to,
+    `CoinDCX keys linked`,
+    layout({
+      heading: "API keys linked",
+      lead: `New CoinDCX API keys were added to your ${BRAND} account. They're encrypted at rest and used only to run your strategies.`,
+      rows: [["Label", label]],
+      cta: { label: "Review account", href: `${appUrl()}/account` },
+      note: `If you didn't do this, remove the keys and revoke them in CoinDCX.`,
+    }),
+  );
 }
 
 type BillingKind = "active" | "failed" | "cancelled" | "expired";
 export function sendBillingEmail(to: string, kind: BillingKind, tier?: string) {
-  const copy: Record<BillingKind, { subject: string; heading: string; lead: string }> = {
-    active: { subject: "Subscription active", heading: "You're subscribed", lead: `Payment received. Your ${tier ?? ""} plan is active.` },
-    failed: { subject: "Payment failed", heading: "Payment failed", lead: `We couldn't collect your subscription payment. Access continues until the current period ends.` },
-    cancelled: { subject: "Subscription cancelled", heading: "Subscription cancelled", lead: `Your plan is cancelled. You keep access until the end of the current billing period.` },
-    expired: { subject: "Subscription expired", heading: "Subscription expired", lead: `Your subscription has ended and your account is back on the free plan.` },
+  const copy: Record<
+    BillingKind,
+    { subject: string; heading: string; lead: string }
+  > = {
+    active: {
+      subject: "Subscription active",
+      heading: "You're subscribed",
+      lead: `Payment received. Your ${tier ?? ""} plan is active.`,
+    },
+    failed: {
+      subject: "Payment failed",
+      heading: "Payment failed",
+      lead: `We couldn't collect your subscription payment. Access continues until the current period ends.`,
+    },
+    cancelled: {
+      subject: "Subscription cancelled",
+      heading: "Subscription cancelled",
+      lead: `Your plan is cancelled. You keep access until the end of the current billing period.`,
+    },
+    expired: {
+      subject: "Subscription expired",
+      heading: "Subscription expired",
+      lead: `Your subscription has ended and your account is back on the free plan.`,
+    },
   };
   const c = copy[kind];
-  return send(to, c.subject, layout({
-    heading: c.heading,
-    lead: c.lead,
-    rows: tier ? [["Plan", tier]] : undefined,
-    cta: { label: "Manage billing", href: `${appUrl()}/billing` },
-  }));
+  return send(
+    to,
+    c.subject,
+    layout({
+      heading: c.heading,
+      lead: c.lead,
+      rows: tier ? [["Plan", tier]] : undefined,
+      cta: { label: "Manage billing", href: `${appUrl()}/billing` },
+    }),
+  );
 }
 
-export function sendTradeEmail(to: string, t: {
-  side: string; market: string; qty: number; price: number; notional: number;
-  strategy?: string; dryRun?: boolean;
-}) {
+export function sendTradeEmail(
+  to: string,
+  t: {
+    side: string;
+    market: string;
+    qty: number;
+    price: number;
+    notional: number;
+    strategy?: string;
+    dryRun?: boolean;
+  },
+) {
   const buy = t.side.toLowerCase() === "buy";
   const tag = t.dryRun ? " (dry run)" : "";
-  return send(to, `${buy ? "Buy" : "Sell"} ${t.market}${tag}`, layout({
-    heading: `${buy ? "Bought" : "Sold"} ${t.market}`,
-    lead: `Your bot placed a ${buy ? "buy" : "sell"} order${t.dryRun ? " in dry-run mode" : ""}.`,
-    rows: [
-      ["Side", t.side.toUpperCase()],
-      ["Market", t.market],
-      ["Quantity", String(t.qty)],
-      ["Price", money(t.price)],
-      ["Notional", money(t.notional)],
-      ...(t.strategy ? ([["Strategy", t.strategy]] as Row[]) : []),
-    ],
-    cta: { label: "View dashboard", href: `${appUrl()}/dashboard` },
-  }));
+  return send(
+    to,
+    `${buy ? "Buy" : "Sell"} ${t.market}${tag}`,
+    layout({
+      heading: `${buy ? "Bought" : "Sold"} ${t.market}`,
+      lead: `Your bot placed a ${buy ? "buy" : "sell"} order${t.dryRun ? " in dry-run mode" : ""}.`,
+      rows: [
+        ["Side", t.side.toUpperCase()],
+        ["Market", t.market],
+        ["Quantity", String(t.qty)],
+        ["Price", money(t.price)],
+        ["Notional", money(t.notional)],
+        ...(t.strategy ? ([["Strategy", t.strategy]] as Row[]) : []),
+      ],
+      cta: { label: "View dashboard", href: `${appUrl()}/dashboard` },
+    }),
+  );
 }
