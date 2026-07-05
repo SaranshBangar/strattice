@@ -16,6 +16,8 @@ import {
   PnlHistogram,
 } from "@/components/charts";
 import { strategyLabel } from "@/lib/strategies";
+import { usdRate } from "@/lib/fx";
+import { currencySymbol } from "@/lib/currencies";
 
 export const dynamic = "force-dynamic";
 
@@ -102,6 +104,9 @@ export default async function DashboardPage() {
     q.credentialsLinked(user.id),
     q.taxSummary(user.id, fy.startISO, fy.endISO),
   ]);
+  const currency = await q.getCurrency(user.id);
+  const rate = (await usdRate(currency)) ?? 1;
+  const fx = { symbol: currencySymbol(currency), rate };
 
   const hbAge = bot.last_heartbeat
     ? Date.now() / 1000 - bot.last_heartbeat
@@ -524,7 +529,7 @@ export default async function DashboardPage() {
         />
       </div>
 
-      <PriceChart markets={userMarkets} />
+      <PriceChart markets={userMarkets} fx={fx} />
 
       <DataTable
         title="Open positions"
