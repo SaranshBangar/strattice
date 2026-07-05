@@ -1,10 +1,8 @@
 import { redirect } from "next/navigation";
 import { getUser } from "@/lib/session";
 import * as q from "@/lib/queries";
-import { telegramConfigured } from "@/lib/telegram";
 import { BotControls } from "@/components/BotControls";
 import { CredentialsForm } from "@/components/CredentialsForm";
-import { NotificationSettings } from "@/components/NotificationSettings";
 import { TourButton } from "@/components/TourButton";
 import { GUARDRAILS } from "@/lib/risk";
 
@@ -35,10 +33,9 @@ export default async function AccountPage() {
   const user = await getUser();
   if (!user) redirect("/sign-in");
 
-  const [creds, bot, prefs, strategies] = await Promise.all([
+  const [creds, bot, strategies] = await Promise.all([
     q.credentialsLinked(user.id),
     q.getBotState(user.id),
-    q.getNotificationPrefs(user.id),
     q.listStrategies(user.id),
   ]);
   const enabledStrategies = strategies.filter((s) => s.enabled).length;
@@ -118,16 +115,6 @@ export default async function AccountPage() {
             initial={{ active: !!bot.active, live: !!bot.live }}
             linked={creds.linked}
             enabledStrategies={enabledStrategies}
-          />
-
-          <NotificationSettings
-            email={user.email}
-            initial={{
-              emailEnabled: !!prefs.email_enabled,
-              telegramEnabled: !!prefs.telegram_enabled,
-              telegramChatId: prefs.telegram_chat_id ?? "",
-              telegramConfigured: telegramConfigured(),
-            }}
           />
         </div>
 

@@ -21,6 +21,7 @@ import { GO_LIVE_PHRASE } from "@/lib/risk";
 import { sanitizeCustomDef } from "@/lib/custom-strategy";
 import { sendApiKeyEmail } from "@/lib/email";
 import { sendTelegram, telegramConfigured, table } from "@/lib/telegram";
+import { isCurrencyCode } from "@/lib/currencies";
 
 export async function saveCredentialsAction(formData: FormData) {
   const user = await getUser();
@@ -137,7 +138,7 @@ export async function getNotificationPrefsAction() {
 export async function setEmailNotificationsAction(enabled: boolean) {
   const userId = await requireUserId();
   await q.setNotificationPrefs(userId, { emailEnabled: enabled });
-  revalidatePath("/account");
+  revalidatePath("/settings");
 }
 
 /** Save (and enable) a Telegram chat id. Sends a confirmation message so the user gets
@@ -168,7 +169,7 @@ export async function saveTelegramNotificationsAction(
     : res.reason === "unconfigured"
       ? "unconfigured"
       : "failed";
-  revalidatePath("/account");
+  revalidatePath("/settings");
   return { ok: true, test };
 }
 
@@ -178,7 +179,14 @@ export async function removeTelegramNotificationsAction() {
     telegramEnabled: false,
     telegramChatId: null,
   });
-  revalidatePath("/account");
+  revalidatePath("/settings");
+}
+
+export async function setCurrencyAction(currency: string) {
+  const userId = await requireUserId();
+  if (!isCurrencyCode(currency)) throw new Error("Unknown currency.");
+  await q.setCurrency(userId, currency);
+  revalidatePath("/settings");
 }
 
 // ---------- billing (Cashfree) ----------

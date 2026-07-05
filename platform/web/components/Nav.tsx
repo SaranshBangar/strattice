@@ -10,6 +10,7 @@ const BASE_LINKS: [string, string][] = [
   ["/dashboard", "Dashboard"],
   ["/strategies", "Strategies"],
   ["/account", "Account"],
+  ["/settings", "Settings"],
 ];
 
 export function Nav() {
@@ -72,7 +73,7 @@ export function Nav() {
               <button
                 type="button"
                 onClick={handleSignOut}
-                className="ml-2 rounded-full bg-white/5 px-3.5 py-1.5 text-sm text-dim transition-colors hover:bg-white/10 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="ml-2 rounded-md bg-white/5 px-3.5 py-1.5 text-sm text-dim transition-colors hover:bg-white/10 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 Sign out
               </button>
@@ -84,7 +85,7 @@ export function Nav() {
               aria-label="Menu"
               aria-expanded={open}
               onClick={() => setOpen((v) => !v)}
-              className="grid h-9 w-9 place-items-center rounded-full bg-white/5 text-dim transition-colors hover:bg-white/10 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:hidden"
+              className="grid h-9 w-9 place-items-center rounded-md bg-white/5 text-dim transition-colors hover:bg-white/10 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:hidden"
             >
               <svg
                 viewBox="0 0 20 20"
@@ -116,7 +117,7 @@ export function Nav() {
                   <a
                     key={href}
                     href={href}
-                    className="rounded-full px-2.5 py-1.5 text-sm text-muted transition-colors hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    className="rounded-md px-2.5 py-1.5 text-sm text-muted transition-colors hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   >
                     {label}
                   </a>
@@ -125,13 +126,13 @@ export function Nav() {
             )}
             <Link
               href="/sign-in"
-              className="rounded-full px-3 py-1.5 text-sm text-dim transition-colors hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="rounded-md px-3 py-1.5 text-sm text-dim transition-colors hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               Sign in
             </Link>
             <Link
               href="/sign-up"
-              className="rounded-full bg-accent px-3.5 py-1.5 text-sm font-medium text-accent-ink transition-colors hover:bg-accent-hi focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="rounded-md bg-accent px-3.5 py-1.5 text-sm font-medium text-accent-ink transition-colors hover:bg-accent-hi focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               Get started
             </Link>

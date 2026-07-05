@@ -83,16 +83,27 @@ const PREFS_DDL = `create table if not exists notification_prefs (
   email_enabled    integer not null default 1,
   telegram_enabled integer not null default 0,
   telegram_chat_id text,
+  currency         text not null default 'INR',
   updated_at       text not null default (datetime('now'))
 )`;
+
+// currency shipped after notification_prefs itself, so deployed tables may lack the column.
+const CURRENCY_DDL = `alter table notification_prefs add column currency text not null default 'INR'`;
 
 async function withPrefsTable<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
   } catch (e) {
-    if (!String(e).includes("no such table: notification_prefs")) throw e;
-    await d1Query(PREFS_DDL);
-    return fn();
+    const msg = String(e);
+    if (msg.includes("no such table: notification_prefs")) {
+      await d1Query(PREFS_DDL);
+      return fn();
+    }
+    if (msg.includes("no such column: currency")) {
+      await d1Query(CURRENCY_DDL);
+      return fn();
+    }
+    throw e;
   }
 }
 
@@ -133,6 +144,28 @@ export async function setNotificationPrefs(
        telegram_enabled=excluded.telegram_enabled, telegram_chat_id=excluded.telegram_chat_id,
        updated_at=datetime('now')`,
       [userId, emailEnabled ? 1 : 0, telegramEnabled ? 1 : 0, chatId],
+    ),
+  );
+}
+
+/** A user's preferred display currency. No row => INR. */
+export async function getCurrency(userId: string): Promise<string> {
+  const row = await withPrefsTable(() =>
+    d1First<{ currency: string }>(
+      "select currency from notification_prefs where user_id = ?",
+      [userId],
+    ),
+  );
+  return row?.currency ?? "INR";
+}
+
+export async function setCurrency(userId: string, currency: string) {
+  await withPrefsTable(() =>
+    d1Query(
+      `insert into notification_prefs(user_id, currency, updated_at)
+     values (?,?, datetime('now'))
+     on conflict(user_id) do update set currency=excluded.currency, updated_at=datetime('now')`,
+      [userId, currency],
     ),
   );
 }

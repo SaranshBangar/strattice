@@ -54,8 +54,8 @@ const STEPS: Step[] = [
   {
     icon: <IconBell />,
     title: "Stay in the loop",
-    body: "Turn on email or Telegram alerts so you hear about every buy and sell the moment it happens. You can replay this tour anytime from the Account page.",
-    href: "/account",
+    body: "Turn on email or Telegram alerts in Settings so you hear about every buy and sell the moment it happens. You can replay this tour anytime from the Account page.",
+    href: "/settings",
     cta: "Set up alerts",
   },
 ];
