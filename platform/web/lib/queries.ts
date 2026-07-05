@@ -38,6 +38,55 @@ export async function getUserContact(userId: string): Promise<{ email: string; n
     "select email, name, createdAt as created_at from user where id = ?", [userId]);
 }
 
+// ---------- notification preferences ----------
+export interface NotificationPrefs {
+  email_enabled: number;      // 0/1
+  telegram_enabled: number;   // 0/1
+  telegram_chat_id: string | null;
+}
+
+const DEFAULT_PREFS: NotificationPrefs = { email_enabled: 1, telegram_enabled: 0, telegram_chat_id: null };
+
+/** A user's notification settings. No row => email on, telegram off (existing users keep emails). */
+export async function getNotificationPrefs(userId: string): Promise<NotificationPrefs> {
+  const row = await d1First<NotificationPrefs>(
+    "select email_enabled, telegram_enabled, telegram_chat_id from notification_prefs where user_id = ?",
+    [userId]);
+  return row ?? { ...DEFAULT_PREFS };
+}
+
+/** Upsert only the provided fields, leaving the rest at their current (or default) value. */
+export async function setNotificationPrefs(
+  userId: string,
+  patch: { emailEnabled?: boolean; telegramEnabled?: boolean; telegramChatId?: string | null },
+) {
+  const cur = await getNotificationPrefs(userId);
+  const emailEnabled = patch.emailEnabled ?? !!cur.email_enabled;
+  const telegramEnabled = patch.telegramEnabled ?? !!cur.telegram_enabled;
+  const chatId = patch.telegramChatId !== undefined ? patch.telegramChatId : cur.telegram_chat_id;
+  await d1Query(
+    `insert into notification_prefs(user_id, email_enabled, telegram_enabled, telegram_chat_id, updated_at)
+     values (?,?,?,?, datetime('now'))
+     on conflict(user_id) do update set email_enabled=excluded.email_enabled,
+       telegram_enabled=excluded.telegram_enabled, telegram_chat_id=excluded.telegram_chat_id,
+       updated_at=datetime('now')`,
+    [userId, emailEnabled ? 1 : 0, telegramEnabled ? 1 : 0, chatId]);
+}
+
+/** Everything the notify webhook needs for one user in a single round-trip. */
+export interface NotifyTarget {
+  email: string; email_enabled: number; telegram_enabled: number; telegram_chat_id: string | null;
+}
+export async function getNotifyTarget(userId: string): Promise<NotifyTarget | null> {
+  return d1First<NotifyTarget>(
+    `select u.email,
+            coalesce(np.email_enabled, 1) as email_enabled,
+            coalesce(np.telegram_enabled, 0) as telegram_enabled,
+            np.telegram_chat_id
+     from user u left join notification_prefs np on np.user_id = u.id
+     where u.id = ?`, [userId]);
+}
+
 export async function userIdByCashfreeSub(cashfreeSubId: string): Promise<string | null> {
   const row = await d1First<{ user_id: string }>(
     "select user_id from subscriptions where cashfree_sub_id = ?", [cashfreeSubId]);

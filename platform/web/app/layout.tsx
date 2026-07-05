@@ -3,6 +3,7 @@ import { Archivo, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import { Nav } from "@/components/Nav";
 import { ToastProvider } from "@/components/Toast";
+import { Walkthrough } from "@/components/Walkthrough";
 
 const display = Archivo({
   subsets: ["latin"],
@@ -43,6 +44,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Skip to content
         </a>
         <ToastProvider>
+          <Walkthrough />
           <Nav />
           <main id="main" className="mx-auto max-w-5xl px-4 py-10">{children}</main>
           <footer className="mt-16 border-t border-line">
