@@ -167,12 +167,13 @@ export function PriceChart({ markets }: { markets?: string[] }) {
       : d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
   };
   const xk = Math.min(5, candles.length);
-  const xTicks =
+  const xTickIdx =
     xk <= 1
-      ? candles.slice(0, 1).map((c) => tfmt(c.t))
+      ? candles.slice(0, 1).map(() => 0)
       : Array.from({ length: xk }, (_, j) =>
-          tfmt(candles[Math.round((j * (candles.length - 1)) / (xk - 1))].t),
+          Math.round((j * (candles.length - 1)) / (xk - 1)),
         );
+  const xTicks = xTickIdx.map((i) => tfmt(candles[i].t));
 
   function onMove(e: React.MouseEvent) {
     const el = svgRef.current;
@@ -282,6 +283,39 @@ export function PriceChart({ markets }: { markets?: string[] }) {
                     />
                   );
                 })}
+                {/* Vertical guidelines aligned with the time-axis ticks */}
+                {xTickIdx.map((idx, i) => (
+                  <line
+                    key={`vx${i}`}
+                    x1={x(idx)}
+                    x2={x(idx)}
+                    y1={0}
+                    y2={H}
+                    stroke="#232838"
+                    strokeWidth={1}
+                    strokeDasharray="2 4"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                ))}
+                {/* Axis frame: y-axis on the left, x-axis on the bottom */}
+                <line
+                  x1={0}
+                  x2={0}
+                  y1={0}
+                  y2={H}
+                  stroke="#39415A"
+                  strokeWidth={1}
+                  vectorEffect="non-scaling-stroke"
+                />
+                <line
+                  x1={0}
+                  x2={W}
+                  y1={H}
+                  y2={H}
+                  stroke="#39415A"
+                  strokeWidth={1}
+                  vectorEffect="non-scaling-stroke"
+                />
                 <path d={area} fill={stroke} fillOpacity={0.07} />
                 <path
                   d={path}

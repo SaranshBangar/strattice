@@ -33,7 +33,7 @@ export function LiveChart() {
 
     // Seed the window with real 1-second closes so the line is instantly full.
     fetch(
-      `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1s&limit=${POINTS}`,
+      `https://data-api.binance.vision/api/v3/klines?symbol=${symbol}&interval=1s&limit=${POINTS}`,
     )
       .then((r) => r.json())
       .then((rows: unknown) => {

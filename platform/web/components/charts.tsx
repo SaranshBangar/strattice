@@ -7,6 +7,7 @@ const C = {
   loss: "#F0584F",
   accent: "#C9A24B",
   line: "#232838",
+  axis: "#39415A",
   faint: "#5A6379",
   muted: "#828AA0",
 } as const;
@@ -137,6 +138,23 @@ export function EquityCurve({
             />
           );
         })}
+        {/* Vertical guidelines matching the evenly spaced time labels below */}
+        {Array.from({ length: Math.max(2, xTicks.length || N + 1) }, (_, j) => (
+          <line
+            key={`vx${j}`}
+            x1={(j / (Math.max(2, xTicks.length || N + 1) - 1)) * W}
+            x2={(j / (Math.max(2, xTicks.length || N + 1) - 1)) * W}
+            y1={0}
+            y2={H}
+            stroke={C.line}
+            strokeWidth={1}
+            strokeDasharray="2 4"
+            vectorEffect="non-scaling-stroke"
+          />
+        ))}
+        {/* Axis frame: y-axis left, x-axis bottom */}
+        <line x1={0} x2={0} y1={0} y2={H} stroke={C.axis} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        <line x1={0} x2={W} y1={H} y2={H} stroke={C.axis} strokeWidth={1} vectorEffect="non-scaling-stroke" />
         <path d={area} fill={stroke} fillOpacity={0.08} />
         <path
           d={path}

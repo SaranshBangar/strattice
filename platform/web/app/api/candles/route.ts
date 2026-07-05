@@ -37,7 +37,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "invalid interval" }, { status: 400 });
 
   try {
-    const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+    // data-api.binance.vision = official public market-data mirror; unlike
+    // api.binance.com it is not geo-blocked (451) from US hosting regions.
+    const url = `https://data-api.binance.vision/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
     const r = await fetch(url, {
       next: { revalidate: 5 },
       headers: { accept: "application/json" },
