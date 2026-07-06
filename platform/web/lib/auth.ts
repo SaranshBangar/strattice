@@ -4,6 +4,7 @@ import { db } from "./db";
 import * as schema from "./auth-schema";
 import { dash } from "@better-auth/infra";
 import { getUserContact } from "./queries";
+import { rateLimitStore } from "./rate-limit-store";
 import {
   sendSignUpEmail,
   sendSignInEmail,
@@ -53,10 +54,11 @@ if (
 export const auth = betterAuth({
   database: drizzleAdapter(db, { provider: "sqlite", schema }),
   // Brute-force / abuse protection on the auth endpoints. Memory storage is per-instance
-  // and useless on serverless, so persist counters in D1 (see the rateLimit table in
-  // auth-schema.ts / platform/db/schema.sql). On by default in production.
+  // and useless on serverless, so counters persist in D1 via a self-healing, fail-open
+  // custom store (lib/rate-limit-store.ts): it creates the rateLimit table on first use if
+  // the migration hasn't run, and never throws into an auth request. On by default in prod.
   rateLimit: {
-    storage: "database",
+    customStorage: rateLimitStore,
     window: 60,
     max: 100,
     customRules: {
