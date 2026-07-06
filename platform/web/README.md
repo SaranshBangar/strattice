@@ -61,6 +61,25 @@ keys this app stores.
 > `emailVerified = 0` and must verify (via "Forgot password?" or a fresh sign-in, which re-sends
 > the link) before they can sign in again. Google accounts are unaffected.
 
+- **Optional integrations degrade cleanly**: Google sign-in is only registered when
+  `GOOGLE_CLIENT_ID`/`SECRET` are set (the button is hidden otherwise), and production boot logs
+  a `[config] missing …` warning for absent SMTP/Google rather than failing silently at first use.
+
+## Content-Security-Policy
+
+A full CSP is set in `next.config.mjs`. It allowlists the exact external hosts the browser
+touches: Binance market data (`data-api.binance.vision`) + the live-trade WebSocket
+(`stream.binance.com:9443`, port is significant), and Better Auth's Sentinel (`kv`/`dash`
+.better-auth.com). **If you add a new external fetch/WebSocket/image/script from the client,
+add its host to the matching directive** or the browser will block it. `script-src`/`style-src`
+use `'unsafe-inline'` (Next's hydration + next/font); moving to per-request nonces is a tracked
+follow-up. Legal pages live at `/terms` and `/privacy` (linked from the footer).
+
+## Database migrations
+
+Incremental schema changes are tracked in `../db/migrations/` (see its README); `../db/schema.sql`
+stays the full baseline for a fresh DB.
+
 ## Checks
 
 ```bash

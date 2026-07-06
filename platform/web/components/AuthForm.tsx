@@ -10,7 +10,15 @@ const inputClass =
   "w-full rounded-md border border-line bg-inset px-3 py-2 text-sm text-fg placeholder-faint focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
 const labelClass = "block text-sm font-medium text-dim";
 
-export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
+export function AuthForm({
+  mode,
+  googleEnabled = true,
+}: {
+  mode: "sign-in" | "sign-up";
+  // Hidden when Google OAuth isn't configured on the server, so we never show a
+  // "Continue with Google" button that would error on click.
+  googleEnabled?: boolean;
+}) {
   const router = useRouter();
   const toast = useToast();
   const [email, setEmail] = useState("");
@@ -213,21 +221,25 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
         </button>
       </form>
 
-      <div className="mt-4 flex items-center gap-3 text-xs text-faint">
-        <span className="h-px flex-1 bg-line" />
-        or
-        <span className="h-px flex-1 bg-line" />
-      </div>
+      {googleEnabled && (
+        <>
+          <div className="mt-4 flex items-center gap-3 text-xs text-faint">
+            <span className="h-px flex-1 bg-line" />
+            or
+            <span className="h-px flex-1 bg-line" />
+          </div>
 
-      <button
-        type="button"
-        onClick={google}
-        disabled={gbusy || busy}
-        className="mt-4 inline-flex w-full items-center justify-center gap-2.5 rounded-md bg-white/5 px-4 py-2 text-sm font-medium text-fg transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
-      >
-        {gbusy ? <Spinner className="h-4 w-4" /> : <GoogleIcon />}
-        {gbusy ? "Connecting…" : "Continue with Google"}
-      </button>
+          <button
+            type="button"
+            onClick={google}
+            disabled={gbusy || busy}
+            className="mt-4 inline-flex w-full items-center justify-center gap-2.5 rounded-md bg-white/5 px-4 py-2 text-sm font-medium text-fg transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+          >
+            {gbusy ? <Spinner className="h-4 w-4" /> : <GoogleIcon />}
+            {gbusy ? "Connecting…" : "Continue with Google"}
+          </button>
+        </>
+      )}
 
       <p className="mt-4 text-center text-sm text-muted">
         {mode === "sign-up" ? (

@@ -31,6 +31,25 @@ const devLogLink = (label: string, url: string) => {
     console.info(`[auth] ${label}: ${url}`);
 };
 
+// Optional integrations are only wired up when fully configured, so the app never ships a
+// dead "Continue with Google" button or silently drops every email. Surfaced here (and to
+// the sign-in page) instead of failing at first use.
+export const googleConfigured =
+  !!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET;
+
+if (
+  process.env.NODE_ENV === "production" &&
+  process.env.NEXT_PHASE !== "phase-production-build"
+) {
+  const missing: string[] = [];
+  if (!process.env.SMTP_HOST)
+    missing.push("SMTP_HOST (all email, incl. verification/reset, is skipped)");
+  if (!googleConfigured)
+    missing.push("GOOGLE_CLIENT_ID/SECRET (Google sign-in hidden)");
+  if (missing.length)
+    console.warn(`[config] missing in production - ${missing.join("; ")}`);
+}
+
 export const auth = betterAuth({
   database: drizzleAdapter(db, { provider: "sqlite", schema }),
   // Brute-force / abuse protection on the auth endpoints. Memory storage is per-instance
@@ -94,12 +113,16 @@ export const auth = betterAuth({
       },
     },
   },
-  socialProviders: {
-    google: {
-      clientId: process.env.GOOGLE_CLIENT_ID as string,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
-    },
-  },
+  // Registered only when configured, so an unconfigured deploy doesn't advertise a
+  // provider that errors on use (see googleConfigured above).
+  socialProviders: googleConfigured
+    ? {
+        google: {
+          clientId: process.env.GOOGLE_CLIENT_ID as string,
+          clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+        },
+      }
+    : {},
   // Auto-link Google sign-ins to an existing email/password account with the
   // same email. Google verifies its emails, so this is safe as a trusted provider.
   account: {

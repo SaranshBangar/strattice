@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Link from "next/link";
 import { Archivo, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import { Nav } from "@/components/Nav";
@@ -96,6 +97,20 @@ export default function RootLayout({
                   round trip pays exchange fees, GST and TDS. Start in DRY_RUN,
                   size positions you can afford to lose.
                 </p>
+                <nav className="flex flex-wrap gap-x-5 gap-y-1 font-mono text-[11px]">
+                  <Link
+                    href="/terms"
+                    className="text-faint underline-offset-2 hover:text-dim hover:underline"
+                  >
+                    Terms
+                  </Link>
+                  <Link
+                    href="/privacy"
+                    className="text-faint underline-offset-2 hover:text-dim hover:underline"
+                  >
+                    Privacy
+                  </Link>
+                </nav>
               </div>
             </div>
           </footer>
