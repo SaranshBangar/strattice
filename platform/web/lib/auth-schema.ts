@@ -56,3 +56,12 @@ export const verification = sqliteTable("verification", {
   createdAt: integer("createdAt", { mode: "timestamp" }),
   updatedAt: integer("updatedAt", { mode: "timestamp" }),
 });
+
+// Persistent store for Better Auth's rate limiter (rateLimit.storage = "database").
+// key = per-IP/route bucket; lastRequest is epoch milliseconds.
+export const rateLimit = sqliteTable("rateLimit", {
+  id: text("id").primaryKey(),
+  key: text("key"),
+  count: integer("count"),
+  lastRequest: integer("lastRequest"),
+});

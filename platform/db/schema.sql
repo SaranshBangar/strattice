@@ -51,6 +51,15 @@ create table if not exists verification (
   createdAt  integer,
   updatedAt  integer
 );
+-- Persistent rate-limit counters for Better Auth (rateLimit.storage = "database").
+-- Per-instance memory storage is useless on serverless, so the limiter lives here.
+-- lastRequest is epoch milliseconds.
+create table if not exists rateLimit (
+  id          text primary key,
+  key         text,
+  count       integer,
+  lastRequest integer
+);
 
 -- ───────────── App tables (FK -> Better Auth user) ─────────────
 

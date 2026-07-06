@@ -5,6 +5,7 @@
 // order execution still happens on CoinDCX.
 import { NextResponse } from "next/server";
 import { toBinanceSymbol } from "@/lib/binance";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 const INTERVALS = new Set([
   "1m",
@@ -20,6 +21,15 @@ const INTERVALS = new Set([
 ]);
 
 export async function GET(req: Request) {
+  // Open, unauthenticated proxy - cap per-IP volume so it can't be turned into a free
+  // amplifier. 240/min clears realistic chart polling and best-strategy bursts.
+  if (!rateLimit(`candles:${clientIp(req)}`, 240, 60_000)) {
+    return NextResponse.json(
+      { error: "rate limited" },
+      { status: 429, headers: { "Retry-After": "60" } },
+    );
+  }
+
   const { searchParams } = new URL(req.url);
   const pair = (searchParams.get("pair") || "I-BTC_INR").toUpperCase();
   const interval = searchParams.get("interval") || "15m";
@@ -36,33 +46,45 @@ export async function GET(req: Request) {
   if (!INTERVALS.has(interval))
     return NextResponse.json({ error: "invalid interval" }, { status: 400 });
 
-  try {
-    // data-api.binance.vision = official public market-data mirror; unlike
-    // api.binance.com it is not geo-blocked (451) from US hosting regions.
-    const url = `https://data-api.binance.vision/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
-    const r = await fetch(url, {
-      next: { revalidate: 5 },
-      headers: { accept: "application/json" },
-    });
-    if (!r.ok)
-      return NextResponse.json(
-        { error: `upstream ${r.status}` },
-        { status: 502 },
+  // Try mirrors in order so one upstream outage doesn't blank every chart.
+  // data-api.binance.vision = official public market-data mirror, not geo-blocked (451)
+  // from US regions like api.binance.com is; api.binance.us is the last-ditch fallback.
+  const path = `/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+  const hosts = [
+    "https://data-api.binance.vision",
+    "https://api.binance.com",
+    "https://api.binance.us",
+  ];
+  let lastStatus = 0;
+  for (const host of hosts) {
+    try {
+      const r = await fetch(host + path, {
+        next: { revalidate: 5 },
+        headers: { accept: "application/json" },
+      });
+      if (!r.ok) {
+        lastStatus = r.status;
+        continue; // try the next mirror
+      }
+      const data = await r.json();
+      // Binance klines: oldest-first arrays [openTime, open, high, low, close, volume, ...]
+      const candles = (Array.isArray(data) ? data : []).map(
+        (k: (string | number)[]) => ({
+          t: Number(k[0]),
+          o: Number(k[1]),
+          h: Number(k[2]),
+          l: Number(k[3]),
+          c: Number(k[4]),
+          v: Number(k[5]),
+        }),
       );
-    const data = await r.json();
-    // Binance klines: oldest-first arrays [openTime, open, high, low, close, volume, ...]
-    const candles = (Array.isArray(data) ? data : []).map(
-      (k: (string | number)[]) => ({
-        t: Number(k[0]),
-        o: Number(k[1]),
-        h: Number(k[2]),
-        l: Number(k[3]),
-        c: Number(k[4]),
-        v: Number(k[5]),
-      }),
-    );
-    return NextResponse.json({ pair, symbol, interval, candles });
-  } catch {
-    return NextResponse.json({ error: "fetch failed" }, { status: 502 });
+      return NextResponse.json({ pair, symbol, interval, candles });
+    } catch {
+      lastStatus = 0; // network error; fall through to the next mirror
+    }
   }
+  return NextResponse.json(
+    { error: lastStatus ? `upstream ${lastStatus}` : "fetch failed" },
+    { status: 502 },
+  );
 }

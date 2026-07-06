@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { signIn, signUp } from "@/lib/auth-client";
+import { signIn, signUp, sendVerificationEmail } from "@/lib/auth-client";
 import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Spinner";
 
@@ -10,7 +10,15 @@ const inputClass =
   "w-full rounded-md border border-line bg-inset px-3 py-2 text-sm text-fg placeholder-faint focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
 const labelClass = "block text-sm font-medium text-dim";
 
-export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
+export function AuthForm({
+  mode,
+  googleEnabled = true,
+}: {
+  mode: "sign-in" | "sign-up";
+  // Hidden when Google OAuth isn't configured on the server, so we never show a
+  // "Continue with Google" button that would error on click.
+  googleEnabled?: boolean;
+}) {
   const router = useRouter();
   const toast = useToast();
   const [email, setEmail] = useState("");
@@ -20,6 +28,10 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
   const [busy, setBusy] = useState(false);
   const [gbusy, setGbusy] = useState(false);
   const [showPw, setShowPw] = useState(false);
+  // Set once the account exists but the email still needs confirming - covers both a
+  // fresh sign-up and a sign-in attempt on an unverified account.
+  const [pendingVerify, setPendingVerify] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -31,15 +43,41 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
         : await signIn.email({ email, password });
     setBusy(false);
     if (res.error) {
+      // Unverified sign-in: Better Auth has re-sent the link. Show the verify notice
+      // rather than a raw error.
+      if ((res.error as { code?: string }).code === "EMAIL_NOT_VERIFIED") {
+        setPendingVerify(email);
+        return;
+      }
       const msg =
         res.error.message ?? "Something went wrong. Please try again.";
       setErr(msg);
       toast(msg, "error");
       return;
     }
-    toast(mode === "sign-up" ? "Account created" : "Signed in", "success");
+    // Sign-up creates no session until the email is verified, so route to the notice
+    // instead of a dashboard the user can't load yet.
+    if (mode === "sign-up") {
+      setPendingVerify(email);
+      return;
+    }
+    toast("Signed in", "success");
     router.push("/dashboard");
     router.refresh();
+  }
+
+  async function resendVerification() {
+    if (!pendingVerify) return;
+    setResending(true);
+    const res = await sendVerificationEmail({
+      email: pendingVerify,
+      callbackURL: "/dashboard",
+    });
+    setResending(false);
+    toast(
+      res.error ? "Couldn't resend right now." : "Verification email sent.",
+      res.error ? "error" : "success",
+    );
   }
 
   async function google() {
@@ -50,6 +88,39 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
       setGbusy(false);
       toast("Couldn't start Google sign-in. Please try again.", "error");
     }
+  }
+
+  if (pendingVerify) {
+    return (
+      <div className="mx-auto w-full max-w-md card p-6">
+        <h1 className="font-display text-xl font-semibold tracking-tight text-fg">
+          Verify your email
+        </h1>
+        <p className="mt-2 text-sm text-muted">
+          We&apos;ve sent a verification link to{" "}
+          <span className="text-fg">{pendingVerify}</span>. Click it to activate
+          your account, then sign in.
+        </p>
+        <button
+          type="button"
+          onClick={resendVerification}
+          disabled={resending}
+          className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-md bg-white/5 px-4 py-2 text-sm font-medium text-fg transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+        >
+          {resending && <Spinner className="h-4 w-4" />}
+          {resending ? "Sending…" : "Resend link"}
+        </button>
+        <p className="mt-4 text-center text-sm text-muted">
+          <Link
+            href="/sign-in"
+            className="text-accent underline-offset-2 hover:underline"
+            onClick={() => setPendingVerify(null)}
+          >
+            Back to sign in
+          </Link>
+        </p>
+      </div>
+    );
   }
 
   return (
@@ -95,9 +166,19 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
           />
         </div>
         <div className="space-y-1.5">
-          <label htmlFor="af-password" className={labelClass}>
-            Password
-          </label>
+          <div className="flex items-center justify-between">
+            <label htmlFor="af-password" className={labelClass}>
+              Password
+            </label>
+            {mode === "sign-in" && (
+              <Link
+                href="/forgot-password"
+                className="text-xs text-muted underline-offset-2 hover:text-fg hover:underline"
+              >
+                Forgot password?
+              </Link>
+            )}
+          </div>
           <div className="relative">
             <input
               id="af-password"
@@ -140,21 +221,25 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
         </button>
       </form>
 
-      <div className="mt-4 flex items-center gap-3 text-xs text-faint">
-        <span className="h-px flex-1 bg-line" />
-        or
-        <span className="h-px flex-1 bg-line" />
-      </div>
+      {googleEnabled && (
+        <>
+          <div className="mt-4 flex items-center gap-3 text-xs text-faint">
+            <span className="h-px flex-1 bg-line" />
+            or
+            <span className="h-px flex-1 bg-line" />
+          </div>
 
-      <button
-        type="button"
-        onClick={google}
-        disabled={gbusy || busy}
-        className="mt-4 inline-flex w-full items-center justify-center gap-2.5 rounded-md bg-white/5 px-4 py-2 text-sm font-medium text-fg transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
-      >
-        {gbusy ? <Spinner className="h-4 w-4" /> : <GoogleIcon />}
-        {gbusy ? "Connecting…" : "Continue with Google"}
-      </button>
+          <button
+            type="button"
+            onClick={google}
+            disabled={gbusy || busy}
+            className="mt-4 inline-flex w-full items-center justify-center gap-2.5 rounded-md bg-white/5 px-4 py-2 text-sm font-medium text-fg transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+          >
+            {gbusy ? <Spinner className="h-4 w-4" /> : <GoogleIcon />}
+            {gbusy ? "Connecting…" : "Continue with Google"}
+          </button>
+        </>
+      )}
 
       <p className="mt-4 text-center text-sm text-muted">
         {mode === "sign-up" ? (

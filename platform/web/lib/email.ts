@@ -245,6 +245,32 @@ export function sendSignInEmail(to: string, name?: string | null) {
   );
 }
 
+export function sendVerifyEmail(to: string, url: string, name?: string | null) {
+  return send(
+    to,
+    `Verify your ${BRAND} email`,
+    layout({
+      heading: "Confirm your email",
+      lead: `Hi ${first(name)}, confirm this address to finish setting up your ${BRAND} account. This link expires in an hour.`,
+      cta: { label: "Verify email", href: url },
+      note: `If you didn't create a ${BRAND} account, you can ignore this email.`,
+    }),
+  );
+}
+
+export function sendResetEmail(to: string, url: string, name?: string | null) {
+  return send(
+    to,
+    `Reset your ${BRAND} password`,
+    layout({
+      heading: "Reset your password",
+      lead: `Hi ${first(name)}, use the button below to set a new ${BRAND} password. This link expires in an hour.`,
+      cta: { label: "Reset password", href: url },
+      note: `If you didn't request this, ignore this email - your password stays unchanged.`,
+    }),
+  );
+}
+
 export function sendApiKeyEmail(to: string, label: string) {
   return send(
     to,
