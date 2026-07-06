@@ -38,12 +38,18 @@ def _retrying_session() -> requests.Session:
     return s
 
 
+_BALANCE_CACHE_TTL = 3.0  # seconds - collapses the handful of free_balance() calls a single
+                          # trade decision makes (sizing.equity/free_balance x risk.check) into
+                          # one real signed HTTP call, while staying fresh enough between decisions
+
+
 class Client:
     def __init__(self, key: str = config.API_KEY, secret: str = config.SECRET_KEY):
         self.key = key
         self.secret = secret.encode()
         self._markets: dict | None = None
         self._http = _retrying_session()
+        self._balance_cache: dict[str, tuple[float, float]] = {}  # currency -> (value, fetched_at)
 
     # ---------- public ----------
     def candles(self, pair: str, interval: str, limit: int = 200) -> list[dict]:
@@ -141,8 +147,24 @@ class Client:
         return self._signed("/exchange/v1/users/balances", {})
 
     def free_balance(self, currency: str = "USDT") -> float:
-        """Available (non-locked) balance for a currency. 0.0 if not held."""
+        """Available (non-locked) balance for a currency. 0.0 if not held.
+
+        Short-TTL cached: a single trade decision calls this indirectly up to 4 times
+        (sizing.equity/free_balance, each called again from risk.check()) — collapsing
+        those into one signed HTTP call within the TTL window is safe because
+        invalidate_balance_cache() is called right after any fill actually changes it."""
+        now = time.monotonic()
+        cached = self._balance_cache.get(currency)
+        if cached is not None and now - cached[1] < _BALANCE_CACHE_TTL:
+            return cached[0]
+        value = 0.0
         for b in self.balances():
             if b.get("currency") == currency:
-                return float(b.get("balance", 0.0) or 0.0)
-        return 0.0
+                value = float(b.get("balance", 0.0) or 0.0)
+                break
+        self._balance_cache[currency] = (value, now)
+        return value
+
+    def invalidate_balance_cache(self) -> None:
+        """Call right after a fill that changes the wallet, so the next read is fresh."""
+        self._balance_cache.clear()

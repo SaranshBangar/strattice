@@ -28,6 +28,22 @@ _PERIODS_PER_YEAR = {
 }
 
 
+# `window = candles[:i+1]` used to hand every strategy the FULL history-so-far, growing by one
+# element each bar - an O(n) list copy repeated n times is O(n^2) over a long CSV backtest. No
+# built-in strategy's decide() looks back further than a small, bounded number of bars (its own
+# `min_candles`, derived from its lookback/period/regime_period params); this pads that bound
+# generously so the window is a fixed-size trailing slice instead of an ever-growing one, without
+# changing what any strategy can see. Verified bar-for-bar identical to the old unbounded-window
+# behavior for every registered strategy - see bot/test_decision_window.py.
+_WINDOW_PAD = 300
+_WINDOW_FLOOR = 200
+
+
+def _decision_window_bars(strategy) -> int:
+    extra = int(getattr(strategy, "context", 0))  # hf_forecast's model context can exceed min_candles
+    return max(strategy.min_candles + _WINDOW_PAD, extra + _WINDOW_PAD, _WINDOW_FLOOR)
+
+
 def run(strategy, candles: list[dict], capital: float,
         stop_loss_pct: float = 0.0, take_profit_pct: float = 0.0,
         slippage: float | None = None, interval: str = "1h",
@@ -59,8 +75,9 @@ def run(strategy, candles: list[dict], capital: float,
         return gross - fee - t
 
     start = max(strategy.min_candles, 2)
+    window_bars = _decision_window_bars(strategy)
     for i in range(start, len(candles)):
-        window = candles[: i + 1]
+        window = candles[max(0, i + 1 - window_bars): i + 1]
         price = candles[i]["close"]
 
         # 1) protective exit (close-based, same as the live engine) overrides the signal

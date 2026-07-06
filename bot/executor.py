@@ -110,6 +110,7 @@ class Executor:
                 orders = response.get("orders") or [response]
                 exchange_order_id = (orders[0] or {}).get("id")
                 status = "placed"
+                self.client.invalidate_balance_cache()  # wallet just changed - next read must be fresh
             except CoinDCXError as e:
                 audit.log_order({
                     "client_order_id": coid, "strategy": strategy, "market": market,

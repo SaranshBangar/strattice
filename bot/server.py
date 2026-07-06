@@ -71,29 +71,25 @@ def _payload() -> dict:
 
 
 def _recent(table: str, n: int) -> list[dict]:
-    # ponytail: read-only SELECT on the bot's own tables; reuse audit's connection.
-    con = audit._conn()
-    try:
+    # ponytail: read-only SELECT on the bot's own tables; reuse audit's shared connection
+    # (a single persistent connection per process now, not one opened-and-closed per call —
+    # so this must NOT close it; audit._lock is what serializes access across threads).
+    with audit._lock, audit._conn() as con:
         rows = con.execute(
             f"SELECT * FROM {table} ORDER BY ts DESC LIMIT ?", (n,)
         ).fetchall()
         return [dict(r) for r in rows]
-    finally:
-        con.close()
 
 
 def _signals_by_action(action: str) -> list[dict]:
     """ALL signals for a single action (BUY/SELL) — unlike /api/status's latest-30
     payload (mostly HOLD, since a signal is logged every poll cycle regardless of
     action), this is not capped: every matching row in the table is returned."""
-    con = audit._conn()
-    try:
+    with audit._lock, audit._conn() as con:
         rows = con.execute(
             "SELECT * FROM signals WHERE action=? ORDER BY ts DESC", (action.upper(),)
         ).fetchall()
         return [dict(r) for r in rows]
-    finally:
-        con.close()
 
 
 _NAME_RE = re.compile(r'^\s*-\s+name:\s*["\']?{}["\']?\s*(#.*)?$')
