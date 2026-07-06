@@ -1,11 +1,12 @@
+import { cache } from "react";
 import { headers } from "next/headers";
 import { auth } from "./auth";
 import { isAdmin } from "./admin";
 
-export async function getUser() {
+export const getUser = cache(async () => {
   const s = await auth.api.getSession({ headers: await headers() });
   return s?.user ?? null;
-}
+});
 
 export async function requireUserId(): Promise<string> {
   const u = await getUser();

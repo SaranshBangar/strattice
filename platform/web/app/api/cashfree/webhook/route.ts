@@ -41,8 +41,12 @@ export async function POST(req: Request) {
   if (!fresh) return NextResponse.json({ ok: true, duplicate: true });
 
   const T = type.toUpperCase();
-  const email = userId ? (await q.getUserContact(userId))?.email : null;
-  const tier = (await q.getSubscription(userId ?? ""))?.tier;
+  const [contact, sub] = await Promise.all([
+    userId ? q.getUserContact(userId) : Promise.resolve(null),
+    q.getSubscription(userId ?? ""),
+  ]);
+  const email = contact?.email ?? null;
+  const tier = sub?.tier;
   if (T.includes("PAYMENT") && T.includes("SUCCESS")) {
     await q.setSubscriptionStatus(
       subId,

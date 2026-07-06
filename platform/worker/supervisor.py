@@ -21,7 +21,9 @@ import os
 import sqlite3
 import subprocess
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -39,6 +41,19 @@ POLL = int(os.getenv("SUPERVISOR_POLL", "30"))
 STARTING_EQUITY = 1000.0  # mirrors config_gen._BASE; DRY_RUN book equity baseline
 
 _procs: dict[str, dict] = {}  # uid -> {"proc": Popen, "hash": str}
+
+# requests.Session (used by store.D1) isn't documented as safe for concurrent use from
+# multiple threads (its cookie jar isn't), so the publish/heartbeat thread pool below gets
+# its own D1 client per worker thread instead of sharing the main reconcile loop's `conn`.
+_thread_local = threading.local()
+
+
+def _thread_db() -> store.D1:
+    db = getattr(_thread_local, "db", None)
+    if db is None:
+        db = store.connect()
+        _thread_local.db = db
+    return db
 
 
 def _kill_rel(uid: str) -> str:
@@ -109,17 +124,35 @@ def _project(db: Path) -> tuple[list[dict], list[dict], dict]:
         con.close()
 
 
+def _publish_one(uid: str, db: Path) -> tuple[str, Exception | None]:
+    """Pure I/O (SQLite read-only + D1 REST) with no shared mutable state per user - runs in
+    the reconcile thread pool. `_procs[uid]` is only ever READ here; every write to `_procs`
+    happens on the main thread before/after the pool runs, never concurrently with it."""
+    try:
+        db_client = _thread_db()
+        trades, positions, equity = _project(db)
+        store.publish(db_client, uid, trades, positions, equity)
+        rc = _procs[uid]["proc"].poll()
+        store.heartbeat(db_client, uid, None if rc is None else f"engine exited rc={rc}")
+        return uid, None
+    except Exception as e:  # projection/publish must not kill the loop or the pool
+        return uid, e
+
+
 def _reconcile(conn) -> None:
     users = store.active_users(conn)
     desired = set()
+    to_publish: list[tuple[str, Path]] = []
     for u in users:
         uid = u["user_id"]
         desired.add(uid)
         d = USERS_DIR / uid
         cfg = config_gen.build_config(u["tier"], u["strategies"], kill_switch_file=_kill_rel(uid))
         cfg_path, db, log = d / "config.yaml", d / "bot.db", d / "bot.log"
-        config_gen.write_config(cfg_path, cfg)
-        h = hashlib.sha256((yaml.safe_dump(cfg, sort_keys=False) + str(u["live"])).encode()).hexdigest()
+        # Dumped once and reused for both the write and the change-hash (previously dumped twice).
+        dumped = yaml.safe_dump(cfg, sort_keys=False)
+        config_gen.write_config(cfg_path, cfg, dumped)
+        h = hashlib.sha256((dumped + str(u["live"])).encode()).hexdigest()
 
         cur = _procs.get(uid)
         alive = bool(cur) and cur["proc"].poll() is None
@@ -129,13 +162,22 @@ def _reconcile(conn) -> None:
             _procs[uid] = {"proc": _spawn(u, cfg_path, db, log), "hash": h}
             print(f"[supervisor] (re)started engine for {uid} (tier={u['tier']} live={u['live']})")
 
-        try:
-            trades, positions, equity = _project(db)
-            store.publish(conn, uid, trades, positions, equity)
-            rc = _procs[uid]["proc"].poll()
-            store.heartbeat(conn, uid, None if rc is None else f"engine exited rc={rc}")
-        except Exception as e:  # projection/publish must not kill the loop
-            store.heartbeat(conn, uid, f"publish error: {e}")
+        to_publish.append((uid, db))
+
+    # Project + publish + heartbeat are the I/O-bound part of the cycle (one SQLite read plus
+    # a handful of D1 REST round trips per user) and don't touch _procs/_spawn/_stop, so they
+    # run concurrently across users instead of serially - this is what keeps one poll cycle's
+    # duration from growing linearly with the active-user count.
+    if to_publish:
+        with ThreadPoolExecutor(max_workers=min(8, len(to_publish))) as pool:
+            futures = [pool.submit(_publish_one, uid, db) for uid, db in to_publish]
+            for fut in as_completed(futures):
+                uid, err = fut.result()
+                if err is not None:
+                    try:
+                        store.heartbeat(conn, uid, f"publish error: {err}")
+                    except Exception:  # one user's D1 error must not affect the others
+                        pass
 
     for uid in list(_procs):
         if uid not in desired:

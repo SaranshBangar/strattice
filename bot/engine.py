@@ -138,9 +138,16 @@ class Engine:
                             strat.name, sleeve_notional, min_n, strat.market)
 
     def run_once(self) -> None:
+        # Strategies can share a market (e.g. two strategies both on I-BTC_INR); memoize the
+        # candle fetch per (market, interval) for this pass so they don't each issue their own
+        # duplicate public HTTP GET. Cleared every call so the next pass fetches fresh data.
+        candle_cache: dict[tuple[str, str], list[dict]] = {}
         for strat in self.strategies:
             try:
-                candles = self.client.candles(strat.market, self.interval, self.limit)
+                key = (strat.market, self.interval)
+                if key not in candle_cache:
+                    candle_cache[key] = self.client.candles(strat.market, self.interval, self.limit)
+                candles = candle_cache[key]
                 if len(candles) < max(strat.min_candles + 1, 2):
                     continue
                 closed = candles[:-1]  # drop in-progress bar -> no repainting

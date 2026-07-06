@@ -63,14 +63,26 @@ def active_users(db: D1) -> list[dict]:
            left join exchange_credentials c on c.user_id = b.user_id
            where b.active = 1"""
     )
+    eligible = [r for r in rows if r.get("api_key_enc") and r.get("secret_enc")]
+
+    # One batched query for every active user's strategies instead of one D1 REST call
+    # per user (N+1) - chunked to keep any single IN(...) list bounded.
+    uids = [r["user_id"] for r in eligible]
+    strats_by_uid: dict[str, list[dict]] = {uid: [] for uid in uids}
+    for batch in _chunked(uids, 200):
+        placeholders = ",".join("?" for _ in batch)
+        strat_rows = db.query(
+            f"""select user_id, template, market, params, enabled from user_strategies
+               where user_id in ({placeholders}) order by user_id, position, created_at""",
+            list(batch),
+        )
+        for s in strat_rows:
+            strats_by_uid.setdefault(s["user_id"], []).append(s)
+
     out = []
-    for r in rows:
-        if not r.get("api_key_enc") or not r.get("secret_enc"):
-            continue
+    for r in eligible:
         uid = r["user_id"]
-        strats = db.query(
-            """select template, market, params, enabled from user_strategies
-               where user_id = ? order by position, created_at""", [uid])
+        strats = strats_by_uid.get(uid, [])
         out.append({
             "user_id": uid,
             "tier": _effective_tier(r),
@@ -99,6 +111,19 @@ def _chunked(seq, n):
         yield seq[i:i + n]
 
 
+# Last-published positions signature per user, so an unchanged position set skips the
+# delete+reinsert D1 round trips on a cycle where nothing moved. Lost on supervisor restart
+# (self-heals with one redundant write, no correctness impact). Not applied to
+# equity_snapshots - the dashboard's equity chart expects one point per poll tick.
+_last_positions_sig: dict[str, tuple] = {}
+
+
+def _positions_sig(positions: list[dict]) -> tuple:
+    return tuple(sorted(
+        (p["strategy"], p["market"], p["qty"], p["avg_price"]) for p in positions
+    ))
+
+
 def publish(db: D1, user_id: str, trades: list[dict], positions: list[dict], equity: dict) -> None:
     """Upsert the read model from a user's engine SQLite projection.
     Multi-row INSERTs keep the REST round-trips bounded (D1 is one statement per call)."""
@@ -121,16 +146,19 @@ def publish(db: D1, user_id: str, trades: list[dict], positions: list[dict], equ
     if new_coids:
         _notify_trades(user_id, [t for t in trades if t["coid"] in new_coids])
 
-    db.query("delete from positions where user_id = ?", [user_id])
-    for batch in _chunked(positions, 50):
-        params = []
-        for p in batch:
-            params += [user_id, p["strategy"], p["market"], p["qty"], p["avg_price"]]
-        db.query(
-            "insert into positions(user_id,strategy,market,qty,avg_price) values "
-            + ",".join("(?,?,?,?,?)" for _ in batch),
-            params,
-        )
+    sig = _positions_sig(positions)
+    if _last_positions_sig.get(user_id) != sig:
+        db.query("delete from positions where user_id = ?", [user_id])
+        for batch in _chunked(positions, 50):
+            params = []
+            for p in batch:
+                params += [user_id, p["strategy"], p["market"], p["qty"], p["avg_price"]]
+            db.query(
+                "insert into positions(user_id,strategy,market,qty,avg_price) values "
+                + ",".join("(?,?,?,?,?)" for _ in batch),
+                params,
+            )
+        _last_positions_sig[user_id] = sig
 
     db.query(
         """insert into equity_snapshots(user_id,equity,free,realized_today,trades_today)

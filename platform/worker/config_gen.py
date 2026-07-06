@@ -155,9 +155,11 @@ def build_config(tier: str, requested: list[dict], *, kill_switch_file: str) -> 
     return cfg
 
 
-def write_config(path: Path, cfg: dict) -> bool:
-    """Write YAML only if changed (engine re-reads each poll; avoid needless churn). True if written."""
-    new = yaml.safe_dump(cfg, sort_keys=False)
+def write_config(path: Path, cfg: dict, dumped: str | None = None) -> bool:
+    """Write YAML only if changed (engine re-reads each poll; avoid needless churn). True if written.
+    Pass `dumped` when the caller already has yaml.safe_dump(cfg, sort_keys=False) (e.g. because
+    it also needs it for a change-hash) to avoid dumping the same config twice."""
+    new = dumped if dumped is not None else yaml.safe_dump(cfg, sort_keys=False)
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists() and path.read_text(encoding="utf-8") == new:
         return False

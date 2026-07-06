@@ -1,5 +1,6 @@
 """Config + secrets loading. Tunables from config.yaml, secrets from env/.env only."""
 import os
+import time
 from pathlib import Path
 
 import yaml
@@ -48,20 +49,32 @@ LOG_PATH = Path(os.getenv("BOT_LOG_PATH") or (ROOT / "data" / "bot.log"))
 INR_PER_USDT_FALLBACK = float(os.getenv("INR_PER_USDT", "85"))
 
 
+_INR_PER_USDT_TTL = 30.0  # seconds
+_inr_per_usdt_cache: tuple[float, float] | None = None  # (value, fetched_at)
+
+
 def inr_per_usdt() -> float:
     """Live USDT->INR from CoinDCX's own public ticker (no key, same rate the bot trades at).
-    Falls back to INR_PER_USDT env / 85 if the call fails. ponytail: no caching — /status is
-    a one-shot CLI; add an lru_cache+TTL only if a long-lived caller starts hammering it."""
+    Falls back to INR_PER_USDT env / 85 if the call fails. Display-only value (never used in
+    sizing/risk) - short TTL cache since bot.server's /api/status calls this on every request,
+    and the dashboard PWA polls that every few seconds."""
+    global _inr_per_usdt_cache
+    now = time.monotonic()
+    if _inr_per_usdt_cache is not None and now - _inr_per_usdt_cache[1] < _INR_PER_USDT_TTL:
+        return _inr_per_usdt_cache[0]
     import requests
+    value = INR_PER_USDT_FALLBACK
     try:
         r = requests.get("https://api.coindcx.com/exchange/ticker", timeout=10)
         r.raise_for_status()
         for t in r.json():
             if t.get("market") == "USDTINR":
-                return float(t["last_price"])
+                value = float(t["last_price"])
+                break
     except Exception:
         pass
-    return INR_PER_USDT_FALLBACK
+    _inr_per_usdt_cache = (value, now)
+    return value
 
 
 def mode_str() -> str:
