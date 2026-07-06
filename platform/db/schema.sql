@@ -28,6 +28,7 @@ create table if not exists session (
   createdAt integer not null,
   updatedAt integer not null
 );
+create index if not exists session_user on session(userId);
 create table if not exists account (
   id                    text primary key,
   userId                text not null references user(id) on delete cascade,
@@ -43,6 +44,7 @@ create table if not exists account (
   createdAt             integer not null,
   updatedAt             integer not null
 );
+create index if not exists account_user on account(userId);
 create table if not exists verification (
   id         text primary key,
   identifier text not null,
@@ -84,6 +86,9 @@ create table if not exists subscriptions (
   period_end       integer,                         -- unix seconds
   updated_at       text not null default (datetime('now'))
 );
+-- Looked up by cashfree_sub_id on every webhook delivery + cancel action. NULL-safe:
+-- SQLite treats each NULL as distinct, so users without a subscription never collide.
+create unique index if not exists subscriptions_cashfree_sub on subscriptions(cashfree_sub_id);
 
 -- User's chosen strategies (desired state). params NULL unless Max tier customizes.
 create table if not exists user_strategies (
@@ -96,7 +101,8 @@ create table if not exists user_strategies (
   position   integer not null default 0,            -- ordering for the max_active cap
   created_at text not null default (datetime('now'))
 );
-create index if not exists user_strategies_user on user_strategies(user_id);
+-- Composite: serves both the user_id filter and listStrategies()'s order-by-position.
+create index if not exists user_strategies_user_position on user_strategies(user_id, position);
 
 -- Desired runtime + liveness. active=on/off; live=DRY_RUN(0)/LIVE(1). Two-switch default DRY_RUN.
 create table if not exists bot_state (
