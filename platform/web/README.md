@@ -17,7 +17,9 @@ thing the two share - see `../RESEARCH.md`.
 | Path                    | What                                                                                                                                                                                                                                                                                                     |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/`                     | Landing (pricing removed - everything is free for now)                                                                                                                                                                                                                                                   |
-| `/sign-in`, `/sign-up`  | Better Auth                                                                                                                                                                                                                                                                                              |
+| `/sign-in`, `/sign-up`  | Better Auth (email+password with required email verification, or Google)                                                                                                                                                                                                                                 |
+| `/forgot-password`      | Request a password-reset link (`authClient.requestPasswordReset`)                                                                                                                                                                                                                                        |
+| `/reset-password`       | Set a new password from an emailed token (`authClient.resetPassword`)                                                                                                                                                                                                                                    |
 | `/account`              | Link CoinDCX keys (encrypted), bot on/off + DRY_RUN/LIVE switch                                                                                                                                                                                                                                          |
 | `/strategies`           | Card-based template picker with per-template config, editable entry params, deep explanations + a simulated entry/exit preview chart on live candles (`lib/strategy-sim.ts`, `components/StrategyPreview.tsx`)                                                                                           |
 | `/strategies/build`     | Custom strategy builder: compose entry rules from indicator blocks, live preview + multi-window historic analysis + head-to-head vs the stock templates (`lib/custom-strategy.ts`, `components/StrategyBuilder.tsx`). Defs run live via `bot/strategies/custom.py` - keep the two evaluators in lockstep |
@@ -40,6 +42,24 @@ npm run dev
 
 `ENCRYPTION_MASTER_KEY` MUST be identical to the worker's, or the supervisor can't decrypt the
 keys this app stores.
+
+## Auth hardening
+
+- **Email verification is required** for email+password sign-ups (`requireEmailVerification`).
+  A session is only created once the address is confirmed; Google sign-ins arrive pre-verified.
+  Verification/reset emails go through the SMTP sender in `lib/email.ts` — in dev with no SMTP
+  the link is logged to the server console so the flow stays testable.
+- **Password reset** is wired end-to-end (`/forgot-password` → email → `/reset-password`).
+- **Rate limiting** on the auth endpoints uses Better Auth's DB-backed limiter (memory storage
+  is per-instance and useless on serverless). This needs the `rateLimit` table — **re-apply
+  `platform/db/schema.sql`** (it's `create table if not exists`, so idempotent) before deploying.
+  The public `/api/candles` proxy has its own in-memory per-IP cap (`lib/rate-limit.ts`).
+- **`BETTER_AUTH_SECRET` is mandatory in production** — the app refuses to start without it
+  rather than falling back to Better Auth's forgeable default secret.
+
+> Existing email+password accounts created before verification was required have
+> `emailVerified = 0` and must verify (via "Forgot password?" or a fresh sign-in, which re-sends
+> the link) before they can sign in again. Google accounts are unaffected.
 
 ## Checks
 

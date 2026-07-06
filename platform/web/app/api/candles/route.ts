@@ -5,6 +5,7 @@
 // order execution still happens on CoinDCX.
 import { NextResponse } from "next/server";
 import { toBinanceSymbol } from "@/lib/binance";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 const INTERVALS = new Set([
   "1m",
@@ -20,6 +21,15 @@ const INTERVALS = new Set([
 ]);
 
 export async function GET(req: Request) {
+  // Open, unauthenticated proxy - cap per-IP volume so it can't be turned into a free
+  // amplifier. 240/min clears realistic chart polling and best-strategy bursts.
+  if (!rateLimit(`candles:${clientIp(req)}`, 240, 60_000)) {
+    return NextResponse.json(
+      { error: "rate limited" },
+      { status: 429, headers: { "Retry-After": "60" } },
+    );
+  }
+
   const { searchParams } = new URL(req.url);
   const pair = (searchParams.get("pair") || "I-BTC_INR").toUpperCase();
   const interval = searchParams.get("interval") || "15m";

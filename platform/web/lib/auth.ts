@@ -4,13 +4,76 @@ import { db } from "./db";
 import * as schema from "./auth-schema";
 import { dash } from "@better-auth/infra";
 import { getUserContact } from "./queries";
-import { sendSignUpEmail, sendSignInEmail } from "./email";
+import {
+  sendSignUpEmail,
+  sendSignInEmail,
+  sendVerifyEmail,
+  sendResetEmail,
+} from "./email";
+
+// Fail closed in production: with no secret, sessions are signed with a predictable
+// default and can be forged. The env is intentionally absent during `next build`
+// (NEXT_PHASE marks that phase), so only enforce this at real request time.
+if (
+  !process.env.BETTER_AUTH_SECRET &&
+  process.env.NODE_ENV === "production" &&
+  process.env.NEXT_PHASE !== "phase-production-build"
+) {
+  throw new Error(
+    "BETTER_AUTH_SECRET is not set - refusing to start, as sessions would be signed with an insecure default.",
+  );
+}
+
+// In dev, SMTP is usually unset so verification/reset emails are skipped. Log the link
+// so local password flows remain testable without a mail server.
+const devLogLink = (label: string, url: string) => {
+  if (process.env.NODE_ENV !== "production")
+    console.info(`[auth] ${label}: ${url}`);
+};
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, { provider: "sqlite", schema }),
-  emailAndPassword: { enabled: true },
-  // Notification emails. Both hooks fire on sign-up (user + session created); the
-  // sign-in mail is skipped for accounts younger than 60s so new users get only the welcome.
+  // Brute-force / abuse protection on the auth endpoints. Memory storage is per-instance
+  // and useless on serverless, so persist counters in D1 (see the rateLimit table in
+  // auth-schema.ts / platform/db/schema.sql). On by default in production.
+  rateLimit: {
+    storage: "database",
+    window: 60,
+    max: 100,
+    customRules: {
+      "/sign-in/email": { window: 60, max: 10 },
+      "/sign-up/email": { window: 60, max: 5 },
+      "/request-password-reset": { window: 60, max: 5 },
+      "/forget-password": { window: 60, max: 5 },
+      "/reset-password": { window: 60, max: 10 },
+      "/send-verification-email": { window: 60, max: 5 },
+    },
+  },
+  emailAndPassword: {
+    enabled: true,
+    // No session until the address is confirmed - stops registration with emails the
+    // user doesn't own and the email-bomb vector that opens up. Google sign-ins arrive
+    // pre-verified from the provider, so they are unaffected.
+    requireEmailVerification: true,
+    sendResetPassword: async ({ user, url }) => {
+      devLogLink("reset password", url);
+      await sendResetEmail(user.email, url, user.name);
+    },
+    resetPasswordTokenExpiresIn: 3600,
+  },
+  emailVerification: {
+    sendOnSignUp: true,
+    autoSignInAfterVerification: true,
+    expiresIn: 3600,
+    sendVerificationEmail: async ({ user, url }) => {
+      devLogLink("verify email", url);
+      await sendVerifyEmail(user.email, url, user.name);
+    },
+  },
+  // Notification emails. The welcome fires on user creation; the sign-in mail is skipped
+  // for accounts younger than 60s so a fresh Google sign-up (which does create a session)
+  // gets only the welcome. Password sign-ups create no session until verified, so their
+  // sign-in mail naturally waits until they actually log in.
   databaseHooks: {
     user: {
       create: {

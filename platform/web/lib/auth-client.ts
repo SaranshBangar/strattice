@@ -5,4 +5,12 @@ import { sentinelClient } from "@better-auth/infra/client";
 export const authClient = createAuthClient({
   plugins: [sentinelClient()],
 });
-export const { signIn, signUp, signOut, useSession } = authClient;
+export const {
+  signIn,
+  signUp,
+  signOut,
+  useSession,
+  requestPasswordReset,
+  resetPassword,
+  sendVerificationEmail,
+} = authClient;
