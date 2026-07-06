@@ -53,6 +53,13 @@ if (
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, { provider: "sqlite", schema }),
+  // Every getSession() call otherwise hits D1 (over its REST API) to validate the token -
+  // that's most page loads and every server action. A short signed-cookie cache serves the
+  // common case with zero D1 round trips; role/ban/tier changes lag up to maxAge, which is
+  // an acceptable window (session revocation on sign-out still clears the cookie itself).
+  session: {
+    cookieCache: { enabled: true, maxAge: 60 },
+  },
   // Brute-force / abuse protection on the auth endpoints. Memory storage is per-instance
   // and useless on serverless, so counters persist in D1 via a self-healing, fail-open
   // custom store (lib/rate-limit-store.ts): it creates the rateLimit table on first use if

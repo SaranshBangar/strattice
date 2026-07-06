@@ -90,6 +90,7 @@ export default async function DashboardPage() {
     strategies,
     creds,
     tax,
+    currency,
   ] = await Promise.all([
     q.effectiveTier(user.id),
     q.getBotState(user.id),
@@ -103,8 +104,8 @@ export default async function DashboardPage() {
     q.listStrategies(user.id),
     q.credentialsLinked(user.id),
     q.taxSummary(user.id, fy.startISO, fy.endISO),
+    q.getCurrency(user.id),
   ]);
-  const currency = await q.getCurrency(user.id);
   const rate = (await usdRate(currency)) ?? 1;
   const fx = { symbol: currencySymbol(currency), rate };
 

@@ -254,7 +254,7 @@ export async function saveCredentials(
   secret: string,
   label: string,
 ) {
-  const [k, s] = [await encrypt(apiKey), await encrypt(secret)];
+  const [k, s] = await Promise.all([encrypt(apiKey), encrypt(secret)]);
   await d1Query(
     `insert into exchange_credentials(user_id, api_key_enc, secret_enc, key_label)
      values (?,?,?,?)
@@ -286,10 +286,12 @@ export async function addStrategy(
   market: string,
   params?: string | null,
 ) {
-  const tier = await effectiveTier(userId);
+  const [tier, rows] = await Promise.all([
+    effectiveTier(userId),
+    listStrategies(userId),
+  ]);
   if (!isAllowed(tier, template))
     throw new Error(`${template} not allowed on the ${tier.name} plan`);
-  const rows = await listStrategies(userId);
   const enabledCount = rows.filter((r) => r.enabled).length;
   // new strategies start enabled only if there's room under the cap; else added disabled.
   const enabled =
@@ -307,8 +309,10 @@ export async function setStrategyEnabled(
   enabled: boolean,
 ) {
   if (enabled) {
-    const tier = await effectiveTier(userId);
-    const rows = await listStrategies(userId);
+    const [tier, rows] = await Promise.all([
+      effectiveTier(userId),
+      listStrategies(userId),
+    ]);
     const enabledCount = rows.filter((r) => r.enabled && r.id !== id).length;
     if (tier.maxActive !== null && enabledCount >= tier.maxActive)
       throw new Error(
@@ -346,15 +350,21 @@ export async function setBotState(
   userId: string,
   patch: { active?: boolean; live?: boolean },
 ) {
-  // upsert; only overwrite provided fields
-  const cur = await getBotState(userId);
-  const active = patch.active ?? !!cur.active;
-  const live = patch.live ?? !!cur.live;
+  // Single upsert instead of a read-then-merge-then-write: unspecified fields are bound
+  // as SQL NULL and `coalesce`d against the existing row (or the column default on first
+  // insert), so a patch touching only one field never has to fetch the other one first.
+  // Safe because active/live are non-nullable booleans - there's no real value that could
+  // be confused with "not provided" (contrast with notification_prefs.telegram_chat_id,
+  // which IS legitimately nullable and keeps its read-then-write for that reason).
+  const activeVal = patch.active === undefined ? null : patch.active ? 1 : 0;
+  const liveVal = patch.live === undefined ? null : patch.live ? 1 : 0;
   await d1Query(
-    `insert into bot_state(user_id, active, live) values (?,?,?)
-     on conflict(user_id) do update set active=excluded.active, live=excluded.live,
-       updated_at=datetime('now')`,
-    [userId, active ? 1 : 0, live ? 1 : 0],
+    `insert into bot_state(user_id, active, live) values (?, coalesce(?, 0), coalesce(?, 0))
+     on conflict(user_id) do update set
+       active = coalesce(?, active),
+       live = coalesce(?, live),
+       updated_at = datetime('now')`,
+    [userId, activeVal, liveVal, activeVal, liveVal],
   );
 }
 
@@ -490,25 +500,27 @@ export async function listUsersAdmin(
   const p = Math.max(1, page);
   const size = Math.min(100, Math.max(5, pageSize));
   const like = `%${search.trim().toLowerCase()}%`;
-  const countRow = await d1First<{ n: number }>(
-    "select count(*) as n from user where lower(email) like ?",
-    [like],
-  );
-  const rows = await d1Query<AdminUser>(
-    `select u.id, u.email, u.name, u.createdAt as created_at,
-            coalesce(s.tier,'free') as tier, coalesce(s.status,'-') as status, s.period_end,
-            coalesce(b.active,0) as bot_active, coalesce(b.live,0) as bot_live, b.last_heartbeat,
-            (case when c.user_id is not null then 1 else 0 end) as linked,
-            (select count(*) from trades t where t.user_id = u.id) as trades
-     from user u
-     left join subscriptions s on s.user_id = u.id
-     left join bot_state b on b.user_id = u.id
-     left join exchange_credentials c on c.user_id = u.id
-     where lower(u.email) like ?
-     order by u.createdAt desc
-     limit ? offset ?`,
-    [like, size, (p - 1) * size],
-  );
+  const [countRow, rows] = await Promise.all([
+    d1First<{ n: number }>(
+      "select count(*) as n from user where lower(email) like ?",
+      [like],
+    ),
+    d1Query<AdminUser>(
+      `select u.id, u.email, u.name, u.createdAt as created_at,
+              coalesce(s.tier,'free') as tier, coalesce(s.status,'-') as status, s.period_end,
+              coalesce(b.active,0) as bot_active, coalesce(b.live,0) as bot_live, b.last_heartbeat,
+              (case when c.user_id is not null then 1 else 0 end) as linked,
+              (select count(*) from trades t where t.user_id = u.id) as trades
+       from user u
+       left join subscriptions s on s.user_id = u.id
+       left join bot_state b on b.user_id = u.id
+       left join exchange_credentials c on c.user_id = u.id
+       where lower(u.email) like ?
+       order by u.createdAt desc
+       limit ? offset ?`,
+      [like, size, (p - 1) * size],
+    ),
+  ]);
   return { rows, total: countRow?.n ?? 0, page: p, pageSize: size };
 }
 
