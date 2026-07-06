@@ -56,7 +56,7 @@ create table if not exists verification (
 -- lastRequest is epoch milliseconds.
 create table if not exists rateLimit (
   id          text primary key,
-  key         text,
+  key         text unique,
   count       integer,
   lastRequest integer
 );

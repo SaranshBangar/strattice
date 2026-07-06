@@ -6,7 +6,7 @@
 --   wrangler d1 execute coindcx --file platform/db/migrations/0001_rate_limit.sql --remote
 create table if not exists rateLimit (
   id          text primary key,
-  key         text,
+  key         text unique,
   count       integer,
   lastRequest integer
 );
