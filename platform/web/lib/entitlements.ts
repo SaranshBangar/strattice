@@ -5,15 +5,24 @@
 // everything, and the paid tiers are kept only so legacy subscription rows still
 // resolve. Checkout is not offered anywhere in the UI.
 
-/** The stock strategy templates that ship with the bot. */
-export const BUILTIN_TEMPLATES = [
-  "ma_crossover",
-  "rsi",
+/** The ACTIVE stock templates: the daily trend engines that survived the real-data
+ *  backtest study (research/FINDINGS.md). Order = picker order, strongest first. */
+export const ACTIVE_TEMPLATES = [
+  "tsmom",
   "momentum",
-  "vol_expansion",
-  "fast_rsi",
-  "bb_reversion",
   "squeeze_breakout",
+  "ma_crossover",
+  "vol_expansion",
+  "supertrend",
+] as const;
+/** RETIRED templates: mean reversion loses net of India friction at EVERY tested
+ *  altitude (research/FINDINGS.md). Not offered for new adds; kept so legacy rows
+ *  still resolve, render, and keep their exits managed until removed by the user. */
+export const RETIRED_TEMPLATES = ["rsi", "fast_rsi", "bb_reversion"] as const;
+/** Everything the TS sim can simulate (active + retired). */
+export const BUILTIN_TEMPLATES = [
+  ...ACTIVE_TEMPLATES,
+  ...RETIRED_TEMPLATES,
 ] as const;
 /** Experimental templates: run in the bot's Python engine only (ML model
  *  inference is server-side), so the browser cannot simulate/backtest them.
@@ -28,11 +37,14 @@ export const ALL_TEMPLATES = [
   "custom",
 ] as const;
 export type Template = (typeof ALL_TEMPLATES)[number];
+export type ActiveTemplate = (typeof ACTIVE_TEMPLATES)[number];
+export type RetiredTemplate = (typeof RETIRED_TEMPLATES)[number];
 export type BuiltinTemplate = (typeof BUILTIN_TEMPLATES)[number];
 export type ExperimentalTemplate = (typeof EXPERIMENTAL_TEMPLATES)[number];
-/** Templates pickable from the template cards (everything except "custom"). */
-export type PickableTemplate = BuiltinTemplate | ExperimentalTemplate;
-export const DEFAULT_TEMPLATE: Template = "ma_crossover";
+/** Templates pickable from the template cards (active + experimental; retired and
+ *  "custom" are excluded — custom has its own builder). */
+export type PickableTemplate = ActiveTemplate | ExperimentalTemplate;
+export const DEFAULT_TEMPLATE: Template = "tsmom";
 
 export type TierName = "free" | "starter" | "plus" | "pro" | "max";
 

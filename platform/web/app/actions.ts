@@ -11,7 +11,7 @@ import {
 import {
   PAID_TIERS,
   TIERS,
-  BUILTIN_TEMPLATES,
+  ACTIVE_TEMPLATES,
   EXPERIMENTAL_TEMPLATES,
   type TierName,
   type PickableTemplate,
@@ -50,8 +50,10 @@ export async function addStrategyAction(formData: FormData) {
   if (template === "custom") {
     paramsJson = JSON.stringify(sanitizeCustomDef(String(raw ?? "")));
   } else if (raw) {
+    // New adds are restricted to ACTIVE templates: retired ones (mean reversion)
+    // keep resolving for legacy rows but can no longer be added.
     if (
-      !(BUILTIN_TEMPLATES as readonly string[]).includes(template) &&
+      !(ACTIVE_TEMPLATES as readonly string[]).includes(template) &&
       !(EXPERIMENTAL_TEMPLATES as readonly string[]).includes(template)
     )
       throw new Error("unknown template");

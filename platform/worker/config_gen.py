@@ -13,35 +13,72 @@ import yaml
 
 import entitlements  # flat import: run with platform/worker on sys.path (not as 'platform.*')
 
-# Proven per-template defaults, lifted from config.yaml. {exits..., market, params}.
+# Proven per-template defaults, lifted from config.yaml (the DAILY profile validated in
+# research/FINDINGS.md — the engine trades 1d bars). {exits..., market, params}.
+# Default markets are where each template was profitable on BOTH the INR pair and its
+# USDT twin (venue robustness). Trend templates: no take-profit, 3.5×ATR(14) chandelier,
+# 7% hard stop — the fat right tail of trend winners is what pays India's ~1.5-1.7%
+# round-trip friction.
 TEMPLATE_DEFAULTS: dict[str, dict] = {
-    "ma_crossover": {
-        "market": "I-BTC_INR",
-        "stop_loss_pct": 0.04, "take_profit_pct": 0.0, "chandelier_k": 3.0,
-        "atr_period": 16, "max_hold_bars": 0,
-        "params": {"fast": 32, "slow": 96, "atr_period": 16, "k_atr": 0.5,
-                   "confirm_bars": 4, "regime_period": 192, "expected_move_pct": 0.05},
+    # +207.6% net (PF 2.58) on I-ETH_INR 2023-09..2026-07; 17/21 walk-forward folds.
+    "tsmom": {
+        "market": "I-ETH_INR",
+        "stop_loss_pct": 0.07, "take_profit_pct": 0.0, "chandelier_k": 3.5,
+        "atr_period": 14, "max_hold_bars": 0,
+        "params": {"lookback": 30, "min_return": 0.10, "near_high_frac": 0.02,
+                   "regime_period": 50, "expected_move_pct": 0.08},
     },
+    # +108.7% net (PF 2.75) on I-BTC_INR; 16/21 folds.
+    "momentum": {
+        "market": "I-BTC_INR",
+        "stop_loss_pct": 0.07, "take_profit_pct": 0.0, "chandelier_k": 3.5,
+        "atr_period": 14, "max_hold_bars": 0,
+        "params": {"lookback": 20, "atr_period": 14, "vol_period": 20, "min_atr_frac": 0.01,
+                   "vol_mult": 1.0, "buffer": 0.002, "max_chase": 0.05,
+                   "regime_period": 50, "expected_move_pct": 0.08},
+    },
+    # +138.9% net (PF 2.85) on I-DOGE_INR; 18/21 folds — best fold record of the study.
+    "squeeze_breakout": {
+        "market": "I-DOGE_INR",
+        "stop_loss_pct": 0.07, "take_profit_pct": 0.0, "chandelier_k": 3.5,
+        "atr_period": 14, "max_hold_bars": 0,
+        "params": {"bb_period": 20, "k_bb": 2.0, "k_kc": 1.5, "atr_period": 14, "lookback": 20,
+                   "squeeze_lookback": 6, "vol_period": 20, "vol_mult": 1.0, "buffer": 0.002,
+                   "max_chase": 0.05, "min_atr_frac": 0.01,
+                   "regime_period": 50, "expected_move_pct": 0.08},
+    },
+    # +187.7% net (PF 2.25) on I-XRP_INR (twin +109.8%).
+    "ma_crossover": {
+        "market": "I-XRP_INR",
+        "stop_loss_pct": 0.07, "take_profit_pct": 0.0, "chandelier_k": 3.5,
+        "atr_period": 14, "max_hold_bars": 0,
+        "params": {"fast": 8, "slow": 25, "atr_period": 14, "k_atr": 0.2,
+                   "confirm_bars": 3, "regime_period": 100, "expected_move_pct": 0.08},
+    },
+    # +143.6% net (PF 2.75) on I-BNB_INR (twin +171.9%); 78/81 param combos positive.
+    "vol_expansion": {
+        "market": "I-BNB_INR",
+        "stop_loss_pct": 0.07, "take_profit_pct": 0.0, "chandelier_k": 3.5,
+        "atr_period": 14, "max_hold_bars": 0,
+        "params": {"short_atr": 5, "long_atr": 20, "expansion_mult": 1.3,
+                   "breakout_lookback": 10, "regime_period": 50, "expected_move_pct": 0.06},
+    },
+    # +94.6% net on I-BTC_INR (twin +21.8%); 7/7 INR pairs positive; 15/21 folds (v4).
+    "supertrend": {
+        "market": "I-BTC_INR",
+        "stop_loss_pct": 0.07, "take_profit_pct": 0.0, "chandelier_k": 3.5,
+        "atr_period": 14, "max_hold_bars": 0,
+        "params": {"atr_period": 10, "mult": 3.0, "confirm_bars": 2,
+                   "regime_period": 50, "expected_move_pct": 0.08},
+    },
+    # --- RETIRED templates (mean reversion loses net of India friction at every tested
+    # altitude — research/FINDINGS.md). Kept ONLY so legacy rows keep resolving and any
+    # open position keeps its exits managed. Not offered for new adds in the UI. ---
     "rsi": {
         "market": "I-ETH_INR",
         "stop_loss_pct": 0.03, "take_profit_pct": 0.03, "chandelier_k": 0.0,
         "atr_period": 16, "max_hold_bars": 64,
         "params": {"period": 14, "oversold": 22, "regime_period": 192, "expected_move_pct": 0.05},
-    },
-    "momentum": {
-        "market": "I-BTC_INR",
-        "stop_loss_pct": 0.04, "take_profit_pct": 0.0, "chandelier_k": 3.0,
-        "atr_period": 16, "max_hold_bars": 0,
-        "params": {"lookback": 32, "atr_period": 16, "vol_period": 32, "min_atr_frac": 0.005,
-                   "vol_mult": 1.2, "buffer": 0.002, "max_chase": 0.02,
-                   "regime_period": 96, "expected_move_pct": 0.03},
-    },
-    "vol_expansion": {
-        "market": "I-XRP_INR",
-        "stop_loss_pct": 0.025, "take_profit_pct": 0.0, "chandelier_k": 2.5,
-        "atr_period": 16, "max_hold_bars": 0,
-        "params": {"short_atr": 8, "long_atr": 32, "expansion_mult": 1.6,
-                   "breakout_lookback": 24, "regime_period": 96, "expected_move_pct": 0.03},
     },
     "fast_rsi": {
         "market": "I-BNB_INR",
@@ -56,32 +93,25 @@ TEMPLATE_DEFAULTS: dict[str, dict] = {
         "params": {"period": 20, "k": 2.0, "z_entry": 2.0,
                    "regime_period": 96, "expected_move_pct": 0.03},
     },
-    "squeeze_breakout": {
-        "market": "I-DOGE_INR",
-        "stop_loss_pct": 0.04, "take_profit_pct": 0.0, "chandelier_k": 3.0,
-        "atr_period": 16, "max_hold_bars": 0,
-        "params": {"bb_period": 20, "k_bb": 2.0, "k_kc": 1.5, "atr_period": 16, "lookback": 20,
-                   "squeeze_lookback": 6, "vol_period": 32, "vol_mult": 1.2, "buffer": 0.002,
-                   "max_chase": 0.02, "min_atr_frac": 0.005,
-                   "regime_period": 96, "expected_move_pct": 0.03},
-    },
-    # EXPERIMENTAL: Hugging Face Chronos forecast (bot/strategies/hf_forecast.py).
-    # Needs `pip install chronos-forecasting torch` on the runner; without them the
-    # strategy logs once and HOLDs forever (never crashes the engine). Tight stop,
-    # take-profit and time-stop because model edge is unproven on crypto.
+    # EXPERIMENTAL: Hugging Face Chronos-2 forecast (bot/strategies/hf_forecast.py).
+    # Needs `pip install "chronos-forecasting>=2.0" torch` on the runner; without them
+    # the strategy logs once and HOLDs forever (never crashes the engine). Exits are
+    # horizon-matched (8-day forecast -> 16-day time-stop) because model edge is
+    # unproven on crypto; the bot falls back to chronos-bolt-tiny if chronos-2 can't load.
     "hf_forecast": {
         "market": "I-BTC_INR",
-        "stop_loss_pct": 0.03, "take_profit_pct": 0.04, "chandelier_k": 0.0,
-        "atr_period": 16, "max_hold_bars": 32,
-        "params": {"model": "amazon/chronos-bolt-tiny", "context": 384, "horizon": 8,
-                   "min_forecast_pct": 1.0, "regime_period": 192, "expected_move_pct": 0.04},
+        "stop_loss_pct": 0.05, "take_profit_pct": 0.08, "chandelier_k": 0.0,
+        "atr_period": 14, "max_hold_bars": 16,
+        "params": {"model": "amazon/chronos-2", "context": 512, "horizon": 8,
+                   "min_forecast_pct": 3.0, "regime_period": 100, "expected_move_pct": 0.06},
     },
     # User-built rule strategies (bot/strategies/custom.py). The rule JSON travels in the
     # row's params; exits come from the def's "exits" (clamped in _strategy_spec). These
-    # baseline exits apply only when the def carries none.
+    # baseline exits apply only when the def carries none — daily-bar friendly: 7% stop,
+    # chandelier trail, no target.
     "custom": {
         "market": "I-BTC_INR",
-        "stop_loss_pct": 0.03, "take_profit_pct": 0.05, "chandelier_k": 0.0,
+        "stop_loss_pct": 0.07, "take_profit_pct": 0.0, "chandelier_k": 3.5,
         "atr_period": 14, "max_hold_bars": 0,
         "params": {},
     },
@@ -96,7 +126,10 @@ def _clamp(v, lo: float, hi: float, dflt: float) -> float:
     return min(hi, max(lo, v))
 
 _BASE = {
-    "engine": {"poll_seconds": 180, "candle_interval": "15m", "candle_limit": 400},
+    # DAILY bars (was 15m): the only altitude that survived the friction study
+    # (research/FINDINGS.md). 5-min poll acts within minutes of each daily close;
+    # 400 daily bars ≈ 13 months > regime(100) + slow MA + ATR warmups.
+    "engine": {"poll_seconds": 300, "candle_interval": "1d", "candle_limit": 400},
     "starting_equity": 1000.0,   # DRY_RUN sim wallet; LIVE reads the real exchange balance
     "allocation_frac": 0.97,
     "quote_currency": "INR",
@@ -170,19 +203,26 @@ def write_config(path: Path, cfg: dict, dumped: str | None = None) -> bool:
 if __name__ == "__main__":
     # self-check: tier cap reaches the generated config; entitlements applied; valid YAML.
     req = [
-        {"template": "ma_crossover", "market": "I-BTC_INR", "enabled": True},
-        {"template": "rsi", "market": "I-ETH_INR", "enabled": True},
+        {"template": "tsmom", "market": "I-ETH_INR", "enabled": True},
         {"template": "momentum", "market": "I-BTC_INR", "enabled": True},
-        {"template": "fast_rsi", "market": "I-BNB_INR", "enabled": True},
+        {"template": "supertrend", "market": "I-BTC_INR", "enabled": True},
+        {"template": "rsi", "market": "I-ETH_INR", "enabled": True},  # retired legacy row
     ]
     # pricing is off: every tier is fully unlocked (see entitlements.py).
     free = build_config("free", req, kill_switch_file="data/users/u1/KILL")
     assert free["risk"]["max_trades_per_day"] == 100
     assert free["risk"]["daily_loss_frac"] == 0.10, "daily loss brake must stay at 10%"
+    assert free["engine"]["candle_interval"] == "1d", "the engine trades DAILY bars"
     assert sum(s["enabled"] for s in free["strategies"]) == 4, "free -> all active while pricing is off"
+    assert free["strategies"][3]["module"] == "rsi", "legacy retired rows must still resolve"
 
     mx = build_config("max", req, kill_switch_file="data/users/u2/KILL")
     assert mx["risk"]["max_trades_per_day"] == 100
     assert sum(s["enabled"] for s in mx["strategies"]) == 4, "max -> all active"
     assert yaml.safe_load(yaml.safe_dump(mx)) == mx, "round-trips through YAML"
+    # every template default must reference a module in the bot's registry, with a
+    # daily-safe exit layer for the active trend templates.
+    for tpl, d in TEMPLATE_DEFAULTS.items():
+        spec = _strategy_spec(0, {"template": tpl})
+        assert spec["module"] == tpl and spec["params"] is not None
     print("config_gen self-check OK")

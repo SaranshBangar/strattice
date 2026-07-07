@@ -341,19 +341,30 @@ export default function Dashboard() {
   );
 }
 
-// Plain-English blurb per strategy, keyed off the name prefix (modules: ma_crossover,
-// rsi, momentum, vol_expansion). ponytail: name-prefix heuristic, not the bot's module
+// Plain-English blurb per strategy, keyed off the name prefix (v4 lineup: tsmom,
+// momentum/breakout, ma_crossover, vol_expansion, squeeze_breakout, plus supertrend,
+// hf_forecast and custom). ponytail: name-prefix heuristic, not the bot's module
 // field (status API doesn't return it); add a `module` to the API if names ever drift.
 function describe(name: string): string {
   const n = name.toLowerCase();
+  if (n.startsWith("tsmom"))
+    return "Time-series momentum. Buys daily strength near the recent high (≥10% up over ~30 days) in an uptrend; a 7% hard stop and an ATR chandelier trail handle the exit. The best performer of the backtest study.";
+  if (n.startsWith("squeeze"))
+    return "Squeeze breakout. Waits for the Bollinger bands to compress inside the Keltner channel (a volatility coil), then buys the confirmed break of the 20-day high on real volume; chandelier trail exits.";
+  if (n.startsWith("super"))
+    return "Supertrend. Buys a fresh flip of the ATR-band trend state from down to up in an uptrend; the chandelier trail and hard stop manage the exit.";
   if (n.startsWith("ma"))
-    return "Moving-average crossover. Buys when a fast SMA crosses above a slow SMA and rides the trend; a hard stop and ATR trail handle the exit.";
-  if (n.startsWith("rsi"))
-    return "RSI mean-reversion. Buys oversold dips (RSI below threshold) inside an uptrend, expecting a bounce back toward the average; time-stop bails a stalled trade.";
+    return "Moving-average crossover. Buys when the fast daily SMA crosses above the slow one with a real gap and rising slope; a hard stop and ATR trail handle the exit.";
+  if (n.startsWith("rsi") || n.startsWith("fast_rsi") || n.startsWith("bb"))
+    return "Mean-reversion (retired). Kept only to manage any open position's exits — the backtest study found mean reversion loses net of India friction at every timeframe.";
   if (n.startsWith("breakout") || n.startsWith("mom"))
-    return "Momentum breakout. Buys when price closes above its recent N-bar high (Donchian channel) and trails the move.";
+    return "Momentum breakout. Buys when price closes above its prior 20-day high (Donchian channel) on confirming volume, and trails the move with a chandelier stop.";
   if (n.startsWith("vol"))
-    return "Volatility expansion. Enters when the bar's range expands past the expected move, catching fresh bursts of momentum.";
+    return "Volatility expansion. Enters when short-window ATR pops versus its long window at a fresh local high — a regime shift from quiet to loud; trail-managed exit.";
+  if (n.startsWith("hf") || n.startsWith("ai"))
+    return "AI forecast (experimental). Buys only when the Chronos-2 time-series model forecasts a clear up-move with limited downside, inside an uptrend. No proven edge — paper-trade first.";
+  if (n.startsWith("custom"))
+    return "Custom rule strategy built in the platform's strategy builder; all of its entry rules must be true on the same bar. Exits come from its own configured protective layer.";
   return "Algorithmic, entry-only strategy. Exits are handled by the shared stop-loss / take-profit / trail layer.";
 }
 

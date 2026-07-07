@@ -7,6 +7,8 @@ from .ma_crossover import MACrossover
 from .momentum import Momentum
 from .rsi import RSIMeanReversion
 from .squeeze_breakout import SqueezeBreakout
+from .supertrend import Supertrend
+from .trend_ensemble import TrendEnsemble
 from .tsmom import TSMomentum
 from .vol_expansion import VolExpansion
 
@@ -18,6 +20,8 @@ REGISTRY = {
     "fast_rsi": FastRSIReversion,
     "bb_reversion": BBReversion,
     "squeeze_breakout": SqueezeBreakout,
+    "supertrend": Supertrend,
+    "trend_ensemble": TrendEnsemble,
     "tsmom": TSMomentum,
     "hf_forecast": HFForecast,
     "custom": CustomRules,

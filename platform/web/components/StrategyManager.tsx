@@ -12,7 +12,7 @@ import {
 } from "@/app/actions";
 import type { StrategyRow } from "@/lib/queries";
 import {
-  BUILTIN_TEMPLATES,
+  ACTIVE_TEMPLATES,
   EXPERIMENTAL_TEMPLATES,
   type BuiltinTemplate,
   type PickableTemplate,
@@ -99,9 +99,9 @@ function ConfigRow({ k, v }: { k: string; v: string }) {
 
 export function StrategyManager({ strategies }: { strategies: StrategyRow[] }) {
   const [pending, start] = useTransition();
-  const [tpl, setTpl] = useState<PickableTemplate>(BUILTIN_TEMPLATES[0]);
+  const [tpl, setTpl] = useState<PickableTemplate>(ACTIVE_TEMPLATES[0]);
   const [marketSel, setMarketSel] = useState<string>(
-    TEMPLATE_CONFIG[BUILTIN_TEMPLATES[0]].market,
+    TEMPLATE_CONFIG[ACTIVE_TEMPLATES[0]].market,
   );
   const [customMarket, setCustomMarket] = useState("");
   const [edits, setEdits] = useState<Record<string, number>>({});
@@ -181,7 +181,7 @@ export function StrategyManager({ strategies }: { strategies: StrategyRow[] }) {
           role="radiogroup"
           aria-label="Strategy template"
         >
-          {[...BUILTIN_TEMPLATES, ...EXPERIMENTAL_TEMPLATES].map((t) => {
+          {[...ACTIVE_TEMPLATES, ...EXPERIMENTAL_TEMPLATES].map((t) => {
             const m = STRATEGY_META[t];
             const active = t === tpl;
             return (

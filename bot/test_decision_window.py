@@ -37,6 +37,10 @@ PARAM_SETS: dict[str, dict] = {
                         "lookback": 20, "squeeze_lookback": 6, "vol_period": 32,
                         "regime_period": 80, "expected_move_pct": 0.01},
     "tsmom": {"lookback": 30, "min_return": 0.02, "regime_period": 80, "expected_move_pct": 0.01},
+    "supertrend": {"atr_period": 10, "mult": 3.0, "confirm_bars": 2,
+                   "regime_period": 80, "expected_move_pct": 0.01},
+    "trend_ensemble": {"lookbacks": [10, 20, 40, 80], "min_agree_frac": 0.8, "confirm_bars": 3,
+                       "regime_period": 80, "expected_move_pct": 0.01},
     "custom": {"rules": [
         {"kind": "trend", "op": "above", "period": 50},
         {"kind": "sma_cross", "fast": 10, "slow": 30, "within": 3},

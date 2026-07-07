@@ -30,12 +30,14 @@ def main() -> None:
     from bot.engine import Engine
 
     req = [
-        {"template": "ma_crossover", "market": "I-BTC_INR", "enabled": True},
-        {"template": "rsi", "market": "I-ETH_INR", "enabled": True},
-        {"template": "momentum", "market": "I-BTC_INR", "enabled": True},
+        {"template": "tsmom", "market": "I-ETH_INR", "enabled": True},
+        {"template": "supertrend", "market": "I-BTC_INR", "enabled": True},
+        {"template": "squeeze_breakout", "market": "I-DOGE_INR", "enabled": True},
+        {"template": "rsi", "market": "I-ETH_INR", "enabled": True},  # retired legacy row
     ]
 
-    for tier, expect_active in (("free", 1), ("plus", 3), ("max", 3)):
+    # pricing is off: every tier is fully unlocked, so all 4 rows stay active.
+    for tier, expect_active in (("free", 4), ("plus", 4), ("max", 4)):
         cfg = config_gen.build_config(tier, req, kill_switch_file="data/users/test/KILL")
         config_gen.write_config(Path(os.environ["CONFIG_PATH"]), cfg)
         loaded = config.load()                 # honors CONFIG_PATH (the 2-line bot change)

@@ -74,7 +74,7 @@ const fullLabel = (t: number) =>
 
 export default function MarketChart() {
   const [pair, setPair] = useState(PAIRS[0]);
-  const [interval, setInterval] = useState("1h");
+  const [interval, setInterval] = useState("1d"); // default = the bot's trading interval
   const [ctype, setCtype] = useState<ChartType>("Area");
   const [data, setData] = useState<Candle[]>([]);
   const [loading, setLoading] = useState(true);

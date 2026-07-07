@@ -1,11 +1,11 @@
 "use client";
 // "Choose the best strategy" - for users who don't know which template to pick.
-// Replays every builtin template over live Binance candles on two windows
-// (15m = the live trading interval, 1h = longer history for robustness),
-// ranks them on net-of-fees performance with enough closed trades to mean
-// something, auto-selects the winner and explains the choice in plain words.
+// Replays every ACTIVE template over live Binance DAILY candles (the interval the
+// engine actually trades), split into two ~16-month halves so one lucky stretch
+// can't crown a winner. Ranks on net-of-fees performance with enough closed trades
+// to mean something, auto-selects the winner and explains the choice in plain words.
 import { useState } from "react";
-import { BUILTIN_TEMPLATES, type BuiltinTemplate } from "@/lib/entitlements";
+import { ACTIVE_TEMPLATES, type ActiveTemplate } from "@/lib/entitlements";
 import { STRATEGY_META } from "@/lib/strategies";
 import {
   simulate,
@@ -15,14 +15,13 @@ import {
 } from "@/lib/strategy-sim";
 import { Spinner } from "@/components/Spinner";
 
-// Both windows are 500 bars - 15m matches what the engine actually trades,
-// 1h adds ~3 weeks of history so one lucky day can't crown a winner.
-const WINDOWS = ["15m", "1h"] as const;
-const LIMIT = 500;
+// 1000 daily bars (Binance max) ≈ 2.7 years, evaluated as two halves.
+const WINDOWS = ["older", "recent"] as const;
+const LIMIT = 1000;
 const MIN_CLOSED = 3; // fewer closed trades than this = not enough evidence
 
 interface Verdict {
-  template: BuiltinTemplate;
+  template: ActiveTemplate;
   net: number; // summed net % across windows, after friction
   closed: number;
   wins: number;
@@ -34,16 +33,16 @@ interface Verdict {
 const pct = (n: number) => `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;
 
 function rank(candles: Record<(typeof WINDOWS)[number], Candle[]>): Verdict[] {
-  const verdicts: Verdict[] = BUILTIN_TEMPLATES.map((t) => {
+  const verdicts: Verdict[] = ACTIVE_TEMPLATES.map((t) => {
     const perWindow = {
-      "15m": simulate(t, candles["15m"]),
-      "1h": simulate(t, candles["1h"]),
+      older: simulate(t, candles["older"]),
+      recent: simulate(t, candles["recent"]),
     };
-    const closed = perWindow["15m"].closed + perWindow["1h"].closed;
-    const wins = perWindow["15m"].wins + perWindow["1h"].wins;
+    const closed = perWindow["older"].closed + perWindow["recent"].closed;
+    const wins = perWindow["older"].wins + perWindow["recent"].wins;
     return {
       template: t,
-      net: perWindow["15m"].totalNetPct + perWindow["1h"].totalNetPct,
+      net: perWindow["older"].totalNetPct + perWindow["recent"].totalNetPct,
       closed,
       wins,
       winRate: closed ? (wins / closed) * 100 : null,
@@ -69,14 +68,14 @@ function explain(
   const label = STRATEGY_META[v.template].label;
   const parts: string[] = [];
   if (!v.eligible) {
-    return `${label} scored best, but no template closed ${MIN_CLOSED}+ trades on ${market} in these windows - the stock filters are deliberately picky and this market has been quiet. Treat this pick as weak evidence; try another market or keep the default.`;
+    return `${label} scored best, but no template closed ${MIN_CLOSED}+ trades on ${market} in these windows - the stock filters are deliberately picky and daily strategies only trade a handful of times a year. Treat this pick as weak evidence; try another market or keep the default.`;
   }
   parts.push(
     `${label} came out on top: ${pct(v.net)} net of ~${FRICTION_PCT}% round-trip fees across the two test windows, from ${v.closed} closed trades (${v.winRate!.toFixed(0)}% winners).`,
   );
   if (v.net > buyHold) {
     parts.push(
-      `That beats simply holding ${market} (${pct(buyHold)} over the ~3-week test stretch).`,
+      `That beats simply holding ${market} (${pct(buyHold)} over the ~2.7-year test stretch).`,
     );
   } else {
     parts.push(
@@ -102,7 +101,7 @@ export function BestStrategyFinder({
   market: string;
   disabled?: boolean;
   /** Called with the winning template so the parent selects its card. */
-  onPick: (t: BuiltinTemplate) => void;
+  onPick: (t: ActiveTemplate) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -117,27 +116,26 @@ export function BestStrategyFinder({
     setErr(null);
     setResult(null);
     try {
-      const fetched = await Promise.all(
-        WINDOWS.map(async (iv) => {
-          const r = await fetch(
-            `/api/candles?pair=${encodeURIComponent(market)}&interval=${iv}&limit=${LIMIT}`,
-          );
-          const j = await r.json().catch(() => ({}));
-          if (!r.ok || !Array.isArray(j.candles) || j.candles.length < 50) {
-            throw new Error(`Could not load ${iv} candles for ${market}.`);
-          }
-          return [iv, j.candles as Candle[]] as const;
-        }),
+      const r = await fetch(
+        `/api/candles?pair=${encodeURIComponent(market)}&interval=1d&limit=${LIMIT}`,
       );
-      const candles = Object.fromEntries(fetched) as Record<
-        (typeof WINDOWS)[number],
-        Candle[]
-      >;
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !Array.isArray(j.candles) || j.candles.length < 300) {
+        throw new Error(`Could not load daily candles for ${market}.`);
+      }
+      const all = j.candles as Candle[];
+      const mid = Math.floor(all.length / 2);
+      // Two ~16-month halves of the live 1d interval. The recent half also gets the
+      // older half as indicator warm-up context via slicing from a common array.
+      const candles = {
+        older: all.slice(0, mid),
+        recent: all.slice(mid),
+      } as Record<(typeof WINDOWS)[number], Candle[]>;
       const verdicts = rank(candles);
       const best = verdicts[0];
-      // Buy & hold benchmark: the 1h window (~3 weeks) contains the 15m window, so
-      // its buy & hold covers the whole tested stretch without double counting.
-      const buyHold = best.perWindow["1h"].buyHoldPct;
+      // Buy & hold benchmark across the full fetched stretch.
+      const buyHold =
+        all.length > 1 ? ((all[all.length - 1].c - all[0].c) / all[0].c) * 100 : 0;
       onPick(best.template);
       setResult({
         verdicts,
@@ -205,10 +203,10 @@ export function BestStrategyFinder({
                     Template
                   </th>
                   <th className="py-1 pr-3 text-right font-medium uppercase tracking-wider">
-                    Net 15m
+                    Net · older half
                   </th>
                   <th className="py-1 pr-3 text-right font-medium uppercase tracking-wider">
-                    Net 1h
+                    Net · recent half
                   </th>
                   <th className="py-1 pr-3 text-right font-medium uppercase tracking-wider">
                     Win rate
@@ -237,17 +235,17 @@ export function BestStrategyFinder({
                       )}
                     </td>
                     <td
-                      className={`py-1.5 pr-3 text-right tnum ${v.perWindow["15m"].totalNetPct >= 0 ? "text-gain" : "text-loss"}`}
+                      className={`py-1.5 pr-3 text-right tnum ${v.perWindow["older"].totalNetPct >= 0 ? "text-gain" : "text-loss"}`}
                     >
-                      {v.perWindow["15m"].closed
-                        ? pct(v.perWindow["15m"].totalNetPct)
+                      {v.perWindow["older"].closed
+                        ? pct(v.perWindow["older"].totalNetPct)
                         : "-"}
                     </td>
                     <td
-                      className={`py-1.5 pr-3 text-right tnum ${v.perWindow["1h"].totalNetPct >= 0 ? "text-gain" : "text-loss"}`}
+                      className={`py-1.5 pr-3 text-right tnum ${v.perWindow["recent"].totalNetPct >= 0 ? "text-gain" : "text-loss"}`}
                     >
-                      {v.perWindow["1h"].closed
-                        ? pct(v.perWindow["1h"].totalNetPct)
+                      {v.perWindow["recent"].closed
+                        ? pct(v.perWindow["recent"].totalNetPct)
                         : "-"}
                     </td>
                     <td className="py-1.5 pr-3 text-right tnum">
@@ -262,9 +260,10 @@ export function BestStrategyFinder({
 
           <p className="mt-3 text-[10px] leading-relaxed text-faint">
             Ranked by net return after ~{FRICTION_PCT}% round-trip friction on
-            500×15m + 500×1h live candles; templates need {MIN_CLOSED}+ closed
-            trades to qualify. Small sample - a good score here is a starting
-            point, not a promise of future returns.
+            1000 daily candles (~2.7 years, the interval the engine trades),
+            scored separately on the older and recent halves; templates need{" "}
+            {MIN_CLOSED}+ closed trades to qualify. Small sample - a good score
+            here is a starting point, not a promise of future returns.
           </p>
         </div>
       )}

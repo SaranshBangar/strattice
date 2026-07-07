@@ -1,5 +1,27 @@
 # Strategy review: backtest findings (July 2026)
 
+> **v4 addendum (late July 2026)** — a second study pass over the same data
+> (`research/run_backtests.py --only supertrend_1d,ensemble_1d,squeeze_1d`):
+>
+> - **squeeze_breakout 1d PROMOTED** off the bench as a 5th sleeve @ I-DOGE_INR
+>   (+138.9% net, PF 2.85 | USDT twin +36.5%): **18/21** walk-forward folds
+>   positive — the best fold record of either study. The original redundancy
+>   objection (same trigger family as the Donchian breakout) doesn't apply on a
+>   different asset sleeve.
+> - **supertrend 1d VALIDATED** (new module): 7/7 INR pairs positive at
+>   mult 3.0 / ATR 10 (median +27.6%), 5/7 USDT twins, positive median across the
+>   entire mult 2.5-3.5 × ATR 7-14 plateau, 15/21 folds. Offered as a platform
+>   template (default I-BTC_INR: +94.6% / twin +21.8%); no bot sleeve because its
+>   venue-robust assets are already occupied by stronger engines.
+> - **trend_ensemble REJECTED** (multi-lookback Donchian consensus, after
+>   Zarattini/Pagani/Barbon 2025): every long-only variant fails venue
+>   robustness (best: 6/7 INR but 4/7 USDT, ADA -47%). The published edge needs
+>   long/short + vol-targeted sizing this spot bot can't express. Module kept
+>   only so the rejection reproduces.
+> - **hf_forecast default model upgraded** to `amazon/chronos-2` (top zero-shot
+>   forecaster on fev-bench/GIFT-Eval, Apache-2.0), with automatic fallback to
+>   `chronos-bolt-tiny`. Still experimental: no crypto edge is claimed or proven.
+
 **TL;DR — every intraday configuration lost money after real India friction; daily
 trend-following won on nearly every market. The bot moved from a 15m mean-reversion-heavy
 lineup to four daily trend engines (tsmom @ ETH, Donchian breakout @ BTC, MA cross @ XRP,
