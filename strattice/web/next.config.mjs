@@ -16,7 +16,12 @@ const CSP = [
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
   "style-src 'self' 'unsafe-inline'",
-  "script-src 'self' 'unsafe-inline'",
+  // Dev-only 'unsafe-eval': next dev serves webpack eval-sourcemap bundles, so a strict
+  // script-src kills hydration locally (every client component dies silently). Production
+  // bundles contain no eval and keep the strict policy.
+  process.env.NODE_ENV === "development"
+    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+    : "script-src 'self' 'unsafe-inline'",
   // stream.binance.com uses port 9443 - a source without a port implies the scheme
   // default (443) and would block the live-price WebSocket, so the port is explicit.
   "connect-src 'self' https://data-api.binance.vision wss://stream.binance.com:9443 https://kv.better-auth.com https://dash.better-auth.com",
