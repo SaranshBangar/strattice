@@ -15,11 +15,17 @@ from dataclasses import dataclass
 # Strategy templates we offer = the bot's REGISTRY (bot/strategies/__init__.py).
 # "custom" is the user-built rule strategy: the rule JSON travels in the row's params
 # and is interpreted by bot/strategies/custom.py.
-ALL_TEMPLATES = (
-    "ma_crossover", "rsi", "momentum", "vol_expansion",
-    "fast_rsi", "bb_reversion", "squeeze_breakout", "hf_forecast", "custom",
+# ACTIVE = the daily trend engines validated in research/FINDINGS.md; RETIRED = mean
+# reversion (loses net of India friction at every altitude) — kept in the allowlist so
+# LEGACY rows still resolve and open positions keep their exits managed, but the web UI
+# no longer offers them for new adds (see web/lib/entitlements.ts RETIRED_TEMPLATES).
+ACTIVE_TEMPLATES = (
+    "tsmom", "momentum", "squeeze_breakout", "ma_crossover", "vol_expansion",
+    "supertrend", "hf_forecast", "custom",
 )
-DEFAULT_TEMPLATE = "ma_crossover"  # the starting template new users see first
+RETIRED_TEMPLATES = ("rsi", "fast_rsi", "bb_reversion")
+ALL_TEMPLATES = ACTIVE_TEMPLATES + RETIRED_TEMPLATES
+DEFAULT_TEMPLATE = "tsmom"  # the starting template new users see first
 
 
 @dataclass(frozen=True)

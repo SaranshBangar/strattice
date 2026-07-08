@@ -164,6 +164,22 @@ def candidates() -> list[dict]:
         {"lookback": 30, "min_return": 0.10, "near_high_frac": 0.02,
          "regime_period": 50, "expected_move_pct": 0.08},
         sl=0.07, ch=3.5, atrp=14)
+
+    # --- v4 candidates: new daily trend engines (validated July 2026) ---
+    add("supertrend_1d", "supertrend", "1d",
+        {"atr_period": 10, "mult": 3.0, "confirm_bars": 2,
+         "regime_period": 50, "expected_move_pct": 0.08},
+        sl=0.07, ch=3.5, atrp=14)
+    add("ensemble_1d", "trend_ensemble", "1d",
+        {"lookbacks": [10, 20, 40, 80, 160], "min_agree_frac": 0.8, "confirm_bars": 3,
+         "regime_period": 50, "expected_move_pct": 0.08},
+        sl=0.07, ch=3.5, atrp=14)
+    add("squeeze_1d", "squeeze_breakout", "1d",
+        {"bb_period": 20, "k_bb": 2.0, "k_kc": 1.5, "atr_period": 14, "lookback": 20,
+         "squeeze_lookback": 6, "vol_period": 20, "vol_mult": 1.0, "buffer": 0.002,
+         "max_chase": 0.05, "min_atr_frac": 0.01, "regime_period": 50,
+         "expected_move_pct": 0.08},
+        sl=0.07, ch=3.5, atrp=14)
     return c
 
 

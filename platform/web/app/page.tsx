@@ -4,18 +4,19 @@ import { Reveal } from "@/components/Reveal";
 import { STRATEGY_META } from "@/lib/strategies";
 
 // The strategy templates that actually ship - shown as a terminal-style ledger.
+// The ACTIVE daily lineup (research/FINDINGS.md), each on its venue-robust market.
 const STRATS: [keyof typeof STRATEGY_META, string][] = [
-  ["ma_crossover", "BTC/INR"],
+  ["tsmom", "ETH/INR"],
   ["momentum", "BTC/INR"],
-  ["rsi", "ETH/INR"],
-  ["fast_rsi", "BNB/INR"],
-  ["vol_expansion", "XRP/INR"],
-  ["bb_reversion", "SOL/INR"],
   ["squeeze_breakout", "DOGE/INR"],
+  ["ma_crossover", "XRP/INR"],
+  ["vol_expansion", "BNB/INR"],
+  ["supertrend", "BTC/INR"],
+  ["hf_forecast", "BTC/INR"],
 ];
 
 const NUMBERS: [string, string][] = [
-  ["7", "strategy templates, each with entry/exit previews"],
+  ["6", "backtest-proven daily templates, plus an experimental AI forecaster"],
   ["4", "risk checks in front of every single order"],
   ["~1.5%", "real round-trip cost, modeled in every simulation"],
   ["₹0", "per month while we're in early access"],
@@ -78,8 +79,8 @@ const COST_ROWS: [string, string, string][] = [
 
 const FEATURES: [string, string][] = [
   [
-    "All 7 strategy templates",
-    "Trend, momentum, mean-reversion, volatility and breakout systems - every template unlocked.",
+    "Every strategy template",
+    "Trend, momentum, breakout and volatility systems that survived a real-data cost study - plus an experimental AI forecaster, every template unlocked.",
   ],
   [
     "Entry / exit previews",
@@ -304,11 +305,12 @@ export default function Home() {
           </p>
           <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted">
             So every preview, backtest and DRY_RUN fill on Strattice is computed{" "}
-            <span className="text-fg">net of the full friction stack</span>, and
-            the engine trades 15-minute bars, so this cost math matters here
-            too. That is exactly why DRY_RUN is the default: watch fees as a
-            share of P&amp;L in paper mode, and only go live if the numbers
-            still work after friction.
+            <span className="text-fg">net of the full friction stack</span> -
+            and it is why the engine trades <span className="text-fg">daily
+            bars</span>: our multi-year study found slow trend-following is the
+            only style that stays net-positive after this toll. DRY_RUN is the
+            default: watch fees as a share of P&amp;L in paper mode, and only go
+            live if the numbers still work after friction.
           </p>
         </Reveal>
         <Reveal>

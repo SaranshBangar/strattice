@@ -4,5 +4,5 @@ pyyaml>=6.0
 
 # Optional: hf_forecast strategy (Hugging Face Chronos). Heavy (torch); install only
 # on runners that enable it. Without these the strategy safely HOLDs forever.
-# chronos-forecasting>=1.4
+# chronos-forecasting>=2.0    # 2.x loads amazon/chronos-2 (default) AND chronos-bolt-*
 # torch>=2.2

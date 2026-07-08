@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { addStrategyAction } from "@/app/actions";
-import { BUILTIN_TEMPLATES } from "@/lib/entitlements";
+import { ACTIVE_TEMPLATES } from "@/lib/entitlements";
 import { STRATEGY_META } from "@/lib/strategies";
 import {
   simulate,
@@ -42,11 +42,12 @@ const pct = (n: number) => `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;
 // Exit fields whose stored value is a fraction but whose UI unit is %.
 const PCT_EXIT_KEYS = new Set(["stop_loss_pct", "take_profit_pct"]);
 
+// 1d first: it is the interval the live engine trades - judge a design there.
 const WINDOWS: Record<string, string> = {
-  "15m": "≈ 5 days",
-  "1h": "≈ 3 weeks",
+  "1d": "≈ 16 months · live interval",
   "4h": "≈ 12 weeks",
-  "1d": "≈ 16 months",
+  "1h": "≈ 3 weeks",
+  "15m": "≈ 5 days",
 };
 
 function NumInput({
@@ -190,7 +191,7 @@ export function StrategyBuilder() {
   const [def, setDef] = useState<CustomDef>(defaultCustomDef);
   const [market, setMarket] = useState<string>(MARKETS[0]);
   const [addOpen, setAddOpen] = useState(false);
-  const [compareIv, setCompareIv] = useState("1h");
+  const [compareIv, setCompareIv] = useState("1d"); // default = the live trading interval
   const addRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -240,7 +241,7 @@ export function StrategyBuilder() {
         you: true,
         sim: simulateCustom(cleanDef, candles),
       },
-      ...BUILTIN_TEMPLATES.map((t) => ({
+      ...ACTIVE_TEMPLATES.map((t) => ({
         name: STRATEGY_META[t].label,
         sim: simulate(t, candles),
       })),

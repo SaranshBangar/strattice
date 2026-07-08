@@ -10,14 +10,14 @@ export const GO_LIVE_PHRASE = "GO LIVE";
 export const DAILY_LOSS_HALT_PCT = 10;
 
 /** Candle interval the live engine trades on (worker/config_gen.py _BASE.engine). */
-export const ENGINE_INTERVAL = "15m";
+export const ENGINE_INTERVAL = "1d";
 
 /** What stands between a signal and your balance - shown wherever the user is about
  *  to arm real money. Every line is enforced in code, none of it is marketing. */
 export const GUARDRAILS: [string, string][] = [
   [
     "Hard stop-loss",
-    "Every strategy carries a per-position stop (2–4%), checked on every poll and overriding the strategy's own signal.",
+    "Every strategy carries a per-position stop (5–7%, sized for daily-bar noise), checked on every poll and overriding the strategy's own signal.",
   ],
   [
     "ATR trail / take-profit",

@@ -9,8 +9,10 @@ No LLM in the execution path — every trade decision is plain algorithm code.
 - Polls candles on a schedule, runs each enabled strategy, routes signals through one
   risk-managed executor.
 - Strategies (each its own module, own config, own position): daily Time-Series
-  Momentum, Donchian Breakout, MA Crossover and Volatility Expansion — the survivors
-  of a full real-data backtest study ([research/FINDINGS.md](research/FINDINGS.md)).
+  Momentum, Donchian Breakout, MA Crossover, Volatility Expansion and Squeeze
+  Breakout — the survivors of a full real-data backtest study
+  ([research/FINDINGS.md](research/FINDINGS.md)); a validated Supertrend module and
+  an experimental Chronos-2 AI forecaster are available but not in the default lineup.
   Mean-reversion and all intraday variants are retired: they lose net of India friction.
 - Every signal + order persisted to SQLite (`data/bot.db`). Idempotent orders.
 - Backtester with realistic India costs (0.1% fee + 1% TDS).
@@ -28,10 +30,11 @@ Tune everything in `config.yaml` (strategies, params, capital, **risk limits**).
 Secrets live only in `.env` (gitignored) — never in config or code.
 **Filling in `.env`:** step-by-step (CoinDCX keys, live switches, Telegram) → [ENV.md](ENV.md).
 
-### The daily-trend profile (v3)
+### The daily-trend profile (v4)
 
-`config.yaml` ships with **daily candles and 4 trend strategies** (tsmom @ ETH,
-Donchian breakout @ BTC, MA cross @ XRP, volatility-expansion @ BNB), each in its
+`config.yaml` ships with **daily candles and 5 trend strategies** (tsmom @ ETH,
+Donchian breakout @ BTC, MA cross @ XRP, volatility-expansion @ BNB, squeeze
+breakout @ DOGE), each in its
 own equity sleeve with a 7% hard stop and an ATR chandelier trail. Expect a handful of trades per year per
 strategy — that is the point: at ~1.5-1.7% round-trip friction, holding winners for
 weeks is the only backtested way to stay net-positive. Evidence, methodology and
@@ -273,7 +276,8 @@ bot/
   engine.py     poll loop
   status.py     /status summary
   backtest.py   historical replay with fee + TDS
-  strategies/   base + ma_crossover, rsi, momentum
+  strategies/   base + tsmom, momentum, ma_crossover, vol_expansion, squeeze_breakout,
+                supertrend, hf_forecast (Chronos-2), custom, retired mean-reversion
 config.yaml  .env.example  requirements.txt
 ```
 

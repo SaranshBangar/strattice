@@ -34,14 +34,14 @@ const C = {
 } as const;
 
 // Candle interval choices for the preview window (1000 bars each - Binance's
-// per-request max, double the old CoinDCX ceiling). Only 15m matches what the
-// live engine trades - longer intervals show more history, but entries, exits
-// and returns are NOT what the engine would have done. Marked in the picker.
+// per-request max). Only 1d matches what the live engine trades - shorter
+// intervals zoom in for detail, but entries, exits and returns are NOT what
+// the engine would have done there. Marked in the picker.
 const INTERVALS: Record<string, string> = {
-  "15m": "≈ 10 days · live interval",
-  "1h": "≈ 6 weeks",
+  "1d": "≈ 33 months · live interval",
   "4h": "≈ 24 weeks",
-  "1d": "≈ 33 months",
+  "1h": "≈ 6 weeks",
+  "15m": "≈ 10 days",
 };
 const LIMIT = 1000;
 
@@ -105,7 +105,7 @@ export function StrategyPreview({
   /** Reports the current window's candles upward (the builder compares strategies on them). */
   onWindowResult?: (interval: string, candles: Candle[]) => void;
 }) {
-  const [interval, setInterval_] = useState("1h");
+  const [interval, setInterval_] = useState("1d"); // default = the live trading interval
   const [candles, setCandles] = useState<Candle[]>([]);
   const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
   const [hover, setHover] = useState<number | null>(null);
@@ -642,7 +642,7 @@ export function StrategyPreview({
       <p className="text-[11px] leading-relaxed text-faint">
         Simulated preview on live Binance candles: fills at bar close,
         long-only, net of ~{FRICTION_PCT}% round-trip friction (exchange fee +
-        GST + TDS). The live engine trades 15m bars - other intervals are for
+        GST + TDS). The live engine trades 1d bars - other intervals are for
         exploring behavior, and results change with bar size. Not a promise of
         future returns; the live engine also enforces daily-loss limits and
         trade caps.

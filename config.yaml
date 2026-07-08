@@ -63,7 +63,7 @@ risk:
 #   stop_loss_pct / take_profit_pct / max_hold_bars (time-stop) / chandelier_k (ATR trailing).
 # regime_period gates every long entry to an uptrend (price above its N-bar SMA, shared).
 #
-# THE LINEUP (all 1d bars). Three diversified trend engines, one per market, so all three can
+# THE LINEUP (all 1d bars). Five diversified trend engines, one per market, so all five can
 # hold concurrently (no-dup-asset rule). Markets were assigned where each strategy was profitable
 # on BOTH the INR pair AND its USDT twin (venue robustness, not pair lottery — see FINDINGS).
 # Take-profits are OFF everywhere: the fat right tail of trend winners is the whole edge; the
@@ -75,6 +75,7 @@ risk:
 #   breakout @ BTC +108.7% (PF 2.75, 8 trades) | USDT twin   +9.2%
 #   ma_cross @ XRP +187.7% (PF 2.25, 6 trades) | USDT twin +109.8%
 #   volexp @ BNB +143.6% (PF 2.75, 6 trades)   | USDT twin +171.9%
+#   squeeze @ DOGE +138.9% (PF 2.85, 9 trades) | USDT twin  +36.5%  (v4, July 2026)
 strategies:
   - name: "tsmom_eth" # time-series momentum: buy strength near its highs
     module: "tsmom"
@@ -151,6 +152,31 @@ strategies:
       regime_period: 50
       expected_move_pct: 0.06
 
+  - name: "squeeze_doge" # TTM squeeze: low-vol coil, then a confirmed Donchian break (v4)
+    module: "squeeze_breakout"
+    enabled: true
+    weight: 1.0
+    market: "I-DOGE_INR"
+    stop_loss_pct: 0.07
+    take_profit_pct: 0.0
+    chandelier_k: 3.5
+    atr_period: 14
+    max_hold_bars: 0
+    params:
+      bb_period: 20
+      k_bb: 2.0
+      k_kc: 1.5
+      atr_period: 14
+      lookback: 20 # break of the prior 20-DAY high after a squeeze
+      squeeze_lookback: 6
+      vol_period: 20
+      vol_mult: 1.0
+      buffer: 0.002
+      max_chase: 0.05
+      min_atr_frac: 0.01
+      regime_period: 50
+      expected_move_pct: 0.08
+
   # --- MIGRATION (v2 -> v3): keep the previously-enabled strategies as DISABLED stubs so an
   #     engine that still holds one of their positions keeps managing its EXITS until flat
   #     (bot/engine.py builds disabled-but-open strategies exit-only). While such a position is
@@ -204,4 +230,15 @@ strategies:
   # 1d — the SAME vol_expansion that lost -41.5% at 15m makes +143.6% at 1d on BNB.
   # The modules stay in the registry (the platform references them); do NOT re-enable
   # anything below daily altitude without a NEW backtest that clears the friction.
+  #
+  # v4 study (July 2026) additions/rejections:
+  #   squeeze_breakout 1d @ DOGE PROMOTED off the bench (18/21 walk-forward folds
+  #     positive — best of the study; redundancy with the Donchian breakout doesn't
+  #     apply on a different asset sleeve).
+  #   supertrend 1d VALIDATED (7/7 INR pairs positive, 15/21 folds, plateau across
+  #     mult 2.5-3.5 x ATR 7-14) — offered on the platform (default I-BTC_INR); no
+  #     bot sleeve because its venue-robust assets are already taken by stronger
+  #     engines (BTC breakout +108.7 vs supertrend +94.6, DOGE squeeze +138.9 vs +17.3).
+  #   trend_ensemble (multi-lookback Donchian consensus) REJECTED — long-only spot
+  #     adaptation fails venue robustness (best variant 4/7 USDT twins positive).
   # ===========================================================================

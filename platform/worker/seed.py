@@ -24,12 +24,13 @@ load_dotenv(Path(__file__).resolve().parents[2] / "platform" / ".env")
 
 DEMO = [
     {"email": "free-demo@example.com", "tier": "free",
-     "strategies": [("ma_crossover", "I-BTC_INR", 1),
-                    ("rsi", "I-ETH_INR", 1)]},          # rsi dropped (free = default only)
-    {"email": "max-demo@example.com", "tier": "max",
-     "strategies": [("ma_crossover", "I-BTC_INR", 1),
-                    ("rsi", "I-ETH_INR", 1),
+     "strategies": [("tsmom", "I-ETH_INR", 1),
                     ("momentum", "I-BTC_INR", 1)]},
+    {"email": "max-demo@example.com", "tier": "max",
+     "strategies": [("tsmom", "I-ETH_INR", 1),
+                    ("momentum", "I-BTC_INR", 1),
+                    ("squeeze_breakout", "I-DOGE_INR", 1),
+                    ("supertrend", "I-BTC_INR", 1)]},
 ]
 
 

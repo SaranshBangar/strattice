@@ -5,7 +5,15 @@
 // would have entered and exited on real candles BEFORE they add it. It is a preview,
 // not the accounting-grade backtester (bot/backtest.py) - fills at bar close, long-only.
 
-import type { BuiltinTemplate, PickableTemplate } from "./entitlements";
+import type {
+  BuiltinTemplate,
+  ExperimentalTemplate,
+  PickableTemplate,
+} from "./entitlements";
+
+/** Every template this module holds a config for: simulable builtins (active +
+ *  retired-legacy) plus the experimental config-display-only entries. */
+export type SimTemplate = BuiltinTemplate | ExperimentalTemplate;
 
 export interface Candle {
   t: number;
@@ -67,25 +75,123 @@ export interface TemplateConfig {
   editable: ParamSpec[];
 }
 
-export const TEMPLATE_CONFIG: Record<PickableTemplate, TemplateConfig> = {
-  // EXPERIMENTAL - Hugging Face Chronos forecast. Runs only in the bot's Python
+export const TEMPLATE_CONFIG: Record<SimTemplate, TemplateConfig> = {
+  // ---- ACTIVE daily templates (stock params = the proven daily defaults from the
+  // repo's config.yaml / research/FINDINGS.md; the engine trades 1d bars) ----
+
+  // Time-series momentum @ ETH: +207.6% net (PF 2.58) on I-ETH_INR 2023-09..2026-07.
+  tsmom: {
+    market: "I-ETH_INR",
+    exits: {
+      stopLossPct: 0.07,
+      takeProfitPct: 0,
+      chandelierK: 3.5,
+      atrPeriod: 14,
+      maxHoldBars: 0,
+    },
+    params: {
+      lookback: 30,
+      min_return: 0.1,
+      near_high_frac: 0.02,
+      regime_period: 50,
+      expected_move_pct: 0.08,
+    },
+    editable: [
+      {
+        key: "lookback",
+        label: "Momentum lookback (bars)",
+        min: 5,
+        max: 200,
+        step: 1,
+        int: true,
+      },
+      {
+        key: "min_return",
+        label: "Min return (frac)",
+        min: 0.02,
+        max: 0.5,
+        step: 0.01,
+      },
+      {
+        key: "near_high_frac",
+        label: "Max off-high (frac)",
+        min: 0.005,
+        max: 0.1,
+        step: 0.005,
+      },
+      {
+        key: "regime_period",
+        label: "Regime SMA period",
+        min: 10,
+        max: 400,
+        step: 1,
+        int: true,
+      },
+    ],
+  },
+  // Supertrend @ BTC: +94.6% net on I-BTC_INR (twin +21.8%); 7/7 INR pairs positive.
+  supertrend: {
+    market: "I-BTC_INR",
+    exits: {
+      stopLossPct: 0.07,
+      takeProfitPct: 0,
+      chandelierK: 3.5,
+      atrPeriod: 14,
+      maxHoldBars: 0,
+    },
+    params: {
+      atr_period: 10,
+      mult: 3.0,
+      confirm_bars: 2,
+      regime_period: 50,
+      expected_move_pct: 0.08,
+    },
+    editable: [
+      {
+        key: "atr_period",
+        label: "ATR period",
+        min: 3,
+        max: 50,
+        step: 1,
+        int: true,
+      },
+      { key: "mult", label: "Band width (× ATR)", min: 1, max: 6, step: 0.1 },
+      {
+        key: "confirm_bars",
+        label: "Flip freshness (bars)",
+        min: 1,
+        max: 10,
+        step: 1,
+        int: true,
+      },
+      {
+        key: "regime_period",
+        label: "Regime SMA period",
+        min: 10,
+        max: 400,
+        step: 1,
+        int: true,
+      },
+    ],
+  },
+  // EXPERIMENTAL - Hugging Face Chronos-2 forecast. Runs only in the bot's Python
   // engine (bot/strategies/hf_forecast.py); the browser cannot run the model, so
   // this entry exists for config display/param editing only - no ENTRY fn, no sim.
   hf_forecast: {
     market: "I-BTC_INR",
     exits: {
-      stopLossPct: 0.03,
-      takeProfitPct: 0.04,
+      stopLossPct: 0.05,
+      takeProfitPct: 0.08,
       chandelierK: 0,
-      atrPeriod: 16,
-      maxHoldBars: 32,
+      atrPeriod: 14,
+      maxHoldBars: 16,
     },
     params: {
-      context: 384,
+      context: 512,
       horizon: 8,
-      min_forecast_pct: 1.0,
-      regime_period: 192,
-      expected_move_pct: 0.04,
+      min_forecast_pct: 3.0,
+      regime_period: 100,
+      expected_move_pct: 0.06,
     },
     editable: [
       {
@@ -99,37 +205,38 @@ export const TEMPLATE_CONFIG: Record<PickableTemplate, TemplateConfig> = {
       {
         key: "min_forecast_pct",
         label: "Min forecast move (%)",
-        min: 0.2,
-        max: 5,
+        min: 0.5,
+        max: 10,
         step: 0.1,
       },
       {
         key: "context",
         label: "Context window (bars)",
         min: 64,
-        max: 768,
+        max: 1024,
         step: 32,
         int: true,
       },
     ],
   },
+  // MA cross @ XRP: +187.7% net (PF 2.25) on I-XRP_INR (twin +109.8%). 8/25 daily.
   ma_crossover: {
-    market: "I-BTC_INR",
+    market: "I-XRP_INR",
     exits: {
-      stopLossPct: 0.04,
+      stopLossPct: 0.07,
       takeProfitPct: 0,
-      chandelierK: 3.0,
-      atrPeriod: 16,
+      chandelierK: 3.5,
+      atrPeriod: 14,
       maxHoldBars: 0,
     },
     params: {
-      fast: 32,
-      slow: 96,
-      atr_period: 16,
-      k_atr: 0.5,
-      confirm_bars: 4,
-      regime_period: 192,
-      expected_move_pct: 0.05,
+      fast: 8,
+      slow: 25,
+      atr_period: 14,
+      k_atr: 0.2,
+      confirm_bars: 3,
+      regime_period: 100,
+      expected_move_pct: 0.08,
     },
     editable: [
       {
@@ -167,6 +274,9 @@ export const TEMPLATE_CONFIG: Record<PickableTemplate, TemplateConfig> = {
       },
     ],
   },
+  // ---- RETIRED templates (mean reversion loses net of India friction at every
+  // tested altitude - research/FINDINGS.md). Kept ONLY so legacy rows still render
+  // and simulate; not offered for new adds. Params are the historical 15m-era stock. ----
   rsi: {
     market: "I-ETH_INR",
     exits: {
@@ -208,25 +318,26 @@ export const TEMPLATE_CONFIG: Record<PickableTemplate, TemplateConfig> = {
       },
     ],
   },
+  // Donchian breakout @ BTC: +108.7% net (PF 2.75) on I-BTC_INR (twin +9.2%).
   momentum: {
     market: "I-BTC_INR",
     exits: {
-      stopLossPct: 0.04,
+      stopLossPct: 0.07,
       takeProfitPct: 0,
-      chandelierK: 3.0,
-      atrPeriod: 16,
+      chandelierK: 3.5,
+      atrPeriod: 14,
       maxHoldBars: 0,
     },
     params: {
-      lookback: 32,
-      atr_period: 16,
-      vol_period: 32,
-      min_atr_frac: 0.005,
-      vol_mult: 1.2,
+      lookback: 20,
+      atr_period: 14,
+      vol_period: 20,
+      min_atr_frac: 0.01,
+      vol_mult: 1.0,
       buffer: 0.002,
-      max_chase: 0.02,
-      regime_period: 96,
-      expected_move_pct: 0.03,
+      max_chase: 0.05,
+      regime_period: 50,
+      expected_move_pct: 0.08,
     },
     editable: [
       {
@@ -268,22 +379,23 @@ export const TEMPLATE_CONFIG: Record<PickableTemplate, TemplateConfig> = {
       },
     ],
   },
+  // Volatility expansion @ BNB: +143.6% net (PF 2.75) on I-BNB_INR (twin +171.9%).
   vol_expansion: {
-    market: "I-XRP_INR",
+    market: "I-BNB_INR",
     exits: {
-      stopLossPct: 0.025,
+      stopLossPct: 0.07,
       takeProfitPct: 0,
-      chandelierK: 2.5,
-      atrPeriod: 16,
+      chandelierK: 3.5,
+      atrPeriod: 14,
       maxHoldBars: 0,
     },
     params: {
-      short_atr: 8,
-      long_atr: 32,
-      expansion_mult: 1.6,
-      breakout_lookback: 24,
-      regime_period: 96,
-      expected_move_pct: 0.03,
+      short_atr: 5,
+      long_atr: 20,
+      expansion_mult: 1.3,
+      breakout_lookback: 10,
+      regime_period: 50,
+      expected_move_pct: 0.06,
     },
     editable: [
       {
@@ -411,29 +523,31 @@ export const TEMPLATE_CONFIG: Record<PickableTemplate, TemplateConfig> = {
       },
     ],
   },
+  // TTM squeeze @ DOGE: +138.9% net (PF 2.85) on I-DOGE_INR (twin +36.5%);
+  // 18/21 walk-forward folds positive - the best fold record of the study.
   squeeze_breakout: {
     market: "I-DOGE_INR",
     exits: {
-      stopLossPct: 0.04,
+      stopLossPct: 0.07,
       takeProfitPct: 0,
-      chandelierK: 3.0,
-      atrPeriod: 16,
+      chandelierK: 3.5,
+      atrPeriod: 14,
       maxHoldBars: 0,
     },
     params: {
       bb_period: 20,
       k_bb: 2.0,
       k_kc: 1.5,
-      atr_period: 16,
+      atr_period: 14,
       lookback: 20,
       squeeze_lookback: 6,
-      vol_period: 32,
-      vol_mult: 1.2,
+      vol_period: 20,
+      vol_mult: 1.0,
       buffer: 0.002,
-      max_chase: 0.02,
-      min_atr_frac: 0.005,
-      regime_period: 96,
-      expected_move_pct: 0.03,
+      max_chase: 0.05,
+      min_atr_frac: 0.01,
+      regime_period: 50,
+      expected_move_pct: 0.08,
     },
     editable: [
       {
@@ -664,6 +778,86 @@ const volExpansionEntry: EntryFn = (candles, closes, end, p) => {
   return closes[end] >= hi; // new local closing high
 };
 
+const tsmomEntry: EntryFn = (candles, closes, end, p) => {
+  const { lookback, min_return, near_high_frac, regime_period } = p;
+  if (end + 1 < Math.max(lookback + 1, regime_period + 1)) return false;
+  if (!uptrend(closes, end, regime_period)) return false;
+  const base = closes[end - lookback];
+  if (base <= 0) return false;
+  if (closes[end] / base - 1 < min_return) return false; // momentum threshold
+  let windowHigh = 0; // high of the last `lookback` bars INCLUDING the current one
+  for (let i = end - lookback + 1; i <= end; i++)
+    windowHigh = Math.max(windowHigh, candles[i].h);
+  return closes[end] >= windowHigh * (1 - near_high_frac); // not rolling over
+};
+
+/** Per-bar supertrend state over candles[0..end]: +1 up, -1 down, 0 warming up.
+ *  Exact port of bot/strategies/supertrend.py supertrend_states (ratcheting bands). */
+export function supertrendStates(
+  candles: Candle[],
+  end: number,
+  atrPeriod: number,
+  mult: number,
+): number[] {
+  const states = new Array<number>(end + 1).fill(0);
+  const trs: number[] = [];
+  let upBand: number | null = null; // support in an uptrend
+  let dnBand: number | null = null; // resistance in a downtrend
+  let state = 0;
+  for (let i = 0; i <= end; i++) {
+    let a: number | null = null;
+    if (i >= 1) {
+      const h = candles[i].h,
+        l = candles[i].l,
+        pc = candles[i - 1].c;
+      trs.push(Math.max(h - l, Math.abs(h - pc), Math.abs(l - pc)));
+      if (trs.length >= atrPeriod) {
+        let s = 0;
+        for (let j = trs.length - atrPeriod; j < trs.length; j++) s += trs[j];
+        a = s / atrPeriod;
+      }
+    }
+    if (a === null) continue;
+    const hl2 = (candles[i].h + candles[i].l) / 2;
+    const basicUp = hl2 - mult * a;
+    const basicDn = hl2 + mult * a;
+    const prevClose = i ? candles[i - 1].c : candles[i].c;
+    upBand =
+      upBand === null || prevClose <= upBand
+        ? basicUp
+        : Math.max(basicUp, upBand);
+    dnBand =
+      dnBand === null || prevClose >= dnBand
+        ? basicDn
+        : Math.min(basicDn, dnBand);
+    const close = candles[i].c;
+    if (state <= 0 && close > dnBand) {
+      state = 1;
+      upBand = basicUp; // re-seed the new support
+    } else if (state === 1 && close < upBand) {
+      state = -1;
+      dnBand = basicDn; // re-seed the new resistance
+    } else if (state === 0) {
+      state = close > dnBand ? 1 : -1;
+    }
+    states[i] = state;
+  }
+  return states;
+}
+
+const supertrendEntry: EntryFn = (candles, closes, end, p) => {
+  const { atr_period, mult, confirm_bars, regime_period } = p;
+  if (end + 1 < Math.max(atr_period + 2, regime_period + 1)) return false;
+  if (!uptrend(closes, end, regime_period)) return false;
+  const states = supertrendStates(candles, end, atr_period, mult);
+  if (states[end] !== 1) return false;
+  // fresh flip: a non-up state within the last confirm_bars bars before now
+  const from = Math.max(0, end - confirm_bars);
+  if (from >= end) return false;
+  for (let i = from; i < end; i++) if (states[i] !== 1) return true;
+  return false;
+};
+
 const bbReversionEntry: EntryFn = (candles, closes, end, p) => {
   const { period, k, z_entry, regime_period } = p;
   if (end + 1 < Math.max(period + 1, regime_period + 1)) return false;
@@ -744,7 +938,10 @@ const squeezeBreakoutEntry: EntryFn = (candles, closes, end, p) => {
   return av !== null && candles[end].v >= vol_mult * av;
 };
 
-const ENTRY: Record<BuiltinTemplate, EntryFn> = {
+// Exported so signal-level parity against bot/strategies/*.py can be scripted.
+export const ENTRY: Record<BuiltinTemplate, EntryFn> = {
+  tsmom: tsmomEntry,
+  supertrend: supertrendEntry,
   ma_crossover: maCrossoverEntry,
   rsi: rsiEntry,
   momentum: momentumEntry,
@@ -758,7 +955,7 @@ const ENTRY: Record<BuiltinTemplate, EntryFn> = {
 
 /** Stock params merged with a user's overrides (unknown keys ignored). */
 export function mergedParams(
-  template: PickableTemplate,
+  template: SimTemplate,
   overrides?: Record<string, number> | null,
 ): Record<string, number> {
   const stock = TEMPLATE_CONFIG[template].params;
@@ -773,7 +970,7 @@ export function mergedParams(
 
 /** Cross-field sanity rules a param set must satisfy (beyond per-field bounds). */
 export function paramRuleError(
-  template: PickableTemplate,
+  template: SimTemplate,
   params: Record<string, number>,
 ): string | null {
   if (template === "ma_crossover" && params.fast >= params.slow)
@@ -965,6 +1162,67 @@ export function overlays(
     role: "secondary",
   };
   switch (template) {
+    case "tsmom":
+      return [
+        {
+          name: `${p.lookback}-bar high`,
+          points: priorHighSeries(highs, p.lookback),
+          role: "primary",
+        },
+        regime,
+      ];
+    case "supertrend": {
+      // The active supertrend band per bar: support while up, resistance while down.
+      const n = candles.length;
+      const line: (number | null)[] = new Array(n).fill(null);
+      const trs: number[] = [];
+      let upBand: number | null = null,
+        dnBand: number | null = null,
+        state = 0;
+      for (let i = 0; i < n; i++) {
+        let a: number | null = null;
+        if (i >= 1) {
+          const h = candles[i].h,
+            l = candles[i].l,
+            pc = candles[i - 1].c;
+          trs.push(Math.max(h - l, Math.abs(h - pc), Math.abs(l - pc)));
+          if (trs.length >= p.atr_period) {
+            let s = 0;
+            for (let j = trs.length - p.atr_period; j < trs.length; j++)
+              s += trs[j];
+            a = s / p.atr_period;
+          }
+        }
+        if (a === null) continue;
+        const hl2 = (candles[i].h + candles[i].l) / 2;
+        const basicUp = hl2 - p.mult * a;
+        const basicDn = hl2 + p.mult * a;
+        const prevClose = i ? candles[i - 1].c : candles[i].c;
+        upBand =
+          upBand === null || prevClose <= upBand
+            ? basicUp
+            : Math.max(basicUp, upBand);
+        dnBand =
+          dnBand === null || prevClose >= dnBand
+            ? basicDn
+            : Math.min(basicDn, dnBand);
+        const close = candles[i].c;
+        if (state <= 0 && close > dnBand) {
+          state = 1;
+          upBand = basicUp;
+        } else if (state === 1 && close < upBand) {
+          state = -1;
+          dnBand = basicDn;
+        } else if (state === 0) {
+          state = close > dnBand ? 1 : -1;
+        }
+        line[i] = state === 1 ? upBand : dnBand;
+      }
+      return [
+        { name: `Supertrend (${p.mult}× ATR)`, points: line, role: "primary" },
+        regime,
+      ];
+    }
     case "ma_crossover":
       return [
         {

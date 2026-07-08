@@ -1,6 +1,7 @@
 // Human-facing metadata for strategy templates. The engine keys off the template
 // id; this is purely for the UI so users aren't picking from raw snake_case ids.
-// Entry/exit text mirrors bot/strategies/*.py + worker/config_gen.py stock params.
+// Entry/exit text mirrors bot/strategies/*.py + worker/config_gen.py stock params
+// (the DAILY defaults validated in research/FINDINGS.md - the engine trades 1d bars).
 import type { Template } from "./entitlements";
 
 export interface StrategyMeta {
@@ -16,99 +17,36 @@ export interface StrategyMeta {
 }
 
 export const STRATEGY_META: Record<Template, StrategyMeta> = {
-  ma_crossover: {
-    label: "MA Crossover",
+  tsmom: {
+    label: "Time-Series Momentum",
     kind: "TREND",
     blurb:
-      "Buys when a fast moving average crosses above a slow one; the trail takes care of the exit.",
+      "Buys strength near recent highs - the most robust documented crypto edge.",
     entry:
-      "Fast SMA(32) crosses above slow SMA(96) with the gap ≥ 0.5×ATR, the slow MA rising, and price above its 192-bar regime SMA.",
-    exit: "ATR chandelier trail (3×ATR off the peak) plus a 4% hard stop. No take-profit - winners are left to run.",
+      "Price is up ≥ 10% over the last 30 days, closes within 2% of the 30-day high, and sits above its 50-day regime SMA.",
+    exit: "ATR chandelier trail (3.5×ATR(14) off the peak) plus a 7% hard stop. No take-profit - winners are left to run.",
     style:
-      "Patient trend-follower. Few entries; holds winners for days to weeks.",
+      "Patient trend rider. A handful of trades per year; holds winners for weeks.",
     explain: [
-      "A moving average smooths price over a window: the 32-bar average reacts quickly, the 96-bar average slowly. When the fast average climbs above the slow one, recent prices are decisively higher than older prices - the classic definition of a new uptrend.",
-      "The naive version of this strategy gets destroyed by whipsaws: in sideways chop the averages cross back and forth and every crossing pays fees. This template kills the churn three ways - the fast average must clear the slow one by at least half an ATR (a real gap, not a graze), the slow average itself must be rising, and price must sit above its long regime average so you only ever buy into strength.",
-      "There is deliberately no take-profit. Trend-following makes its money on a few large winners, so the exit is a chandelier trail that follows the highest price up at a distance of 3×ATR - the trade stays open while the trend breathes normally and closes only when it breaks. A 4% hard stop caps the damage when the entry is simply wrong.",
-      "It struggles in ranging markets (no trend to follow, occasional small losses) and gives back part of every big winner - the trail exits after the peak, by design. Judge it over months, not days.",
-    ],
-  },
-  rsi: {
-    label: "RSI Reversion",
-    kind: "MEAN-REV",
-    blurb: "Buys deeply oversold dips in an uptrend and sells the bounce.",
-    entry:
-      "RSI(14) drops below 22 while price is above its 192-bar regime SMA, then a candle closes back above the prior bar's high (confirmation).",
-    exit: "3% take-profit, 3% hard stop, or a 64-bar time-stop - whichever comes first.",
-    style: "Conservative dip-buyer. Small, frequent-ish mean-reversion trades.",
-    explain: [
-      "RSI (Relative Strength Index) measures how one-sided the last 14 bars were: near 100 every bar closed up, near 0 every bar closed down. A very low RSI means sellers have been relentlessly in control - which, inside a healthy uptrend, is usually a temporary overreaction rather than the start of a collapse.",
-      "The threshold here is a deep 22, not the textbook 30 - shallow dips don't clear real-world costs. Two gates keep it honest: the regime filter (price above its 192-bar average) means you only buy dips in markets that are going up, and the confirmation rule (a candle closing back above the previous bar's high) means you buy the bounce after it starts, never the falling knife.",
-      "Mean-reversion profits are small and quick, so the exits are symmetric and tight: +3% target, -3% stop, and a time-stop that frees the capital if the bounce never comes. Hit rate matters more than trade size for this style.",
-      "It struggles when a dip is actually a regime change - the stop handles that - and it goes quiet in flat markets where RSI never reaches 22. Silence is the filter working, not a bug.",
+      "Time-series momentum is the simplest fact in the trend-following literature: assets that have gone up meaningfully over the last month tend to keep going up. This template buys strength - not dips - and only when that strength is fresh.",
+      "Three gates keep it honest. The 30-day return must exceed 10% (real momentum, not drift). The close must sit within 2% of the 30-day high - if price is already rolling over, the move is fading and you'd be buying someone else's exit. And the regime filter (price above its 50-day average) confirms the uptrend context.",
+      "There is deliberately no take-profit. The whole edge is the fat right tail: a few large winners pay for everything, including India's ~1.5-1.7% round-trip friction. The exit is a chandelier trail 3.5×ATR below the highest close since entry, plus a 7% disaster stop.",
+      "Backtested on real CoinDCX daily data (2023-2026): +207.6% net of all fees and TDS on ETH/INR, profit factor 2.58, positive in 17 of 21 rolling out-of-sample folds. It goes quiet in bear markets and choppy ranges - that silence is the regime filter doing its job.",
     ],
   },
   momentum: {
     label: "Momentum Breakout",
     kind: "MOMENTUM",
-    blurb: "Buys fresh breakouts of the recent high on real volume.",
+    blurb: "Buys fresh breakouts of the 20-day high on real volume.",
     entry:
-      "Close breaks the prior 32-bar high by ≥ 0.2% (but < 2% - no chasing) on ≥ 1.2× average volume, with ATR above its volatility floor.",
-    exit: "ATR chandelier trail (3×ATR off the peak) plus a 4% hard stop. No take-profit.",
-    style: "Breakout rider. Waits for participation, then follows the move.",
+      "Close breaks the prior 20-day high by ≥ 0.2% (but < 5% - no chasing) on ≥ 1× average volume, with ATR ≥ 1% of price and the 50-day regime SMA below.",
+    exit: "ATR chandelier trail (3.5×ATR(14) off the peak) plus a 7% hard stop. No take-profit.",
+    style: "Classic Donchian breakout rider on daily bars.",
     explain: [
-      "When price clears its highest point of the last 32 bars, everyone who bought in that window is in profit and nobody is trapped waiting to sell at break-even - resistance is gone. That structural fact, not a prediction, is the edge a Donchian-style breakout trades.",
-      "Most breakouts fail, so the template demands proof before committing: volume at least 1.2× its recent average (real participation, not a quiet drift over the line), ATR above a volatility floor (dead tape produces fake breakouts), a 0.2% buffer over the old high (no rounding-error entries), and a 2% chase cap so you never buy the top of a spike.",
-      "Exits mirror the MA Crossover: no target, a 3×ATR chandelier trail, and a 4% hard stop. Breakout profits come from the occasional move that keeps going for weeks; the trail is what lets those happen.",
-      "Expect a modest win rate - many breakouts stall and trail out flat or slightly down. The strategy is profitable when the few that run pay for the many that don't, which is why the chase cap and volume gate matter so much.",
-    ],
-  },
-  vol_expansion: {
-    label: "Volatility Expansion",
-    kind: "VOLATILITY",
-    blurb:
-      "Enters when volatility pops out of a quiet range at a new local high.",
-    entry:
-      "8-bar ATR expands to ≥ 1.6× the 32-bar ATR and price prints a new 24-bar closing high, in an uptrend.",
-    exit: "ATR chandelier trail (2.5×ATR off the peak) plus a 2.5% hard stop.",
-    style:
-      "Aggressive expansion trader. Fires on regime shifts from quiet to loud.",
-    explain: [
-      "Markets alternate between quiet and loud regimes, and the transition is tradeable: when the short-window ATR (8 bars) blows out to 1.6× the long-window ATR (32 bars), something just changed - news, a large buyer, a broken level. Volatility arriving is information.",
-      "Direction comes from the second condition: the expansion must coincide with a new 24-bar closing high, in an uptrend. Volatility with an upward resolution is an entry; volatility alone is just noise.",
-      "Because expansion moves are sharper and shorter than slow trends, the exits are tighter than the trend templates: a 2.5×ATR trail and a 2.5% hard stop. Note the subtlety - the ATR that widened to trigger the entry also widens the trail, so the exit automatically gives a violent move more room.",
-      "This is the most aggressive template: more entries, faster exits, more small losses. It earns its keep in regime shifts and loses small amounts waiting for them.",
-    ],
-  },
-  fast_rsi: {
-    label: "Fast RSI",
-    kind: "MEAN-REV",
-    blurb: "A quicker RSI dip-buyer for shorter, sharper reversion trades.",
-    entry:
-      "RSI(7) drops below 25 in an uptrend, then a candle closes back above the prior bar's high (confirmation).",
-    exit: "2.5% take-profit, 2% hard stop, or a 12-bar time-stop - whichever comes first.",
-    style: "Fast in, fast out. More entries, tighter exits than RSI Reversion.",
-    explain: [
-      "The same logic as RSI Reversion - buy confirmed dips inside an uptrend - but on a 7-bar RSI instead of 14. A shorter window makes the oscillator twitchier: it reaches oversold more often, so the strategy trades more and holds for less time.",
-      "The threshold is loosened to 25 and the regime filter shortened to 96 bars, both consistent with the faster clock. The confirmation rule is unchanged and non-negotiable: the current candle must close back above the prior bar's high before any buy.",
-      "Exits are compressed to match: +2.5% target, -2% stop, and a hard 12-bar time-stop. On 15-minute candles that's a three-hour maximum hold - capital never sits in a trade that isn't working.",
-      "More trades means more total friction, which is the real risk here: at ~1.5% round-trip cost, a marginal fast-reversion setup loses money on fees alone. Watch the net (post-friction) numbers in the preview, not the gross.",
-    ],
-  },
-  bb_reversion: {
-    label: "Bollinger Reversion",
-    kind: "MEAN-REV",
-    blurb:
-      "Fades ≥2σ stretches below the Bollinger band once price snaps back inside.",
-    entry:
-      "Prior bar closes ≥ 2σ below the 20-bar Bollinger mid; the current bar closes back inside the band (buy the reversion, not the knife).",
-    exit: "4% take-profit, 3% hard stop, or a 32-bar time-stop - whichever comes first.",
-    style: "Dislocation fader. Rare, high-conviction snap-back entries.",
-    explain: [
-      "Bollinger bands draw a statistical envelope around price: the 20-bar average ± 2 standard deviations. Price closing below the lower band is, by construction, a rare event - roughly the 2.5% tail if returns were normal. This strategy trades the tendency of such dislocations to snap back toward the average.",
-      "The two-bar structure is the whole trick. Bar one must close a full 2σ below the mid - a genuine dislocation, not a wobble. Bar two must close back inside the band - the snap-back has already begun. Buying on bar one is catching a falling knife; buying on bar two is joining a reversal in progress. The regime filter additionally requires the dislocation to happen inside an uptrend.",
-      "The exits are asymmetric in your favor: +4% target against a -3% stop, because a true 2σ snap-back tends to travel. A 32-bar time-stop cleans up the trades that just sit there.",
-      "Setups are rare - a few per month per market is normal. When it fires without an uptrend context or during a genuine crash, the stop is what saves you; that's why it's sized as one strategy in a portfolio, not the whole portfolio.",
+      "When price clears its highest point of the last 20 days, everyone who bought in that window is in profit and nobody is trapped waiting to sell at break-even - resistance is gone. That structural fact, not a prediction, is the edge a Donchian-style breakout trades.",
+      "Most breakouts fail, so the template demands proof before committing: volume at least equal to its 20-day average (real participation), ATR above 1% of price (dead tape produces fake breakouts), a 0.2% buffer over the old high, and a 5% chase cap so you never buy the top of a spike - daily gaps are bigger than intraday ones, hence the wider cap.",
+      "Exits are pure trend-following: no target, a 3.5×ATR chandelier trail, and a 7% hard stop sized for daily-bar noise.",
+      "Backtested on real CoinDCX daily data (2023-2026): +108.7% net on BTC/INR, profit factor 2.75, positive in 16 of 21 rolling out-of-sample folds. Expect a modest win rate - the few breakouts that run for weeks pay for the many that stall out.",
     ],
   },
   squeeze_breakout: {
@@ -117,33 +55,127 @@ export const STRATEGY_META: Record<Template, StrategyMeta> = {
     blurb:
       "Waits for a volatility squeeze, then trades the breakout with volume.",
     entry:
-      "Bollinger bands compress inside the Keltner channel (squeeze), then price breaks the prior 20-bar high by ≥ 0.2% on ≥ 1.2× average volume.",
-    exit: "ATR chandelier trail (3×ATR off the peak) plus a 4% hard stop. No take-profit.",
+      "Bollinger bands compress inside the Keltner channel (squeeze) within the last 6 days, then price breaks the prior 20-day high by ≥ 0.2% on ≥ 1× average volume, in an uptrend.",
+    exit: "ATR chandelier trail (3.5×ATR(14) off the peak) plus a 7% hard stop. No take-profit.",
     style:
-      "Coil-and-release. Low-volatility compression before the expansion move.",
+      "Coil-and-release on daily bars. The best walk-forward record of the backtest study.",
     explain: [
       "Volatility is cyclical: quiet periods are compressed springs. The TTM-squeeze idea detects the compression by comparing two envelopes - when the Bollinger bands (driven by close-to-close variance) squeeze inside the Keltner channel (driven by true range), the market is unusually coiled.",
-      "The squeeze itself has no direction; it only says a move is loading. Direction comes from the breakout: within 6 bars of a squeeze, price must clear the prior 20-bar high with the same discipline as the Momentum template - 0.2% buffer, 2% chase cap, 1.2× volume, ATR floor.",
-      "A breakout born from compression is statistically better than a random breakout - the energy for the follow-through was visibly stored. Exits are pure trend-following: a 3×ATR chandelier trail, 4% hard stop, no target.",
-      "The failure mode is a squeeze that resolves downward or fizzles - the regime filter blocks most of the former, the stop and trail contain the rest. Like every breakout system, a handful of runners pays for the duds.",
+      "The squeeze itself has no direction; it only says a move is loading. Direction comes from the breakout: within 6 days of a squeeze, price must clear the prior 20-day high with the same discipline as the Momentum template - 0.2% buffer, 5% chase cap, volume at least average, ATR floor.",
+      "A breakout born from compression is statistically better than a random breakout - the energy for the follow-through was visibly stored. Exits are pure trend-following: a 3.5×ATR chandelier trail, 7% hard stop, no target.",
+      "Backtested on real CoinDCX daily data (2023-2026): +138.9% net on DOGE/INR, profit factor 2.85, and positive in 18 of 21 rolling out-of-sample folds - the best fold record of the whole study.",
+    ],
+  },
+  ma_crossover: {
+    label: "MA Crossover",
+    kind: "TREND",
+    blurb:
+      "Buys when the 8-day average crosses above the 25-day; the trail takes care of the exit.",
+    entry:
+      "Fast SMA(8) crosses above slow SMA(25) within the last 3 days with the gap ≥ 0.2×ATR, the slow MA rising, and price above its 100-day regime SMA.",
+    exit: "ATR chandelier trail (3.5×ATR(14) off the peak) plus a 7% hard stop. No take-profit - winners are left to run.",
+    style:
+      "Patient trend-follower. Few entries; holds winners for weeks to months.",
+    explain: [
+      "A moving average smooths price over a window: the 8-day average reacts quickly, the 25-day average slowly. When the fast average climbs above the slow one, recent prices are decisively higher than older prices - the classic definition of a new uptrend.",
+      "The naive version of this strategy gets destroyed by whipsaws: in sideways chop the averages cross back and forth and every crossing pays fees. This template kills the churn three ways - the fast average must clear the slow one by at least 0.2×ATR (a real gap, not a graze), the slow average itself must be rising, and price must sit above its 100-day regime average so you only ever buy into strength.",
+      "There is deliberately no take-profit. Trend-following makes its money on a few large winners, so the exit is a chandelier trail that follows the highest price up at a distance of 3.5×ATR - the trade stays open while the trend breathes normally and closes only when it breaks. A 7% hard stop caps the damage when the entry is simply wrong.",
+      "Backtested on real CoinDCX daily data (2023-2026): +187.7% net on XRP/INR, profit factor 2.25 (USDT twin +109.8%). It struggles in ranging markets and gives back part of every big winner - the trail exits after the peak, by design. Judge it over months, not days.",
+    ],
+  },
+  vol_expansion: {
+    label: "Volatility Expansion",
+    kind: "VOLATILITY",
+    blurb:
+      "Enters when volatility pops out of a quiet range at a new local high.",
+    entry:
+      "5-day ATR expands to ≥ 1.3× the 20-day ATR and price prints a new 10-day closing high, above the 50-day regime SMA.",
+    exit: "ATR chandelier trail (3.5×ATR(14) off the peak) plus a 7% hard stop.",
+    style: "Expansion trader. Fires on regime shifts from quiet to loud.",
+    explain: [
+      "Markets alternate between quiet and loud regimes, and the transition is tradeable: when the short-window ATR (5 days) expands to 1.3× the long-window ATR (20 days), something just changed - news, a large buyer, a broken level. Volatility arriving is information.",
+      "Direction comes from the second condition: the expansion must coincide with a new 10-day closing high, in an uptrend. Volatility with an upward resolution is an entry; volatility alone is just noise.",
+      "The ATR that widened to trigger the entry also widens the chandelier trail, so the exit automatically gives a violent move more room - then the 7% hard stop is the disaster brake.",
+      "Backtested on real CoinDCX daily data (2023-2026): +143.6% net on BNB/INR, profit factor 2.75 (USDT twin +171.9%), with 78 of 81 tested parameter combinations positive - the widest, most forgiving parameter plateau of the study.",
+    ],
+  },
+  supertrend: {
+    label: "Supertrend",
+    kind: "TREND",
+    blurb:
+      "Rides the classic ATR-band trend indicator; buys fresh flips from down to up.",
+    entry:
+      "The supertrend state (median price ± 3×ATR(10), ratcheting) flips from down to up within the last 2 days, with price above its 50-day regime SMA.",
+    exit: "ATR chandelier trail (3.5×ATR(14) off the peak) plus a 7% hard stop. No take-profit.",
+    style: "Structured trend rider - one clean signal per trend leg.",
+    explain: [
+      "Supertrend draws a band a fixed multiple of ATR away from the median price, and lets it ratchet: while the trend is up the band (below price) may only rise; while it's down the band (above price) may only fall. Price crossing the active band flips the trend state. It's the same logic as the chandelier exit, applied symmetrically to entries.",
+      "This template buys only a FRESH flip to up - within the last 2 days - so it fires once per trend leg. Buying a stale up-state weeks into a move would just be chasing; the freshness rule and the 50-day regime filter keep entries at the start of legs, where the trail has the most room to work.",
+      "Because the band is ATR-scaled, the entry automatically adapts: a volatile market needs a bigger reversal to flip the state, a quiet one a smaller one. Exits are the shared trend-following layer - 3.5×ATR chandelier, 7% hard stop, no target.",
+      "Backtested on real CoinDCX daily data (2023-2026): positive on 7 of 7 INR pairs (BTC/INR +94.6%, twin +21.8%), positive median across the entire tested parameter plateau, and 15 of 21 rolling out-of-sample folds positive.",
+    ],
+  },
+  rsi: {
+    label: "RSI Reversion",
+    kind: "MEAN-REV",
+    blurb: "Retired: buys deeply oversold dips - loses net of India friction.",
+    entry:
+      "RSI(14) drops below 22 in an uptrend, then a candle closes back above the prior bar's high (confirmation).",
+    exit: "3% take-profit, 3% hard stop, or a 64-bar time-stop - whichever comes first.",
+    style: "Retired mean-reversion dip-buyer.",
+    warning:
+      "Retired after the backtest study (research/FINDINGS.md): mean-reversion's many small wins are exactly the shape that India's 1% TDS per sell taxes to death. It lost money net of friction at every tested timeframe - including daily. Existing copies keep their exits managed, but this template is no longer offered and we recommend replacing it with a trend template.",
+    explain: [
+      "RSI (Relative Strength Index) measures how one-sided recent bars were: near 100 every bar closed up, near 0 every bar closed down. A very low RSI inside a healthy uptrend is usually a temporary overreaction - and buying the confirmed bounce back was the idea here.",
+      "The full real-data study retired it: at 15m it lost ~3.5% median across 14 markets, and at daily altitude the gates essentially never align (zero trades on most pairs). Small, frequent wins cannot outrun a ~1.5-1.7% round-trip toll.",
+    ],
+  },
+  fast_rsi: {
+    label: "Fast RSI",
+    kind: "MEAN-REV",
+    blurb: "Retired: a quicker RSI dip-buyer - loses net of India friction.",
+    entry:
+      "RSI(7) drops below 25 in an uptrend, then a candle closes back above the prior bar's high (confirmation).",
+    exit: "2.5% take-profit, 2% hard stop, or a 12-bar time-stop - whichever comes first.",
+    style: "Retired fast mean-reversion.",
+    warning:
+      "Retired after the backtest study (research/FINDINGS.md): it lost 28.6% median at 15m and 6.8% at daily across 14 real markets, net of fees and TDS. More trades means more friction, and the friction is the whole story. Existing copies keep their exits managed, but this template is no longer offered.",
+    explain: [
+      "The same logic as RSI Reversion on a twitchier 7-bar RSI: more entries, tighter exits, shorter holds.",
+      "That higher trade count is exactly why it failed: every round trip pays ~1.5-1.7% in fees and TDS, and fast mean-reversion's small average win never covered it on any tested market or timeframe.",
+    ],
+  },
+  bb_reversion: {
+    label: "Bollinger Reversion",
+    kind: "MEAN-REV",
+    blurb: "Retired: fades 2σ dislocations - loses net of India friction.",
+    entry:
+      "Prior bar closes ≥ 2σ below the 20-bar Bollinger mid; the current bar closes back inside the band.",
+    exit: "4% take-profit, 3% hard stop, or a 32-bar time-stop - whichever comes first.",
+    style: "Retired dislocation fader.",
+    warning:
+      "Retired after the backtest study (research/FINDINGS.md): the worst performer of the retired lineup (-54.2% median at 15m; still negative re-tested at daily). Snap-back wins are small by construction and India's per-sell TDS makes them net-negative. Existing copies keep their exits managed, but this template is no longer offered.",
+    explain: [
+      "Bollinger bands draw a statistical envelope around price; closing 2σ below it is rare, and this strategy traded the tendency of such dislocations to snap back once the reversal had visibly begun.",
+      "The edge is real gross of costs and negative net of them: the average snap-back is a few percent at best, and ~1.5-1.7% of that goes to fees and TDS on every round trip. The study retired it at every tested altitude.",
     ],
   },
   hf_forecast: {
     label: "AI Forecast",
     kind: "AI · EXPT",
     blurb:
-      "Asks a pretrained Hugging Face time-series model (Amazon Chronos) whether the next few bars look up, and buys only on a confident yes.",
+      "Asks Chronos-2 - Amazon's time-series foundation model - whether the next few days look up, and buys only on a confident yes.",
     entry:
-      "Chronos-Bolt forecasts the next 8 bars from the last 384 closes. Buy when the forecast median is ≥ 1% above the current price, the forecast lower band (q10) is not below it, and the market is in an uptrend.",
-    exit: "4% take-profit, 3% hard stop, or a 32-bar time-stop - whichever comes first.",
+      "Chronos-2 forecasts the next 8 daily bars from the last 512 closes. Buy when the forecast median is ≥ 3% above the current price, the forecast lower band (q10) is not below it, and the market is in an uptrend (100-day SMA).",
+    exit: "8% take-profit, 5% hard stop, or a 16-day time-stop - whichever comes first.",
     style:
       "Experimental ML signal. Trades rarely; every entry needs the model, the trend and the cost gate to agree.",
     warning:
-      "Experimental — no proven edge. This strategy trades on a machine-learning forecast from a general-purpose model that was never trained on crypto markets. Crypto price at these horizons is close to a random walk: the model can be confidently wrong, especially around news, crashes and regime changes, and the backtest windows here are far too short to prove (or disprove) any edge. There is no browser preview because inference runs only inside the bot. Run it in DRY_RUN first, size it as a small slice of a portfolio, and never as your only strategy. The stop-loss and time-stop are the real safety net, not the model.",
+      "Experimental — no proven edge. This strategy trades on a machine-learning forecast from a general-purpose model that was never trained specifically on crypto markets. Crypto price at these horizons is close to a random walk: the model can be confidently wrong, especially around news, crashes and regime changes, and no backtest here is long enough to prove (or disprove) an edge. There is no browser preview because inference runs only inside the bot. Run it in DRY_RUN first, size it as a small slice of a portfolio, and never as your only strategy. The stop-loss and time-stop are the real safety net, not the model.",
     explain: [
-      "Chronos (amazon/chronos-bolt-tiny on Hugging Face) is a time-series foundation model: a transformer pretrained on millions of series - sales, traffic, weather, markets - that produces a probabilistic forecast for any numeric sequence. The strategy feeds it the recent closes and reads back quantiles of where price might be a few bars ahead.",
-      "The entry demands agreement, not just a bullish median. The median forecast must clear a minimum move (default 1%, above round-trip friction), the pessimistic q10 band must not sit below the entry price (the model itself sees limited downside), and the shared regime gate must confirm an uptrend. Any single miss means HOLD.",
-      "Exits are deliberately conventional and tight - +4% target, -3% stop, 32-bar time-stop - because the forecast is only trusted for the horizon it was asked about. Nothing rides on the model being right for long.",
+      "Chronos-2 (amazon/chronos-2 on Hugging Face, Apache-2.0) is a 120M-parameter time-series foundation model - a transformer pretrained on millions of series that produces probabilistic forecasts for any numeric sequence. As of 2026 it is the top zero-shot forecaster on the public fev-bench and GIFT-Eval benchmarks. The strategy feeds it recent daily closes and reads back quantiles of where price might be about a week ahead. If the model can't be loaded, the bot automatically falls back to the much smaller chronos-bolt-tiny, and if no model is available it simply never trades.",
+      "The entry demands agreement, not just a bullish median. The median forecast must clear 3% (well above round-trip friction), the pessimistic q10 band must not sit below the entry price (the model itself sees limited downside), and the shared regime gate must confirm an uptrend. Any single miss means HOLD.",
+      "Exits are deliberately conventional and horizon-matched - +8% target, -5% stop, 16-day time-stop - because the forecast is only trusted for the window it was asked about. Nothing rides on the model being right for long.",
       "Honest framing: published research finds pretrained forecasters rarely beat simple baselines on raw crypto prices. This template exists to let you test that claim safely on your own account, not because the edge is established. Watch its net numbers over weeks in DRY_RUN before giving it real capital.",
     ],
   },
@@ -158,7 +190,7 @@ export const STRATEGY_META: Record<Template, StrategyMeta> = {
     style: "Yours. Backtest it across windows before enabling it live.",
     explain: [
       "Custom strategies are built from the same indicator blocks the stock templates use - trend filters, RSI, breakouts, Bollinger bands, volume and volatility gates - combined with AND logic and run by the same risk-managed engine.",
-      "Build one in the strategy builder: every change re-simulates instantly on live candles and across four history windows, so you see the entries, exits and net-of-fees results while you design.",
+      "Build one in the strategy builder: every change re-simulates instantly on real candles and across multiple history windows, so you see the entries, exits and net-of-fees results while you design. The engine trades DAILY bars - the backtest study found that at India's ~1.5-1.7% round-trip friction, daily trend-following is the only altitude that stays net-positive, so judge your design on the 1d window first.",
     ],
   },
 };
