@@ -195,6 +195,29 @@ export const STRATEGY_META: Record<Template, StrategyMeta> = {
   },
 };
 
+/** DCA (recurring buy) - PREVIEW ONLY. Deliberately NOT in STRATEGY_META: the
+ *  Python engine has no DCA strategy yet, so it must not be addable/enable-able
+ *  live (and the Template key space is parity-checked against the worker).
+ *  Surfaced via the DcaPreview simulator on the strategies page. */
+export const DCA_META: StrategyMeta = {
+  label: "Recurring Buy (DCA)",
+  kind: "ACCUMULATE",
+  blurb:
+    "Buys a fixed amount on a schedule, whatever the price - the simplest way to build a position without timing anything.",
+  entry:
+    "Every week (or the schedule you pick), buy a fixed rupee amount at that day's close. No signals, no indicators.",
+  exit: "None - DCA accumulates. You decide if and when to sell.",
+  style:
+    "Set-and-forget accumulation. Judged over months and years, not trades.",
+  warning:
+    "Preview only for now - the trading engine cannot run DCA live yet. And be clear about what DCA is: it averages your entry price, it does not avoid losses. If the asset falls and stays down, a DCA position is down too. Every future sell still pays exchange fees, GST and 1% TDS, and gains are taxed at 30% (India VDA rules, losses not offsettable).",
+  explain: [
+    "Rupee-cost averaging buys the same amount on a fixed schedule, so you automatically buy more units when price is low and fewer when it is high. Your average cost tracks the market's average level instead of one lucky or unlucky day.",
+    "Its real advantage is behavioral, not mathematical: no timing decisions, no chasing, no waiting for a dip that never comes. Against a lump sum invested on day one, DCA wins when the market falls after you start and loses when it rises - it is a way of spreading regret, not a source of edge.",
+    "The simulator shows contributions vs mark-to-market value on real candles, net of buy-side friction on every purchase, and what you would keep after sell-side friction (including 1% TDS) if you sold at the last close. Simulated history is not a promise of future results.",
+  ],
+};
+
 export function strategyLabel(template: string): string {
   return STRATEGY_META[template as Template]?.label ?? template;
 }

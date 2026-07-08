@@ -9,12 +9,14 @@ import {
   simulate,
   overlays,
   mergedParams,
+  walkForward,
   EXIT_REASON_LABEL,
   FRICTION_PCT,
   type Candle,
   type SimTrade,
   type OverlaySeries,
   type SimResult,
+  type WalkForward,
 } from "@/lib/strategy-sim";
 import {
   simulateCustom,
@@ -239,6 +241,14 @@ export function StrategyPreview({
     return m;
   }, [sim]);
 
+  // Out-of-sample consistency: the window split into five equal folds. A strategy
+  // whose whole return lives in one fold got lucky once; spread-out folds are the
+  // signal worth trusting.
+  const wf: WalkForward | null = useMemo(
+    () => (sim && candles.length >= 100 ? walkForward(sim, candles, 5) : null),
+    [sim, candles],
+  );
+
   const hc = hover !== null ? candles[hover] : null;
   const hoverEvent = hover !== null ? eventAt.get(hover) : undefined;
   const trades = sim?.trades ?? [];
@@ -320,6 +330,58 @@ export function StrategyPreview({
             value={`${sim.exposurePct.toFixed(0)}%`}
             hint="Share of bars spent holding a position"
           />
+        </div>
+      )}
+
+      {/* walk-forward folds: is the result spread out, or one lucky stretch? */}
+      {status === "ok" && wf && sim && sim.closed > 0 && (
+        <div className="rounded-md bg-inset px-3 py-2.5">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <span className="font-mono text-[10px] uppercase tracking-wider text-faint">
+              Walk-forward · {wf.folds.length} out-of-sample folds
+            </span>
+            <span className="font-mono text-[11px] text-muted">
+              {wf.tradedFolds === 0
+                ? "no closed trades"
+                : `${wf.positiveFolds}/${wf.tradedFolds} traded folds positive` +
+                  (wf.medianNetPct !== null
+                    ? ` · median ${pct(wf.medianNetPct)}`
+                    : "")}
+            </span>
+          </div>
+          <div className="mt-2 grid grid-cols-5 gap-1.5">
+            {wf.folds.map((f) => (
+              <div
+                key={f.fold}
+                className="rounded bg-panel/60 px-2 py-1.5 text-center"
+                title={`${tsShort(f.fromT, "1d")} – ${tsShort(f.toT, "1d")} · ${f.closed} closed trade${f.closed === 1 ? "" : "s"}${f.profitFactor !== null ? ` · profit factor ${f.profitFactor.toFixed(2)}` : ""} · max drawdown ${f.maxDrawdownPct.toFixed(1)}%`}
+              >
+                <div
+                  className={`font-mono text-xs font-semibold tabular-nums ${
+                    f.closed === 0
+                      ? "text-faint"
+                      : f.netPct >= 0
+                        ? "text-gain"
+                        : "text-loss"
+                  }`}
+                >
+                  {f.closed === 0 ? "—" : pct(f.netPct)}
+                </div>
+                <div className="mt-0.5 font-mono text-[9px] tabular-nums text-faint">
+                  {f.closed === 0
+                    ? "no trades"
+                    : `${f.closed}t · dd ${f.maxDrawdownPct.toFixed(0)}%`}
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[10px] leading-relaxed text-faint">
+            The window split into five consecutive segments, each scored only on
+            trades entered inside it (net of friction). Returns concentrated in
+            one fold suggest a lucky stretch, not a durable edge. Params are
+            fixed, never re-fit per fold. Past folds never guarantee the next
+            one.
+          </p>
         </div>
       )}
 

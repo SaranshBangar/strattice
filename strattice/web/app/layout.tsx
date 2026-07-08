@@ -19,10 +19,29 @@ const mono = IBM_Plex_Mono({
   display: "swap",
 });
 
+const SITE_URL = process.env.BETTER_AUTH_URL || "https://strattice.in";
+
 export const metadata: Metadata = {
-  title: "Strattice",
+  metadataBase: new URL(SITE_URL),
+  title: { default: "Strattice", template: "%s · Strattice" },
   description:
-    "Run algorithmic trading strategies on your own CoinDCX account.",
+    "Run algorithmic trading strategies on your own CoinDCX account. Non-custodial, paper-trading first, every number net of India's fees and TDS.",
+  openGraph: {
+    siteName: "Strattice",
+    type: "website",
+    locale: "en_IN",
+    title: "Strattice",
+    description:
+      "Run algorithmic trading strategies on your own CoinDCX account. Non-custodial, paper-trading first, every number net of India's fees and TDS.",
+    images: [{ url: "/favicon-512.png", width: 512, height: 512 }],
+  },
+  twitter: {
+    card: "summary",
+    title: "Strattice",
+    description:
+      "Run algorithmic trading strategies on your own CoinDCX account.",
+    images: ["/favicon-512.png"],
+  },
   icons: {
     icon: [
       { url: "/favicon.svg", type: "image/svg+xml" },

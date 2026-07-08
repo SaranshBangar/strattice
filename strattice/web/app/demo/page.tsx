@@ -19,12 +19,23 @@ import {
 import { strategyLabel } from "@/lib/strategies";
 import { demoData } from "@/lib/demo-data";
 
-export const dynamic = "force-dynamic";
+// The sample data is deterministic - only the date labels move with the clock
+// (they roll at UTC midnight). Hourly ISR lets the CDN serve cached HTML
+// instead of re-rendering per request; the PriceChart still streams live
+// prices client-side.
+export const revalidate = 3600;
 
 export const metadata = {
-  title: "Demo dashboard · Strattice",
+  title: "Demo dashboard",
   description:
-    "A sample of the Strattice dashboard - what your bot's paper-trading history looks like once it's running.",
+    "A sample of the Strattice dashboard - what your bot's paper-trading history looks like once it's running. Deterministic sample data, no account needed.",
+  alternates: { canonical: "/demo" },
+  openGraph: {
+    title: "Demo dashboard · Strattice",
+    description:
+      "What your bot's paper-trading history looks like once it's running - explore the full dashboard with sample data, no account needed.",
+    url: "/demo",
+  },
 };
 
 function fmt(n: number) {

@@ -22,6 +22,7 @@ import {
 } from "@/components/chart/primitives";
 import { useStickyDomain } from "@/components/chart/useStickyDomain";
 import { LiveTape, type LiveTapePoint } from "@/components/chart/LiveTape";
+import { useBinanceTradeStream } from "@/components/chart/useBinanceTradeStream";
 
 interface Candle {
   t: number;
@@ -84,35 +85,19 @@ export function PriceChart({
   const [tape, setTape] = useState<LiveTapePoint[]>([]);
   const [tapeOpen, setTapeOpen] = useState<number | null>(null);
   const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
+  // A background refresh failed but we still have data - keep the chart, say so.
+  const [degraded, setDegraded] = useState(false);
   const [hover, setHover] = useState<number | null>(null);
   const [showMa20, setShowMa20] = useState(true);
   const [showMa50, setShowMa50] = useState(false);
   const svgRef = useRef<HTMLDivElement>(null);
   const live = range === LIVE_RANGE;
+  const symbol = toBinanceSymbol(pair);
+  // WS lifecycle (backoff reconnects + staleness) lives in the shared hook.
+  const { priceRef, stale } = useBinanceTradeStream(symbol);
 
   useEffect(() => {
     let alive = true;
-    const symbol = toBinanceSymbol(pair);
-    let ws: WebSocket | null = null;
-    let retry: number | undefined;
-    const liveRef = { price: null as number | null };
-
-    function connect() {
-      if (!symbol) return;
-      ws = new WebSocket(
-        `wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@trade`,
-      );
-      ws.onmessage = (e) => {
-        try {
-          const p = Number(JSON.parse(e.data as string).p);
-          if (Number.isFinite(p)) liveRef.price = p;
-        } catch {}
-      };
-      ws.onclose = () => {
-        if (alive) retry = window.setTimeout(connect, 2000);
-      };
-    }
-
     const timers: number[] = [];
 
     if (range === LIVE_RANGE) {
@@ -120,6 +105,7 @@ export function PriceChart({
       setTape([]);
       setTapeOpen(null);
       setStatus("loading");
+      setDegraded(false);
       fetch(
         `https://data-api.binance.vision/api/v3/klines?symbol=${symbol}&interval=1s&limit=${TAPE_KEEP}`,
       )
@@ -133,7 +119,7 @@ export function PriceChart({
             }))
             .filter((p) => Number.isFinite(p.t) && Number.isFinite(p.v));
           if (seeded.length) {
-            liveRef.price = seeded[seeded.length - 1].v;
+            priceRef.current = seeded[seeded.length - 1].v;
             setTape(seeded);
             setTapeOpen(seeded[seeded.length - 1].v);
             setStatus("ok");
@@ -142,10 +128,9 @@ export function PriceChart({
         .catch(() => {
           if (alive) setStatus("error");
         });
-      connect();
       timers.push(
         window.setInterval(() => {
-          const p = liveRef.price;
+          const p = priceRef.current;
           if (p == null) return;
           setStatus("ok");
           setTapeOpen((o) => o ?? p);
@@ -159,8 +144,12 @@ export function PriceChart({
       );
     } else {
       // ----- Candle mode: poll klines, fold live trades into the last candle. -----
+      let haveData = false;
       async function load(initial: boolean) {
-        if (initial) setStatus("loading");
+        if (initial) {
+          setStatus("loading");
+          setDegraded(false);
+        }
         try {
           const { interval, limit } = WINDOWS[range];
           const r = await fetch(
@@ -169,23 +158,28 @@ export function PriceChart({
           const j = await r.json();
           if (!alive) return;
           if (!r.ok || !Array.isArray(j.candles)) {
-            setStatus("error");
+            // A failed refresh must not wipe a working chart - flag it instead.
+            if (haveData) setDegraded(true);
+            else setStatus("error");
             return;
           }
+          haveData = true;
           setCandles(j.candles);
           setStatus("ok");
+          setDegraded(false);
         } catch {
-          if (alive) setStatus("error");
+          if (!alive) return;
+          if (haveData) setDegraded(true);
+          else setStatus("error");
         }
       }
       load(true);
       timers.push(window.setInterval(() => load(false), POLL_MS));
-      connect();
       timers.push(
         window.setInterval(() => {
-          const p = liveRef.price;
+          const p = priceRef.current;
           if (p == null) return;
-          liveRef.price = null;
+          priceRef.current = null;
           setCandles((prev) => {
             if (!prev.length) return prev;
             const lastC = prev[prev.length - 1];
@@ -207,12 +201,8 @@ export function PriceChart({
     return () => {
       alive = false;
       for (const t of timers) window.clearInterval(t);
-      window.clearTimeout(retry);
-      if (ws) {
-        ws.onclose = null;
-        ws.close();
-      }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- symbol derives from pair; priceRef is a stable ref
   }, [pair, range]);
 
   const closes = candles.map((c) => c.c);
@@ -348,14 +338,21 @@ export function PriceChart({
               </>
             )}
           </div>
-          <p className="mt-0.5 font-mono text-[11px] text-faint">
+          <p
+            className={`mt-0.5 font-mono text-[11px] ${stale || degraded ? "text-accent" : "text-faint"}`}
+            role={stale || degraded ? "status" : undefined}
+          >
             {status === "loading"
               ? "loading…"
               : status === "error"
                 ? "market data unavailable"
-                : live
-                  ? "scrolling live tape · last 2 minutes"
-                  : `last ${range} · streaming live from Binance`}
+                : stale
+                  ? "tape stalled · reconnecting in the background"
+                  : degraded
+                    ? "refresh failing · showing the last good data"
+                    : live
+                      ? "scrolling live tape · last 2 minutes"
+                      : `last ${range} · streaming live from Binance`}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -384,8 +381,14 @@ export function PriceChart({
 
       <div className="p-3 pt-0">
         {status === "error" ? (
-          <div className="grid h-[260px] place-items-center text-sm text-muted">
-            Could not load market data. Retrying…
+          <div className="grid h-[260px] place-items-center text-center text-sm text-muted">
+            <div>
+              <p>Could not load market data for {label(pair)}.</p>
+              <p className="mt-1 font-mono text-[11px] text-faint">
+                retrying automatically — your strategies and the bot are not
+                affected, this chart is display-only
+              </p>
+            </div>
           </div>
         ) : live ? (
           tape.length < 2 ? (

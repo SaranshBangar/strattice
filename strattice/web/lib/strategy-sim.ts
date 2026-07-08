@@ -46,6 +46,9 @@ export interface SimResult {
 
 // Round-trip friction: 0.2% fee + 18% GST each side (0.236% x2) + 1% TDS on the sell.
 export const FRICTION_PCT = 1.47;
+// The same friction split per side, for flows that don't round-trip (e.g. DCA buys).
+export const BUY_FRICTION_PCT = 0.236; // fee + GST on a buy
+export const SELL_FRICTION_PCT = 0.236 + 1.0; // fee + GST plus 1% TDS on a sell
 
 // ---------- per-template config (mirrors worker/config_gen.py TEMPLATE_DEFAULTS) ----------
 
@@ -1117,6 +1120,179 @@ export function runSim(
     buyHoldPct,
     exposurePct:
       candles.length > 1 ? (barsInPos / (candles.length - 1)) * 100 : 0,
+  };
+}
+
+// ---------- DCA (recurring buy) simulation ----------
+// Not a signal strategy: a fixed amount buys at the close every `everyBars` bars,
+// accumulating a position. PREVIEW ONLY - the Python engine has no DCA strategy
+// yet, so this cannot be enabled live; it exists to show beginners what
+// rupee-cost averaging actually does, net of India's per-side friction.
+
+export interface DcaBuy {
+  idx: number;
+  price: number;
+  qty: number; // units bought after buy-side friction
+}
+
+export interface DcaResult {
+  buys: DcaBuy[];
+  invested: number; // total contributed (friction comes out of the units)
+  units: number;
+  avgCost: number | null; // invested / units; null when no buys
+  finalValue: number; // units * last close (mark-to-market)
+  grossPct: number; // finalValue vs invested
+  netIfSoldPct: number; // after sell-side friction (fee + GST + 1% TDS) on the way out
+  lumpSumNetPct: number; // same total invested at the first close, also net if sold
+  values: number[]; // portfolio mark-to-market per bar, for charting
+  investedByBar: number[]; // cumulative contributions per bar
+  maxDrawdownPct: number; // worst drop of value/contributed from its running peak
+}
+
+export function simulateDca(
+  candles: Candle[],
+  everyBars: number,
+  amount: number,
+): DcaResult {
+  const buys: DcaBuy[] = [];
+  const values: number[] = [];
+  const investedByBar: number[] = [];
+  let units = 0;
+  let invested = 0;
+  let peakRatio = 0;
+  let dd = 0;
+  const buyKeep = 1 - BUY_FRICTION_PCT / 100;
+  const step = Math.max(1, Math.round(everyBars));
+
+  for (let i = 0; i < candles.length; i++) {
+    const price = candles[i].c;
+    if (i % step === 0 && price > 0) {
+      const qty = (amount * buyKeep) / price;
+      buys.push({ idx: i, price, qty });
+      units += qty;
+      invested += amount;
+    }
+    const value = units * price;
+    values.push(value);
+    investedByBar.push(invested);
+    if (invested > 0) {
+      const ratio = value / invested;
+      peakRatio = Math.max(peakRatio, ratio);
+      if (peakRatio > 0) dd = Math.max(dd, 1 - ratio / peakRatio);
+    }
+  }
+
+  const last = candles.length ? candles[candles.length - 1].c : 0;
+  const finalValue = units * last;
+  const sellKeep = 1 - SELL_FRICTION_PCT / 100;
+  const grossPct = invested > 0 ? (finalValue / invested - 1) * 100 : 0;
+  const netIfSoldPct =
+    invested > 0 ? ((finalValue * sellKeep) / invested - 1) * 100 : 0;
+  const first = candles.length ? candles[0].c : 0;
+  const lumpSumNetPct =
+    invested > 0 && first > 0
+      ? (((invested * buyKeep * (last / first)) * sellKeep) / invested - 1) * 100
+      : 0;
+
+  return {
+    buys,
+    invested,
+    units,
+    avgCost: units > 0 ? invested / units : null,
+    finalValue,
+    grossPct,
+    netIfSoldPct,
+    lumpSumNetPct,
+    values,
+    investedByBar,
+    maxDrawdownPct: dd * 100,
+  };
+}
+
+// ---------- walk-forward fold statistics ----------
+
+/** Per-fold out-of-sample stats. Folds partition the candle window into equal
+ *  consecutive segments; a trade belongs to the fold its ENTRY falls in. Because
+ *  entries only look backward and params are fixed (never re-fit per fold), slicing
+ *  one continuous simulation this way is exactly a rolling-origin out-of-sample
+ *  evaluation - and unlike per-fold restarts, position state carries across
+ *  boundaries the same way the live engine's would. */
+export interface FoldStat {
+  fold: number; // 1-based
+  fromIdx: number; // candle index range [fromIdx, toIdx)
+  toIdx: number;
+  fromT: number; // timestamps of the range, for axis labels
+  toT: number;
+  entries: number; // trades entered in this fold (incl. one still open)
+  closed: number; // closed trades counted in the stats below
+  netPct: number; // compounded net return across this fold's closed trades
+  maxDrawdownPct: number; // worst peak-to-trough on the fold's trade-by-trade equity
+  profitFactor: number | null; // gross net wins / gross net losses; null = no losers
+}
+
+export interface WalkForward {
+  folds: FoldStat[];
+  positiveFolds: number; // folds with closed trades and netPct > 0
+  tradedFolds: number; // folds with at least one closed trade
+  medianNetPct: number | null; // median fold net over traded folds
+  worstDrawdownPct: number; // max of the per-fold drawdowns
+}
+
+/** Partition a simulation into `nFolds` equal windows and score each one. */
+export function walkForward(
+  sim: SimResult,
+  candles: Candle[],
+  nFolds = 5,
+): WalkForward {
+  const n = candles.length;
+  const folds: FoldStat[] = [];
+  const k = Math.max(1, Math.min(nFolds, Math.floor(n / 2) || 1));
+  for (let f = 0; f < k; f++) {
+    const fromIdx = Math.floor((f * n) / k);
+    const toIdx = f === k - 1 ? n : Math.floor(((f + 1) * n) / k);
+    const mine = sim.trades.filter(
+      (t) => t.entryIdx >= fromIdx && t.entryIdx < toIdx,
+    );
+    const closed = mine.filter((t) => t.exitIdx !== null);
+    let eq = 1,
+      peak = 1,
+      dd = 0,
+      grossWin = 0,
+      grossLoss = 0;
+    for (const t of closed) {
+      eq *= 1 + t.netPct / 100;
+      peak = Math.max(peak, eq);
+      dd = Math.max(dd, 1 - eq / peak);
+      if (t.netPct >= 0) grossWin += t.netPct;
+      else grossLoss -= t.netPct;
+    }
+    folds.push({
+      fold: f + 1,
+      fromIdx,
+      toIdx,
+      fromT: candles[fromIdx]?.t ?? 0,
+      toT: candles[Math.max(fromIdx, toIdx - 1)]?.t ?? 0,
+      entries: mine.length,
+      closed: closed.length,
+      netPct: (eq - 1) * 100,
+      maxDrawdownPct: dd * 100,
+      profitFactor:
+        closed.length === 0 ? null : grossLoss > 0 ? grossWin / grossLoss : null,
+    });
+  }
+  const traded = folds.filter((f) => f.closed > 0);
+  const nets = traded.map((f) => f.netPct).sort((a, b) => a - b);
+  const medianNetPct = nets.length
+    ? nets.length % 2
+      ? nets[(nets.length - 1) / 2]
+      : (nets[nets.length / 2 - 1] + nets[nets.length / 2]) / 2
+    : null;
+  return {
+    folds,
+    positiveFolds: traded.filter((f) => f.netPct > 0).length,
+    tradedFolds: traded.length,
+    medianNetPct,
+    worstDrawdownPct: Math.max(0, ...folds.map((f) => f.maxDrawdownPct)),
   };
 }
 

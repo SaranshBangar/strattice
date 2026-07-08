@@ -1,0 +1,41 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`walkForward > snapshot: tsmom folds on the fixture stay stable 1`] = `
+[
+  {
+    "closed": 1,
+    "dd": "0.00",
+    "fold": 1,
+    "netPct": "17.15",
+    "pf": null,
+  },
+  {
+    "closed": 0,
+    "dd": "0.00",
+    "fold": 2,
+    "netPct": "0.00",
+    "pf": null,
+  },
+  {
+    "closed": 1,
+    "dd": "0.00",
+    "fold": 3,
+    "netPct": "39.31",
+    "pf": null,
+  },
+  {
+    "closed": 0,
+    "dd": "0.00",
+    "fold": 4,
+    "netPct": "0.00",
+    "pf": null,
+  },
+  {
+    "closed": 0,
+    "dd": "0.00",
+    "fold": 5,
+    "netPct": "0.00",
+    "pf": null,
+  },
+]
+`;

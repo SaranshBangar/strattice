@@ -1,0 +1,224 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`simulate snapshots (fixtureCandles(500, seed 42)) > bb_reversion trades are stable 1`] = `
+{
+  "buyHoldPct": "144.56",
+  "closed": 3,
+  "exposurePct": "6.2",
+  "totalNetPct": "-13.48",
+  "trades": [
+    {
+      "entry": 124,
+      "exit": 126,
+      "netPct": "-4.67",
+      "reason": "stop",
+    },
+    {
+      "entry": 127,
+      "exit": 135,
+      "netPct": "-4.84",
+      "reason": "stop",
+    },
+    {
+      "entry": 307,
+      "exit": 318,
+      "netPct": "-4.63",
+      "reason": "stop",
+    },
+    {
+      "entry": 490,
+      "exit": null,
+      "netPct": "-0.16",
+      "reason": "open",
+    },
+  ],
+  "wins": 0,
+}
+`;
+
+exports[`simulate snapshots (fixtureCandles(500, seed 42)) > fast_rsi trades are stable 1`] = `
+{
+  "buyHoldPct": "144.56",
+  "closed": 1,
+  "exposurePct": "0.4",
+  "totalNetPct": "-4.06",
+  "trades": [
+    {
+      "entry": 128,
+      "exit": 130,
+      "netPct": "-4.06",
+      "reason": "stop",
+    },
+  ],
+  "wins": 0,
+}
+`;
+
+exports[`simulate snapshots (fixtureCandles(500, seed 42)) > fixture itself is stable 1`] = `246.76`;
+
+exports[`simulate snapshots (fixtureCandles(500, seed 42)) > ma_crossover trades are stable 1`] = `
+{
+  "buyHoldPct": "144.56",
+  "closed": 1,
+  "exposurePct": "2.4",
+  "totalNetPct": "-9.23",
+  "trades": [
+    {
+      "entry": 163,
+      "exit": 175,
+      "netPct": "-9.23",
+      "reason": "stop",
+    },
+  ],
+  "wins": 0,
+}
+`;
+
+exports[`simulate snapshots (fixtureCandles(500, seed 42)) > momentum trades are stable 1`] = `
+{
+  "buyHoldPct": "144.56",
+  "closed": 2,
+  "exposurePct": "55.3",
+  "totalNetPct": "74.22",
+  "trades": [
+    {
+      "entry": 50,
+      "exit": 124,
+      "netPct": "17.15",
+      "reason": "trail",
+    },
+    {
+      "entry": 209,
+      "exit": 308,
+      "netPct": "48.72",
+      "reason": "trail",
+    },
+    {
+      "entry": 397,
+      "exit": null,
+      "netPct": "45.14",
+      "reason": "open",
+    },
+  ],
+  "wins": 2,
+}
+`;
+
+exports[`simulate snapshots (fixtureCandles(500, seed 42)) > rsi trades are stable 1`] = `
+{
+  "buyHoldPct": "144.56",
+  "closed": 0,
+  "exposurePct": "0.0",
+  "totalNetPct": "0.00",
+  "trades": [],
+  "wins": 0,
+}
+`;
+
+exports[`simulate snapshots (fixtureCandles(500, seed 42)) > squeeze_breakout trades are stable 1`] = `
+{
+  "buyHoldPct": "144.56",
+  "closed": 2,
+  "exposurePct": "34.7",
+  "totalNetPct": "74.22",
+  "trades": [
+    {
+      "entry": 50,
+      "exit": 124,
+      "netPct": "17.15",
+      "reason": "trail",
+    },
+    {
+      "entry": 209,
+      "exit": 308,
+      "netPct": "48.72",
+      "reason": "trail",
+    },
+  ],
+  "wins": 2,
+}
+`;
+
+exports[`simulate snapshots (fixtureCandles(500, seed 42)) > supertrend trades are stable 1`] = `
+{
+  "buyHoldPct": "144.56",
+  "closed": 1,
+  "exposurePct": "41.5",
+  "totalNetPct": "48.72",
+  "trades": [
+    {
+      "entry": 209,
+      "exit": 308,
+      "netPct": "48.72",
+      "reason": "trail",
+    },
+    {
+      "entry": 392,
+      "exit": null,
+      "netPct": "51.84",
+      "reason": "open",
+    },
+  ],
+  "wins": 1,
+}
+`;
+
+exports[`simulate snapshots (fixtureCandles(500, seed 42)) > tsmom trades are stable 1`] = `
+{
+  "buyHoldPct": "144.56",
+  "closed": 2,
+  "exposurePct": "52.7",
+  "totalNetPct": "63.20",
+  "trades": [
+    {
+      "entry": 50,
+      "exit": 124,
+      "netPct": "17.15",
+      "reason": "trail",
+    },
+    {
+      "entry": 223,
+      "exit": 308,
+      "netPct": "39.31",
+      "reason": "trail",
+    },
+    {
+      "entry": 396,
+      "exit": null,
+      "netPct": "47.70",
+      "reason": "open",
+    },
+  ],
+  "wins": 2,
+}
+`;
+
+exports[`simulate snapshots (fixtureCandles(500, seed 42)) > vol_expansion trades are stable 1`] = `
+{
+  "buyHoldPct": "144.56",
+  "closed": 2,
+  "exposurePct": "51.3",
+  "totalNetPct": "50.60",
+  "trades": [
+    {
+      "entry": 50,
+      "exit": 124,
+      "netPct": "17.15",
+      "reason": "trail",
+    },
+    {
+      "entry": 231,
+      "exit": 308,
+      "netPct": "28.56",
+      "reason": "trail",
+    },
+    {
+      "entry": 395,
+      "exit": null,
+      "netPct": "49.22",
+      "reason": "open",
+    },
+  ],
+  "wins": 2,
+}
+`;
