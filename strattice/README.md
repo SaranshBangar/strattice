@@ -14,7 +14,7 @@ fee.
 ## 1. Architecture in one picture
 
 ```
- Next.js app (platform/web, on Vercel)            Python supervisor (platform/worker, a server)
+ Next.js app (strattice/web, on Vercel)            Python supervisor (strattice/worker, a server)
  ─ register / login (Better Auth)                 ─ reads active users from D1
  ─ link CoinDCX keys (encrypted)        writes    ─ generates a per-user config.yaml
  ─ pick strategies, toggle bot      ┌─ desired ─┐ ─ spawns one `python -m bot.engine` per user
@@ -50,7 +50,7 @@ can't (it can't spawn long-lived processes), so the supervisor runs on a normal 
 
 ```
 bot/                  existing single-tenant engine (unchanged except 2 env-override lines)
-platform/
+strattice/
   db/schema.sql       D1 (SQLite) schema incl. Better Auth tables
   worker/             Python supervisor (multi-tenant runtime)
     entitlements.py   tier -> caps/strategies (source of truth)
@@ -88,7 +88,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```bash
 wrangler login
 wrangler d1 create coindcx                 # prints database_id — save it
-wrangler d1 execute coindcx --file platform/db/schema.sql --remote
+wrangler d1 execute coindcx --file strattice/db/schema.sql --remote
 ```
 
 Create a Cloudflare **API token** with **D1 Edit** permission (My Profile → API Tokens). You now
@@ -102,14 +102,14 @@ have three values used by both runtimes: `CF_ACCOUNT_ID`, `CF_D1_DATABASE_ID`, `
 ## 6. Worker (Python supervisor)
 
 ```bash
-cd platform/worker
+cd strattice/worker
 pip install -r requirements.txt          # requests, cryptography, pyyaml, dotenv
 # also ensure the bot's own deps are installed (repo root):
 pip install -r ../../requirements.txt
 cp ../.env.example ../.env               # fill CF_*, ENCRYPTION_MASTER_KEY
 ```
 
-`platform/.env`:
+`strattice/.env`:
 
 ```
 CF_ACCOUNT_ID=...
@@ -123,7 +123,7 @@ Verify the logic without any infra:
 
 ```bash
 python crypto.py && python entitlements.py && python config_gen.py
-python ../../platform/worker/selfcheck.py   # generated config boots the real engine
+python ../../strattice/worker/selfcheck.py   # generated config boots the real engine
 ```
 
 DRY_RUN proof with 2 demo users (needs D1 + internet for public candles; no real CoinDCX keys):
@@ -145,12 +145,12 @@ a container. It picks up real users created by the web app automatically.
 ## 7. Web app (Next.js)
 
 ```bash
-cd platform/web
+cd strattice/web
 npm install                              # uses .npmrc (legacy-peer-deps)
 cp .env.example .env.local               # fill everything below
 ```
 
-`platform/web/.env.local`:
+`strattice/web/.env.local`:
 
 ```
 BETTER_AUTH_SECRET=...                    # the node-generated secret
@@ -197,10 +197,10 @@ Plans are created **inline** per subscription (no separate plan registry to main
 
 ## 9. Deploy
 
-- **Web → Vercel:** import `platform/web`, set the env vars from §7, deploy. D1 is reached over
+- **Web → Vercel:** import `strattice/web`, set the env vars from §7, deploy. D1 is reached over
   REST so no Cloudflare runtime is needed. Set `BETTER_AUTH_URL` to the deployed URL.
-- **Worker → a server/VM:** clone the repo, install deps (§6), set `platform/.env`, and run
-  `python platform/worker/supervisor.py` under a process manager. It needs outbound internet
+- **Worker → a server/VM:** clone the repo, install deps (§6), set `strattice/.env`, and run
+  `python strattice/worker/supervisor.py` under a process manager. It needs outbound internet
   (CoinDCX + D1 + Cloudflare API) and disk for `data/users/<uid>/`.
 
 ---
@@ -223,7 +223,7 @@ Plans are created **inline** per subscription (no separate plan registry to main
 
 | Symptom                                    | Likely cause                                                                  |
 | ------------------------------------------ | ----------------------------------------------------------------------------- |
-| Supervisor: "set CF_ACCOUNT_ID..."         | `platform/.env` not loaded / missing D1 vars                                  |
+| Supervisor: "set CF_ACCOUNT_ID..."         | `strattice/.env` not loaded / missing D1 vars                                  |
 | `npm run check:crypto` fails               | `ENCRYPTION_MASTER_KEY` differs between sides, or python not on PATH          |
 | Engine subprocess exits immediately        | bad per-user config; check `data/users/<uid>/bot.log`                         |
 | Dashboard shows nothing after enabling bot | supervisor not running, or user has no linked keys                            |

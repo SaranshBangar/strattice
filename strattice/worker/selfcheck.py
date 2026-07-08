@@ -4,7 +4,7 @@ Catches drift between config_gen's template specs and what bot/engine + bot/stra
 No Postgres, no network, no live keys: builds the Engine object (constructs strategies, risk,
 client) from a generated per-user config in DRY_RUN. Does not run the poll loop.
 
-Run:  python platform/worker/selfcheck.py
+Run:  python strattice/worker/selfcheck.py
 """
 from __future__ import annotations
 

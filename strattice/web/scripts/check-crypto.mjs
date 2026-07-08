@@ -1,7 +1,7 @@
 // Verifies the AES-256-GCM wire format is byte-compatible between web/lib/crypto.ts and
 // worker/crypto.py (Node WebCrypto <-> Python cryptography). Uses the SAME logic as
 // lib/crypto.ts (kept tiny on purpose) and round-trips through the real Python module.
-// Run from platform/web:  node scripts/check-crypto.mjs   (python must be on PATH)
+// Run from strattice/web:  node scripts/check-crypto.mjs   (python must be on PATH)
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 

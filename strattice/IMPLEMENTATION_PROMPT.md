@@ -2,7 +2,7 @@
 
 > Paste this to an implementation agent. It assumes the repo root is `C:\dev\coindcx`
 > (existing single-tenant Python bot in `bot/`, existing single-user dashboard in `web/`).
-> Read `platform/RESEARCH.md` for the full rationale before starting.
+> Read `strattice/RESEARCH.md` for the full rationale before starting.
 
 ---
 
@@ -11,7 +11,7 @@
 Turn the existing single-tenant CoinDCX trading bot into a multi-tenant SaaS. Users register,
 link their **own** CoinDCX account via API keys, pick strategies, and monitor their bots on a
 personal dashboard. Monetize with Cashfree subscription tiers. Build everything new in a
-**new `platform/` folder** at the repo root. **Do not touch the existing `web/` folder** — it
+**new `strattice/` folder** at the repo root. **Do not touch the existing `web/` folder** — it
 stays as the legacy single-user dashboard.
 
 ## Locked decisions (do not re-litigate)
@@ -51,12 +51,12 @@ DRY_RUN, writing to Postgres scoped by `user_id`. Prove with 2 fake users before
 2. **Move persistence to Postgres, scoped by user_id.** Migrate `bot/audit.py` from SQLite to
    Postgres (or a thin DB layer). Add `user_id` to orders/signals/positions. Keep the exact
    same position model (`(user_id, strategy, market)` key) so engine logic is unchanged.
-   Tables per `platform/RESEARCH.md §5`.
+   Tables per `strattice/RESEARCH.md §5`.
 3. **Tier caps from subscription.** When building a user's engine config, set
    `risk.max_trades_per_day` from their tier (5/50/50/75/100) and include only the strategies
    their tier allows. `bot/risk.py` already enforces the daily cap — just feed it the right
    number per user.
-4. **Supervisor** (`platform/worker/supervisor.py` or under `bot/`): each poll, read all
+4. **Supervisor** (`strattice/worker/supervisor.py` or under `bot/`): each poll, read all
    `bot_state.active = true` users + their `subscriptions` + `user_strategies` + decrypted
    `exchange_credentials` from Postgres; build/refresh one `Engine` per user (reuse the
    `_reconcile` change-detection pattern — add/remove engines as users activate/deactivate);
@@ -75,7 +75,7 @@ or `user_strategies.enabled` is picked up within one poll without restart; trade
 
 ---
 
-## Phase 2 — Next.js platform app (`platform/`, separate from `web/`)
+## Phase 2 — Next.js platform app (`strattice/`, separate from `web/`)
 
 Stack: Next.js (App Router) + TypeScript + Supabase (Auth + Postgres) + Tailwind. New folder,
 own `package.json`.
@@ -110,7 +110,7 @@ the `cashfree-pg` Node SDK; `@cashfreepayments/cashfree-js` for the client check
 2. **Subscribe flow:** create a Subscription against the chosen plan → get the mandate
    authorization link / session → user authorizes (UPI Autopay / eMandate). Store
    `cashfree_sub_id`, `cashfree_plan_id`, `mandate_status` on `subscriptions`.
-3. **Webhook route** (`platform/app/api/cashfree/webhook/route.ts`): read **raw body**
+3. **Webhook route** (`strattice/app/api/cashfree/webhook/route.ts`): read **raw body**
    (`await req.text()`), verify signature =
    `base64(HMAC_SHA256(x-webhook-timestamp + rawBody, CLIENT_SECRET))` constant-time vs
    `x-webhook-signature`, then parse. Confirm the exact scheme against current Cashfree docs.
@@ -146,7 +146,7 @@ sandboxed workers); per-user container isolation; multi-exchange; mobile app.
 ## Deliverable layout
 
 ```
-platform/
+strattice/
   app/                 # Next.js App Router (auth, dashboard, billing, webhooks)
   lib/                 # crypto (AES-GCM), supabase client, cashfree client, entitlements
   worker/              # Python supervisor + multi-tenant engine glue (or extend bot/)

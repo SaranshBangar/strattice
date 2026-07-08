@@ -6,7 +6,7 @@ Both run DRY_RUN with dummy (encrypted) keys: DRY_RUN never calls the signed API
 are public, so no real CoinDCX account is needed.
 
 Run:  CF_ACCOUNT_ID=.. CF_D1_DATABASE_ID=.. CF_API_TOKEN=.. ENCRYPTION_MASTER_KEY=.. \
-      python platform/worker/seed.py
+      python strattice/worker/seed.py
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 import crypto
 import store
 
-load_dotenv(Path(__file__).resolve().parents[2] / "platform" / ".env")
+load_dotenv(Path(__file__).resolve().parents[2] / "strattice" / ".env")
 
 DEMO = [
     {"email": "free-demo@example.com", "tier": "free",
@@ -61,12 +61,12 @@ def upsert_user(db: store.D1, email: str, tier: str, strategies) -> str:
 
 def main() -> None:
     if not os.getenv("ENCRYPTION_MASTER_KEY"):
-        raise SystemExit("set ENCRYPTION_MASTER_KEY (see platform/.env.example)")
+        raise SystemExit("set ENCRYPTION_MASTER_KEY (see strattice/.env.example)")
     db = store.connect()
     for d in DEMO:
         uid = upsert_user(db, d["email"], d["tier"], d["strategies"])
         print(f"seeded {d['email']} tier={d['tier']} -> {uid}")
-    print("done. now run: python platform/worker/supervisor.py")
+    print("done. now run: python strattice/worker/supervisor.py")
 
 
 if __name__ == "__main__":

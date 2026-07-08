@@ -27,7 +27,7 @@ tracked here so schema drift is visible and reviewable.
 
 ```bash
 # a single migration (from repo root)
-wrangler d1 execute coindcx --file platform/db/migrations/0001_rate_limit.sql --remote
+wrangler d1 execute coindcx --file strattice/db/migrations/0001_rate_limit.sql --remote
 ```
 
 | File                   | What                                                                   |

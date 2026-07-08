@@ -1,4 +1,4 @@
-# Platform web (Phase 2) - Next.js on Vercel + Cloudflare D1
+# Strattice web (Phase 2) - Next.js on Vercel + Cloudflare D1
 
 User-facing SaaS: register, link a CoinDCX account, pick strategies, run the bot, watch a
 dashboard. Writes **desired state** to D1; the Python supervisor (`../worker`) reads it, runs
@@ -36,7 +36,7 @@ Mutations are server actions (`app/actions.ts`); reads are server components hit
 ```bash
 npm install                         # uses .npmrc legacy-peer-deps
 cp .env.example .env.local && edit  # BETTER_AUTH_SECRET, CF_*, ENCRYPTION_MASTER_KEY (== worker's)
-# apply schema once (from repo root): wrangler d1 execute coindcx --file platform/db/schema.sql --remote
+# apply schema once (from repo root): wrangler d1 execute coindcx --file strattice/db/schema.sql --remote
 npm run dev
 ```
 
@@ -52,7 +52,7 @@ keys this app stores.
 - **Password reset** is wired end-to-end (`/forgot-password` → email → `/reset-password`).
 - **Rate limiting** on the auth endpoints uses Better Auth's DB-backed limiter (memory storage
   is per-instance and useless on serverless). This needs the `rateLimit` table — **re-apply
-  `platform/db/schema.sql`** (it's `create table if not exists`, so idempotent) before deploying.
+  `strattice/db/schema.sql`** (it's `create table if not exists`, so idempotent) before deploying.
   The public `/api/candles` proxy has its own in-memory per-IP cap (`lib/rate-limit.ts`).
 - **`BETTER_AUTH_SECRET` is mandatory in production** — the app refuses to start without it
   rather than falling back to Better Auth's forgeable default secret.

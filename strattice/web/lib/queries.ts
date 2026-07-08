@@ -77,7 +77,7 @@ const DEFAULT_PREFS: NotificationPrefs = {
 // notification_prefs shipped after the original schema, so deployed D1 databases may not
 // have it yet (schema.sql is applied manually with wrangler). Rather than 500 the account
 // page until someone runs the migration, create the table on first miss and retry -
-// the DDL is byte-identical to platform/db/schema.sql and idempotent.
+// the DDL is byte-identical to strattice/db/schema.sql and idempotent.
 const PREFS_DDL = `create table if not exists notification_prefs (
   user_id          text primary key references user(id) on delete cascade,
   email_enabled    integer not null default 1,

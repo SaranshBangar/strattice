@@ -37,7 +37,7 @@ wrangler d1 execute coindcx --file ../db/schema.sql --remote   # apply schema
 
 ```bash
 python crypto.py && python entitlements.py && python config_gen.py   # run from this dir
-python ../../platform/worker/selfcheck.py                            # or: python selfcheck.py from repo root paths
+python ../../strattice/worker/selfcheck.py                            # or: python selfcheck.py from repo root paths
 ```
 
 ## DRY_RUN proof (needs Postgres + internet for public candles; no real keys)

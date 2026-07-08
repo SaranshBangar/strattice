@@ -80,7 +80,7 @@ already available in this environment via MCP, gives you Auth + Postgres + RLS i
 
 ```
 ┌─────────────────────┐     writes desired state      ┌──────────────────────┐
-│  platform/ (Next.js)│ ────────────────────────────► │  Postgres (Supabase) │
+│  strattice/ (Next.js)│ ────────────────────────────► │  Postgres (Supabase) │
 │  - auth/register    │                                │  users, subs,        │
 │  - dashboard        │ ◄──────────────────────────── │  creds(enc), strats, │
 │  - Cashfree checkout│       reads trades/status      │  trades, positions   │

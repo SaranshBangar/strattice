@@ -12,7 +12,7 @@ Each cycle:
   4. project each engine's SQLite -> Postgres read model + heartbeat
   5. stop engines for users no longer active
 
-Run:  DATABASE_URL=... ENCRYPTION_MASTER_KEY=... python platform/worker/supervisor.py
+Run:  DATABASE_URL=... ENCRYPTION_MASTER_KEY=... python strattice/worker/supervisor.py
 """
 from __future__ import annotations
 
@@ -33,9 +33,9 @@ from dotenv import load_dotenv
 import config_gen
 import store
 
-REPO = Path(__file__).resolve().parents[2]   # platform/worker -> platform -> repo root
+REPO = Path(__file__).resolve().parents[2]   # strattice/worker -> strattice -> repo root
 USERS_DIR = REPO / "data" / "users"
-load_dotenv(REPO / "platform" / ".env")
+load_dotenv(REPO / "strattice" / ".env")
 load_dotenv(REPO / ".env")  # fall back to repo .env if present
 POLL = int(os.getenv("SUPERVISOR_POLL", "30"))
 STARTING_EQUITY = 1000.0  # mirrors config_gen._BASE; DRY_RUN book equity baseline

@@ -1,6 +1,6 @@
 """Tier -> entitlements. Single source of truth for what each subscription tier unlocks.
 
-Mirrors platform/RESEARCH.md §3. The Next.js app MUST agree with this table; keep them in
+Mirrors strattice/RESEARCH.md §3. The Next.js app MUST agree with this table; keep them in
 sync (or have Next.js read it). Enforced here in the supervisor as the last line of defense:
 even if the UI lets a user enable a forbidden strategy, resolve() + config_gen drop it.
 

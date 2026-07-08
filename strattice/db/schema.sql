@@ -1,6 +1,6 @@
 -- Platform schema for Cloudflare D1 (SQLite dialect). Integration boundary between the
 -- Next.js app (writes desired state) and the Python supervisor (reads it, writes observed
--- state). Apply with: wrangler d1 execute <DB> --file platform/db/schema.sql --remote
+-- state). Apply with: wrangler d1 execute <DB> --file strattice/db/schema.sql --remote
 --
 -- IDs are app-generated UUIDs (crypto.randomUUID() in Node, uuid4 in Python) — SQLite has no
 -- gen_random_uuid(). Booleans are INTEGER 0/1. Timestamps: Better Auth manages its own; our

@@ -2,7 +2,7 @@
 -- Idempotent; safe to re-run.
 --
 -- Apply (from repo root):
---   wrangler d1 execute coindcx --file platform/db/migrations/0002_perf_indexes.sql --remote
+--   wrangler d1 execute coindcx --file strattice/db/migrations/0002_perf_indexes.sql --remote
 
 -- subscriptions is looked up by cashfree_sub_id on every webhook delivery and cancel
 -- action (lib/queries.ts userIdByCashfreeSub / setSubscriptionStatus), but only has a

@@ -1,5 +1,5 @@
 // Ensures web/lib/entitlements.ts matches worker/entitlements.py (tier caps + allowlists).
-// Run from platform/web:  node scripts/check-entitlements.mjs
+// Run from strattice/web:  node scripts/check-entitlements.mjs
 import { execFileSync } from "node:child_process";
 import { TIERS } from "../lib/entitlements.ts";
 

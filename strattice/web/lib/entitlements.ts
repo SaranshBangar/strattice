@@ -1,5 +1,5 @@
 // Tier -> entitlements. MUST stay in sync with worker/entitlements.py (the supervisor is the
-// last line of defense, but the UI gates from here). See platform/RESEARCH.md §3.
+// last line of defense, but the UI gates from here). See strattice/RESEARCH.md §3.
 //
 // PRICING IS DISABLED FOR NOW: the platform is fully free. The free tier unlocks
 // everything, and the paid tiers are kept only so legacy subscription rows still

@@ -11,7 +11,7 @@ from pathlib import Path
 
 import yaml
 
-import entitlements  # flat import: run with platform/worker on sys.path (not as 'platform.*')
+import entitlements  # flat import: run with strattice/worker on sys.path (not as 'platform.*')
 
 # Proven per-template defaults, lifted from config.yaml (the DAILY profile validated in
 # research/FINDINGS.md — the engine trades 1d bars). {exits..., market, params}.

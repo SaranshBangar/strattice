@@ -19,7 +19,7 @@ from .strategies import REGISTRY
 
 DATA = Path(__file__).resolve().parent.parent / "research" / "data" / "B-BTC_USDT_1h.csv.gz"
 
-# One representative, non-trivial param set per template (mirrors platform/worker/config_gen.py
+# One representative, non-trivial param set per template (mirrors strattice/worker/config_gen.py
 # TEMPLATE_DEFAULTS so the test exercises the same shapes real users' bots run with), with a
 # smaller regime_period so the uptrend/downtrend gate actually flips within the test window.
 PARAM_SETS: dict[str, dict] = {

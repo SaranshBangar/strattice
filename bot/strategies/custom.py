@@ -7,7 +7,7 @@ strategy builder stores in user_strategies.params (schema v1):
 ALL rules must be true on the current bar to BUY. Exits are handled by the engine's
 shared protective layer (config_gen maps the def's "exits" onto the strategy spec) -
 this module never emits SELL. The evaluator MUST stay in lockstep with the web preview
-(platform/web/lib/custom-strategy.ts) so what users see while building is what trades.
+(strattice/web/lib/custom-strategy.ts) so what users see while building is what trades.
 
 Defensive by construction: an unknown rule kind, missing field, or too-little history
 evaluates to False -> HOLD. A malformed def can never throw out of decide().
