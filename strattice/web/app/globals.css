@@ -168,6 +168,114 @@ body {
   }
 }
 
+/* chart draw-in: primary strokes sweep left → right, fills fade up after.
+   Paths must set pathLength={1} so the dash math needs no JS measurement. */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes chartDraw {
+    from {
+      stroke-dashoffset: 1;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+  .chart-draw {
+    stroke-dasharray: 1;
+    animation: chartDraw 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  @keyframes chartFade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  .chart-fade {
+    animation: chartFade 0.6s ease-out 0.45s both;
+  }
+}
+
+/* bars lift slightly under the pointer */
+.chart-bar {
+  transition: fill-opacity 0.15s ease;
+}
+.chart-bar:hover {
+  fill-opacity: 1;
+}
+
+/* live-tape y tick labels fade in when the sticky domain re-snaps their value */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes tickIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  .tick-in {
+    animation: tickIn 0.2s ease both;
+  }
+}
+
+/* CSS-only definition tooltips: <Term> (dotted glossary words) and
+   <InfoHint> ("?" beside a metric). Server-safe - no JS, keyboard reachable
+   via :focus-visible on the tabbable trigger. */
+.term {
+  @apply cursor-help border-b border-dotted border-faint;
+}
+.tip-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.tip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(2px);
+  z-index: 40;
+  width: max-content;
+  max-width: 16rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.5rem;
+  background: #1a1f2e;
+  color: #aeb6c8;
+  font-size: 11px;
+  line-height: 1.5;
+  font-family: var(--font-mono), monospace;
+  text-transform: none;
+  letter-spacing: normal;
+  white-space: normal;
+  text-align: left;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  box-shadow:
+    inset 0 1px 0 rgba(230, 233, 240, 0.06),
+    0 12px 32px -12px rgba(0, 0, 0, 0.7);
+  transition:
+    opacity 0.15s ease,
+    visibility 0.15s ease,
+    transform 0.15s ease;
+}
+.tip-wrap:hover > .tip,
+.tip-wrap:focus-within > .tip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+/* keep tooltips near the viewport edge readable: flip to left-aligned */
+.tip-left {
+  left: auto;
+  right: -0.5rem;
+  transform: translateY(2px);
+}
+.tip-wrap:hover > .tip-left,
+.tip-wrap:focus-within > .tip-left {
+  transform: translateY(0);
+}
+
 /* toast entrance */
 @keyframes toastIn {
   from {

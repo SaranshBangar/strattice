@@ -3,6 +3,8 @@ import Link from "next/link";
 import { getUser } from "@/lib/session";
 import * as q from "@/lib/queries";
 import { StatCard } from "@/components/StatCard";
+import { Metric } from "@/components/Metric";
+import { InfoHint } from "@/components/InfoHint";
 import { DataTable, type Cell } from "@/components/DataTable";
 import { TradesTable, type Trade } from "@/components/TradesTable";
 import { PriceChart } from "@/components/PriceChart";
@@ -46,29 +48,6 @@ function sample<T>(arr: T[], k: number): T[] {
   return Array.from(
     { length: k },
     (_, j) => arr[Math.round((j * (arr.length - 1)) / (k - 1))],
-  );
-}
-
-function Metric({
-  label,
-  value,
-  tone = "default",
-}: {
-  label: string;
-  value: string;
-  tone?: "good" | "bad" | "default";
-}) {
-  const c =
-    tone === "good" ? "text-gain" : tone === "bad" ? "text-loss" : "text-fg";
-  return (
-    <div className="card px-3 py-2.5">
-      <div className="font-mono text-[10px] uppercase tracking-wider text-faint">
-        {label}
-      </div>
-      <div className={`mt-1 font-mono text-sm font-semibold tabular-nums ${c}`}>
-        {value}
-      </div>
-    </div>
   );
 }
 
@@ -218,6 +197,11 @@ export default async function DashboardPage() {
               ? `last engine heartbeat ${heartbeat} IST`
               : "engine has not reported yet"}
           </p>
+          {!hasLive && (
+            <span className="mt-1.5 inline-block rounded-sm bg-gain/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-gain">
+              practice mode — no real money at risk
+            </span>
+          )}
         </div>
         <ProToggle />
       </div>
@@ -297,6 +281,7 @@ export default async function DashboardPage() {
           value={bot.active ? (healthy ? "Running" : "Stalled") : "Off"}
           sub={bot.live ? "LIVE" : "DRY_RUN"}
           tone={bot.active ? (healthy ? "good" : "warn") : "default"}
+          hint="Whether your trading engine is switched on and reporting in. DRY_RUN means it trades practice money; LIVE means real orders."
         />
         {/* The supervisor computes this as ₹1,000 paper base + realized P&L - a book
             figure, not the user's exchange balance. Say so on the card, not in fine print. */}
@@ -308,14 +293,18 @@ export default async function DashboardPage() {
               ? `₹1,000 paper base + realized P&L · as of ${equityAsOf}`
               : ""
           }
+          hint="The bot's own ledger: ₹1,000 of practice money plus everything it has won or lost — not your exchange wallet balance."
           chart={
-            equityVals.length > 1 ? <Sparkline data={equityVals} /> : undefined
+            equityVals.length > 1 ? (
+              <Sparkline data={equityVals} area />
+            ) : undefined
           }
         />
         <StatCard
           label="Realized today"
           value={equity ? inr(equity.realized_today) : "-"}
           sub={`${equity?.trades_today ?? 0} / ${tier.tradesPerDay} trades`}
+          hint="Profit or loss locked in by trades that closed today, after all fees."
           tone={
             equity && equity.realized_today < 0
               ? "bad"
@@ -329,6 +318,7 @@ export default async function DashboardPage() {
             label="Net P&L (live)"
             value={inr(stats.livePnl)}
             sub={`${stats.liveTrades} live fills · paper ${inr(stats.paperPnl)}`}
+            hint="Real-money profit or loss across every live trade, net of fees."
             tone={
               stats.livePnl < 0 ? "bad" : stats.livePnl > 0 ? "good" : "default"
             }
@@ -338,6 +328,7 @@ export default async function DashboardPage() {
             label="Paper P&L (all-time)"
             value={inr(stats.paperPnl)}
             sub={`${stats.paperTrades} DRY_RUN fills · no live trades yet`}
+            hint="Profit or loss from practice trades — real prices, fake money. A safe preview of how the strategies behave."
             tone={
               stats.paperPnl < 0
                 ? "bad"
@@ -365,11 +356,13 @@ export default async function DashboardPage() {
           <Metric
             label="Win rate"
             value={decided ? `${winRate.toFixed(0)}%` : "-"}
+            hint="Of every trade the bot closed, how many made money."
           />
           <Metric
             label="Max drawdown"
             value={`-${maxDD.toFixed(1)}%`}
             tone={maxDD > 0 ? "bad" : "default"}
+            hint="The deepest dip below the account's best-ever level. Smaller is calmer."
           />
           <Metric
             label="Profit factor"
@@ -377,6 +370,7 @@ export default async function DashboardPage() {
             tone={
               profitFactor >= 1 ? "good" : profitFactor > 0 ? "bad" : "default"
             }
+            hint="Total gains divided by total losses. Above 1 means the wins outweigh the losses."
           />
           <Metric
             label="Avg / day"
@@ -393,10 +387,15 @@ export default async function DashboardPage() {
             value={inr(worstDay)}
             tone={worstDay < 0 ? "bad" : "default"}
           />
-          <Metric label="σ / day" value={inr(vol)} />
+          <Metric
+            label="σ / day"
+            value={inr(vol)}
+            hint="How much a typical day's result swings around the average - a volatility gauge."
+          />
           <Metric
             label="Sharpe (ann.)"
             value={sharpe === null ? "-" : sharpe.toFixed(2)}
+            hint="Return earned per unit of risk taken, annualized. Above 1 is generally considered good."
             tone={
               sharpe === null
                 ? "default"
@@ -426,15 +425,36 @@ export default async function DashboardPage() {
             </span>
           </div>
           <div className="p-4">
-            <EquityCurve points={equityVals} fmt={inr} xTicks={equityXTicks} />
+            <EquityCurve
+              points={equityVals}
+              fmt={inr}
+              xTicks={equityXTicks}
+              hwm
+              ddShade
+              baseline={{ value: 1000, label: "start ₹1,000" }}
+              legend
+              drawIn
+              emptySub="No history yet — the chart starts filling in after the bot's first check-in."
+              emptyAction={
+                showSetup
+                  ? { href: "/account", label: "Finish setup" }
+                  : undefined
+              }
+            />
           </div>
+          <p className="px-4 pb-3 text-[11px] leading-relaxed text-faint [html.pro_&]:hidden">
+            The line is the bot&apos;s balance. Gold dashes mark its best-ever
+            level, and the red shading shows how far below that best it dipped
+            (the drawdown).
+          </p>
         </section>
 
         <section className="card">
-          <div className="px-4 py-3">
+          <div className="flex items-center gap-1.5 px-4 py-3">
             <h3 className="font-display text-sm font-semibold tracking-tight text-dim">
               Win / loss · closed sells
             </h3>
+            <InfoHint text="Of every trade the bot closed, how many made money. High isn't everything — a few big wins can beat many small ones." />
           </div>
           <div className="grid place-items-center p-6">
             <WinRateDonut wins={stats.wins} losses={stats.losses} />
@@ -457,6 +477,7 @@ export default async function DashboardPage() {
             <DrawdownCurve
               points={ddSeries.map((v) => -v)}
               xTicks={equityXTicks}
+              guide
             />
           </div>
           <p className="px-4 py-2 text-[11px] leading-relaxed text-faint">
@@ -501,8 +522,14 @@ export default async function DashboardPage() {
                 value: d.pnl,
               }))}
               fmt={(n) => inr(n)}
+              annotateExtremes
+              emptySub="Each bar will show one day's result once the bot closes its first trade."
             />
           </div>
+          <p className="px-4 pb-3 text-[11px] leading-relaxed text-faint [html.pro_&]:hidden">
+            Each bar is one day&apos;s result after all fees — green above the
+            line, red below. The best and worst days are labelled.
+          </p>
         </section>
 
         <DataTable
@@ -577,6 +604,7 @@ export default async function DashboardPage() {
               <Metric
                 label="Sale consideration"
                 value={inr(tax.consideration)}
+                hint="The total value of everything sold - the amount tax rules are applied to."
               />
               <Metric
                 label="Realized gains"
@@ -588,7 +616,11 @@ export default async function DashboardPage() {
                 value={inr(tax.losses)}
                 tone={tax.losses < 0 ? "bad" : "default"}
               />
-              <Metric label="TDS withheld" value={inr(tax.tds)} />
+              <Metric
+                label="TDS withheld"
+                value={inr(tax.tds)}
+                hint="1% withheld on every sell (section 194S). It's a credit you claim back when filing, not an extra fee."
+              />
             </div>
             <p className="px-4 py-2.5 text-[11px] leading-relaxed text-faint">
               Indicative only, not tax advice. VDA gains are taxed flat at 30%

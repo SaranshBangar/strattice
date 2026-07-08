@@ -128,6 +128,17 @@ export function Nav() {
               </div>
             )}
             <Link
+              href="/demo"
+              className={[
+                "rounded-md px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                pathname === "/demo"
+                  ? "bg-white/[0.07] text-fg"
+                  : "text-dim hover:text-fg",
+              ].join(" ")}
+            >
+              Demo
+            </Link>
+            <Link
               href="/sign-in"
               className="rounded-md px-3 py-1.5 text-sm text-dim transition-colors hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >

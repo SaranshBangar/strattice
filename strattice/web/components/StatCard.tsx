@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { InfoHint } from "@/components/InfoHint";
 
 export type StatCardTone = "default" | "good" | "bad" | "warn";
 
@@ -9,6 +10,8 @@ export type StatCardProps = {
   tone?: StatCardTone;
   /** Optional visual (e.g. a sparkline) rendered under the value. */
   chart?: ReactNode;
+  /** Plain-English "?" explainer beside the label. */
+  hint?: string;
 };
 
 const valueTone: Record<StatCardTone, string> = {
@@ -24,11 +27,13 @@ export function StatCard({
   sub,
   tone = "default",
   chart,
+  hint,
 }: StatCardProps) {
   return (
     <div className="flex flex-col card p-4">
-      <div className="font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-faint">
+      <div className="flex items-center gap-1.5 font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-faint">
         {label}
+        {hint && <InfoHint text={hint} />}
       </div>
       <div
         className={[

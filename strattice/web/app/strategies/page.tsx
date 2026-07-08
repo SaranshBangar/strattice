@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getUser } from "@/lib/session";
 import * as q from "@/lib/queries";
 import { StrategyManager } from "@/components/StrategyManager";
+import { StrategyQuiz } from "@/components/StrategyQuiz";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,15 @@ export default async function StrategiesPage() {
           </span>
         </div>
       </div>
+      {strategies.length === 0 && (
+        <section>
+          <p className="mb-3 text-sm text-muted">
+            First time picking a strategy? Answer five quick questions and
+            we&rsquo;ll point you at a template that fits your temperament.
+          </p>
+          <StrategyQuiz />
+        </section>
+      )}
       <StrategyManager strategies={strategies} />
     </div>
   );

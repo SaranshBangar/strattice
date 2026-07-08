@@ -1,6 +1,9 @@
 import { HeroCta } from "@/components/HeroCta";
 import { LiveChart } from "@/components/LiveChart";
 import { Reveal } from "@/components/Reveal";
+import { StrategyDemo } from "@/components/StrategyDemo";
+import { StrategyQuiz } from "@/components/StrategyQuiz";
+import { Term } from "@/components/Term";
 import { STRATEGY_META } from "@/lib/strategies";
 
 // The strategy templates that actually ship - shown as a terminal-style ledger.
@@ -24,16 +27,16 @@ const NUMBERS: [string, string][] = [
 
 const STEPS: [string, string][] = [
   [
-    "Link your keys",
-    "Add a CoinDCX API key with trading on and withdrawals off. Stored encrypted; never shown back to anyone.",
+    "Connect your exchange",
+    "Add a CoinDCX API key with trading on and withdrawals off - the bot can trade for you but can never take money out. Stored encrypted; never shown back to anyone.",
   ],
   [
-    "Pick strategies",
-    "Preview each template's entries and exits on live market data, tune the parameters, then add the ones you like.",
+    "Pick a ready-made strategy",
+    "See exactly how each one would have traded - every entry and exit marked on real market data - before you commit to anything.",
   ],
   [
-    "Let it run",
-    "Bots trade on a schedule against your balance. Start in DRY_RUN, flip to live only when the numbers convince you.",
+    "Let it practice first",
+    "The bot starts in paper mode: real prices, fake money. Watch it work, and only flip to live when the numbers have earned your trust.",
   ],
 ];
 
@@ -106,6 +109,14 @@ const FEATURES: [string, string][] = [
 
 const FAQ: [string, string][] = [
   [
+    "Do I need to know anything about trading?",
+    "No. The strategies are pre-built and previewed on real data before you add them, every piece of jargon on the site has a plain-English explanation a hover away, and everything starts in paper mode. You can learn by watching the bot work without risking anything.",
+  ],
+  [
+    "How much money do I need to start?",
+    "None. Paper mode trades fake money on real live prices - fees, taxes and all - so the results are honest without a rupee at risk. Going live later is a separate, explicit choice, and even then you set the position size caps.",
+  ],
+  [
     "Where does my money actually sit?",
     "In your own CoinDCX account, the whole time. Strattice holds an API key you create, with withdrawals disabled, and uses it only to read balances and place orders. We cannot move funds out, and we never touch custody.",
   ],
@@ -142,14 +153,20 @@ export default function Home() {
             <span className="text-accent">own</span> account.
           </h1>
           <p className="mt-5 max-w-lg text-lg text-muted">
-            Pick a strategy, see exactly where it would have entered and exited
-            on real market data, and let bots trade for you. Your funds never
+            Pick a rulebook, watch it practice with fake money on real prices,
+            and only go live when it has earned your trust. Your funds never
             leave CoinDCX. We hold the keys to run the strategies, nothing else.
           </p>
           <HeroCta />
           <p className="mt-4 font-mono text-[11px] uppercase tracking-wider text-faint">
             no card · withdrawals stay disabled · DRY_RUN by default
           </p>
+          <a
+            href="#learn"
+            className="mt-3 inline-block text-sm text-dim underline decoration-line underline-offset-4 transition-colors hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            New to trading? Start here ↓
+          </a>
         </div>
 
         {/* Signature: the strategy ledger boots one row at a time, like a terminal */}
@@ -190,6 +207,60 @@ export default function Home() {
       <Reveal>
         <LiveChart />
       </Reveal>
+
+      {/* Newcomer on-ramp: what algorithmic trading actually is, in plain
+          English, then an animated demo of one strategy doing its job. */}
+      <section id="learn" className="scroll-mt-20">
+        <Reveal>
+          <h2 className="eyebrow">New to trading?</h2>
+          <p className="mt-2 max-w-2xl font-display text-2xl font-semibold tracking-tight">
+            What is algorithmic trading?
+          </p>
+        </Reveal>
+        <Reveal stagger>
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <div className="card p-5">
+              <h3 className="font-display text-base font-semibold tracking-tight text-fg">
+                A strategy is a rulebook
+              </h3>
+              <p className="mt-1.5 text-sm leading-relaxed text-muted">
+                A <Term k="strategy">strategy</Term> is just written-down
+                rules: if the price does X, buy; if it does Y, sell. Because
+                the rules are exact, they can be tested on years of history (a{" "}
+                <Term k="backtest">backtest</Term>) before touching real money.
+              </p>
+            </div>
+            <div className="card p-5">
+              <h3 className="font-display text-base font-semibold tracking-tight text-fg">
+                The bot never sleeps or panics
+              </h3>
+              <p className="mt-1.5 text-sm leading-relaxed text-muted">
+                The bot checks the market on a schedule and applies the same
+                rules every time. It never revenge-trades a loss, never chases
+                a green candle at 3am - it waits for a{" "}
+                <Term k="signal">signal</Term> and follows the plan.
+              </p>
+            </div>
+            <div className="card p-5">
+              <h3 className="font-display text-base font-semibold tracking-tight text-fg">
+                You keep the controls
+              </h3>
+              <p className="mt-1.5 text-sm leading-relaxed text-muted">
+                Everything starts in{" "}
+                <Term k="paper trading">paper trading</Term> mode. Every trade
+                carries a <Term k="stop-loss">stop-loss</Term>, daily loss
+                limits apply, there&rsquo;s a kill switch - and your funds
+                never leave your own exchange account.
+              </p>
+            </div>
+          </div>
+        </Reveal>
+        <Reveal>
+          <div className="mt-6">
+            <StrategyDemo />
+          </div>
+        </Reveal>
+      </section>
 
       {/* Numbers strip - four facts, no adjectives */}
       <Reveal stagger>
@@ -296,7 +367,11 @@ export default function Home() {
             Every round trip on an Indian exchange costs about 1.5% before you
             earn a rupee.
           </p>
-          <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted">
+          <p className="mt-4 max-w-xl text-sm leading-relaxed text-dim">
+            Every buy-and-sell round trip costs real fees - this is the part
+            most tools quietly hide.
+          </p>
+          <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted">
             Exchange fees on both legs, 18% GST on those fees, and 1% TDS on
             every sell. A strategy that looks brilliant gross can be a slow
             bleed net. In our own multi-year backtests, some fast configurations
@@ -390,6 +465,22 @@ export default function Home() {
               </div>
             ))}
           </div>
+        </Reveal>
+      </section>
+
+      {/* Which strategy fits you? Five questions, one honest starting point. */}
+      <section id="quiz" className="scroll-mt-20">
+        <Reveal>
+          <div className="mb-5">
+            <h2 className="eyebrow">Not sure where to start?</h2>
+            <p className="mt-2 max-w-2xl font-display text-2xl font-semibold tracking-tight">
+              Five questions, and we&rsquo;ll point you at a strategy that fits
+              your temperament.
+            </p>
+          </div>
+        </Reveal>
+        <Reveal>
+          <StrategyQuiz />
         </Reveal>
       </section>
 

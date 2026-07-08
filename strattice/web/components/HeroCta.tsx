@@ -1,6 +1,7 @@
 "use client";
 // Landing-page primary CTA. Signed-in visitors get a direct route into the app
-// instead of a redundant "get started".
+// instead of a redundant "get started"; signed-out visitors get the sample
+// dashboard so they can see the product before creating anything.
 import Link from "next/link";
 import { useSession } from "@/lib/auth-client";
 
@@ -17,10 +18,10 @@ export function HeroCta() {
         {signedIn ? "Go to dashboard" : "Get started free"}
       </Link>
       <Link
-        href="#features"
+        href={signedIn ? "#features" : "/demo"}
         className="rounded-md bg-white/5 px-5 py-2.5 text-sm font-medium text-dim transition-colors hover:bg-white/10 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
-        What&rsquo;s included
+        {signedIn ? "What's included" : "View live demo →"}
       </Link>
     </div>
   );
