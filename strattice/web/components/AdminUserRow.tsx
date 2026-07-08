@@ -89,7 +89,7 @@ export function AdminUserRow({ u }: { u: AdminUser }) {
             <div className="flex items-center gap-1.5">
               <span
                 className={[
-                  "h-1.5 w-1.5 rounded-full",
+                  "h-1.5 w-1.5 rounded-[1px]",
                   u.bot_active ? (stalled ? "bg-warn" : "bg-gain") : "bg-faint",
                 ].join(" ")}
               />

@@ -476,7 +476,7 @@ export function StrategyManager({ strategies }: { strategies: StrategyRow[] }) {
                     <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted">
                       <span
                         className={[
-                          "h-1.5 w-1.5 rounded-full",
+                          "h-1.5 w-1.5 rounded-[1px]",
                           enabled ? "bg-gain" : "bg-faint",
                         ].join(" ")}
                       />

@@ -33,13 +33,13 @@ export function ProToggle() {
         aria-checked={pro}
         onClick={toggle}
         className={[
-          "relative h-6 w-11 rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+          "relative h-6 w-11 rounded-sm border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
           pro ? "border-accent bg-accent/30" : "border-line bg-inset",
         ].join(" ")}
       >
         <span
           className={[
-            "absolute left-0.5 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full transition-transform",
+            "absolute left-0.5 top-1/2 h-4 w-4 -translate-y-1/2 rounded-[2px] transition-transform",
             pro ? "translate-x-[22px] bg-accent" : "translate-x-0 bg-faint",
           ].join(" ")}
         />

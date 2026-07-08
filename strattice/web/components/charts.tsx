@@ -290,13 +290,15 @@ export function WinRateDonut({
     <div className="flex items-center gap-4">
       <div className="relative shrink-0" style={{ width: size, height: size }}>
         <svg viewBox="0 0 132 132" width={size} height={size}>
+          {/* Base ring is neutral until there is at least one closed trade - a red
+              ring at zero trades reads as "losing" before anything has happened. */}
           <circle
             cx={66}
             cy={66}
             r={r}
             fill="none"
-            stroke={C.loss}
-            strokeOpacity={total ? 0.5 : 0.25}
+            stroke={total ? C.loss : C.line}
+            strokeOpacity={total ? 0.5 : 1}
             strokeWidth={14}
           />
           {total > 0 && (

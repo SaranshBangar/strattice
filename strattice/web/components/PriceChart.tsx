@@ -370,11 +370,11 @@ export function PriceChart({
               >
                 <span className="relative flex h-2 w-2">
                   <span
-                    className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-70"
+                    className="absolute inline-flex h-full w-full animate-ping rounded-[1px] opacity-70"
                     style={{ backgroundColor: stroke }}
                   />
                   <span
-                    className="relative inline-flex h-2 w-2 rounded-full"
+                    className="relative inline-flex h-2 w-2 rounded-[1px]"
                     style={{ backgroundColor: stroke }}
                   />
                 </span>

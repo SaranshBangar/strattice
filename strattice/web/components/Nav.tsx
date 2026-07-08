@@ -14,7 +14,7 @@ const BASE_LINKS: [string, string][] = [
 ];
 
 export function Nav() {
-  const { data } = useSession();
+  const { data, isPending } = useSession();
   const router = useRouter();
   const pathname = usePathname();
   const toast = useToast();
@@ -61,7 +61,10 @@ export function Nav() {
           </span>
         </Link>
 
-        {signedIn ? (
+        {/* While the session request is in flight the right side stays empty - flashing
+            "Sign in / Get started" at a signed-in user on every hard navigation reads
+            as being logged out, which on a trading product is alarming. */}
+        {isPending ? null : signedIn ? (
           <>
             {/* Desktop links */}
             <div className="hidden items-center gap-1 sm:flex">

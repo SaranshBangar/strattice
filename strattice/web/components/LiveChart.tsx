@@ -122,8 +122,8 @@ export function LiveChart() {
         <div className="flex items-baseline gap-3">
           <span className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.18em] text-gain">
             <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-gain opacity-60" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-gain" />
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-[1px] bg-gain opacity-60" />
+              <span className="relative inline-flex h-2 w-2 rounded-[1px] bg-gain" />
             </span>
             live
           </span>
@@ -212,11 +212,11 @@ export function LiveChart() {
             >
               <span className="relative flex h-2 w-2">
                 <span
-                  className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-70"
+                  className="absolute inline-flex h-full w-full animate-ping rounded-[1px] opacity-70"
                   style={{ backgroundColor: stroke }}
                 />
                 <span
-                  className="relative inline-flex h-2 w-2 rounded-full"
+                  className="relative inline-flex h-2 w-2 rounded-[1px]"
                   style={{ backgroundColor: stroke }}
                 />
               </span>

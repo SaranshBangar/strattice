@@ -240,7 +240,7 @@ export default async function DashboardPage() {
                   className="flex items-center gap-3.5 px-4 py-3 transition-colors hover:bg-inset/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
                 >
                   {s.done ? (
-                    <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-gain/15 text-gain">
+                    <span className="grid h-5 w-5 shrink-0 place-items-center rounded-sm bg-gain/15 text-gain">
                       <svg
                         viewBox="0 0 20 20"
                         className="h-3 w-3"
@@ -257,7 +257,7 @@ export default async function DashboardPage() {
                       </svg>
                     </span>
                   ) : (
-                    <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-white/5 font-mono text-[10px] text-faint">
+                    <span className="grid h-5 w-5 shrink-0 place-items-center rounded-sm bg-white/5 font-mono text-[10px] text-faint">
                       {i + 1}
                     </span>
                   )}

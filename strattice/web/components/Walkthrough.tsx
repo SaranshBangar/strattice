@@ -189,7 +189,7 @@ export function Walkthrough() {
               aria-label={`Go to step ${idx + 1}`}
               onClick={() => setI(idx)}
               className={[
-                "h-1.5 rounded-full transition-all",
+                "h-1.5 rounded-[1px] transition-all",
                 idx === i ? "w-5 bg-accent" : "w-1.5 bg-line hover:bg-muted",
               ].join(" ")}
             />

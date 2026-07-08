@@ -97,7 +97,7 @@ export default async function AccountPage() {
                 ] as const
               ).map(([title, hint], i) => (
                 <li key={title} className="flex gap-3">
-                  <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-white/5 font-mono text-[10px] text-faint">
+                  <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-sm bg-white/5 font-mono text-[10px] text-faint">
                     {i + 1}
                   </span>
                   <div>

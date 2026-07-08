@@ -134,7 +134,7 @@ export default function Home() {
       <section className="rise grid items-center gap-10 pt-6 lg:grid-cols-[1.05fr_0.95fr] lg:gap-14">
         <div>
           <div className="eyebrow flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-gain" />
+            <span className="h-1.5 w-1.5 rounded-[1px] bg-gain" />
             Non-custodial · CoinDCX · Free during early access
           </div>
           <h1 className="mt-5 font-display text-4xl font-bold leading-[1.05] tracking-tight sm:text-5xl">
@@ -368,7 +368,7 @@ export default function Home() {
                 apply as usual.
               </p>
             </div>
-            <span className="rounded-full bg-gain/10 px-3.5 py-1 font-mono text-xs uppercase tracking-wider text-gain">
+            <span className="rounded-sm bg-gain/10 px-3 py-1 font-mono text-xs uppercase tracking-wider text-gain">
               ₹0 / mo
             </span>
           </div>
@@ -430,12 +430,12 @@ export default function Home() {
         </Reveal>
       </section>
 
-      {/* Final CTA - one quiet band with a faint gold glow, no fireworks */}
+      {/* Final CTA - one quiet band, set apart by a gold hairline on its top edge */}
       <Reveal>
         <section className="card relative overflow-hidden px-6 py-12 text-center sm:px-10">
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 bg-[radial-gradient(560px_200px_at_50%_-60px,rgba(201,162,75,0.10),transparent)]"
+            className="pointer-events-none absolute inset-x-0 top-0 h-px bg-accent/30"
           />
           <div className="relative">
             <p className="eyebrow">Start in DRY_RUN</p>

@@ -27,7 +27,7 @@ export default async function BillingPage() {
       <section className="overflow-hidden card">
         <div className="flex items-center justify-between px-5 py-2.5">
           <span className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em] text-gain">
-            <span className="h-1.5 w-1.5 rounded-full bg-gain" />
+            <span className="h-1.5 w-1.5 rounded-[1px] bg-gain" />
             free during early access
           </span>
           <span className="font-mono text-[11px] text-muted">₹0 / mo</span>
