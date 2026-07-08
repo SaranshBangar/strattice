@@ -1120,6 +1120,93 @@ export function runSim(
   };
 }
 
+// ---------- walk-forward fold statistics ----------
+
+/** Per-fold out-of-sample stats. Folds partition the candle window into equal
+ *  consecutive segments; a trade belongs to the fold its ENTRY falls in. Because
+ *  entries only look backward and params are fixed (never re-fit per fold), slicing
+ *  one continuous simulation this way is exactly a rolling-origin out-of-sample
+ *  evaluation - and unlike per-fold restarts, position state carries across
+ *  boundaries the same way the live engine's would. */
+export interface FoldStat {
+  fold: number; // 1-based
+  fromIdx: number; // candle index range [fromIdx, toIdx)
+  toIdx: number;
+  fromT: number; // timestamps of the range, for axis labels
+  toT: number;
+  entries: number; // trades entered in this fold (incl. one still open)
+  closed: number; // closed trades counted in the stats below
+  netPct: number; // compounded net return across this fold's closed trades
+  maxDrawdownPct: number; // worst peak-to-trough on the fold's trade-by-trade equity
+  profitFactor: number | null; // gross net wins / gross net losses; null = no losers
+}
+
+export interface WalkForward {
+  folds: FoldStat[];
+  positiveFolds: number; // folds with closed trades and netPct > 0
+  tradedFolds: number; // folds with at least one closed trade
+  medianNetPct: number | null; // median fold net over traded folds
+  worstDrawdownPct: number; // max of the per-fold drawdowns
+}
+
+/** Partition a simulation into `nFolds` equal windows and score each one. */
+export function walkForward(
+  sim: SimResult,
+  candles: Candle[],
+  nFolds = 5,
+): WalkForward {
+  const n = candles.length;
+  const folds: FoldStat[] = [];
+  const k = Math.max(1, Math.min(nFolds, Math.floor(n / 2) || 1));
+  for (let f = 0; f < k; f++) {
+    const fromIdx = Math.floor((f * n) / k);
+    const toIdx = f === k - 1 ? n : Math.floor(((f + 1) * n) / k);
+    const mine = sim.trades.filter(
+      (t) => t.entryIdx >= fromIdx && t.entryIdx < toIdx,
+    );
+    const closed = mine.filter((t) => t.exitIdx !== null);
+    let eq = 1,
+      peak = 1,
+      dd = 0,
+      grossWin = 0,
+      grossLoss = 0;
+    for (const t of closed) {
+      eq *= 1 + t.netPct / 100;
+      peak = Math.max(peak, eq);
+      dd = Math.max(dd, 1 - eq / peak);
+      if (t.netPct >= 0) grossWin += t.netPct;
+      else grossLoss -= t.netPct;
+    }
+    folds.push({
+      fold: f + 1,
+      fromIdx,
+      toIdx,
+      fromT: candles[fromIdx]?.t ?? 0,
+      toT: candles[Math.max(fromIdx, toIdx - 1)]?.t ?? 0,
+      entries: mine.length,
+      closed: closed.length,
+      netPct: (eq - 1) * 100,
+      maxDrawdownPct: dd * 100,
+      profitFactor:
+        closed.length === 0 ? null : grossLoss > 0 ? grossWin / grossLoss : null,
+    });
+  }
+  const traded = folds.filter((f) => f.closed > 0);
+  const nets = traded.map((f) => f.netPct).sort((a, b) => a - b);
+  const medianNetPct = nets.length
+    ? nets.length % 2
+      ? nets[(nets.length - 1) / 2]
+      : (nets[nets.length / 2 - 1] + nets[nets.length / 2]) / 2
+    : null;
+  return {
+    folds,
+    positiveFolds: traded.filter((f) => f.netPct > 0).length,
+    tradedFolds: traded.length,
+    medianNetPct,
+    worstDrawdownPct: Math.max(0, ...folds.map((f) => f.maxDrawdownPct)),
+  };
+}
+
 // ---------- indicator overlays for the preview chart ----------
 
 export interface OverlaySeries {
