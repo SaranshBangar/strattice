@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy · Strattice",
+  title: "Privacy Policy",
   description: "What Strattice collects, why, and how it is protected.",
+  alternates: { canonical: "/privacy" },
 };
 
 const UPDATED = "6 July 2026";

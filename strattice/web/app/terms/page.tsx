@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Terms of Service · Strattice",
+  title: "Terms of Service",
   description: "The terms that govern use of Strattice.",
+  alternates: { canonical: "/terms" },
 };
 
 const UPDATED = "6 July 2026";
