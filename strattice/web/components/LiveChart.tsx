@@ -6,8 +6,9 @@
 // labels, a gold 20-tick average, a dashed "open" reference and a green/red
 // wash for time spent above/below it.
 // Display-only: the bot itself still trades INR pairs on CoinDCX.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { LiveTape, type LiveTapePoint } from "@/components/chart/LiveTape";
+import { useBinanceTradeStream } from "@/components/chart/useBinanceTradeStream";
 import { C } from "@/components/chart/primitives";
 
 const SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"] as const;
@@ -32,15 +33,13 @@ export function LiveChart() {
   const [symbol, setSymbol] = useState<Symbol>("BTCUSDT");
   const [points, setPoints] = useState<LiveTapePoint[]>([]);
   const [open, setOpen] = useState<number | null>(null);
-  const priceRef = useRef<number | null>(null);
+  // WS lifecycle (backoff reconnects + staleness) lives in the shared hook.
+  const { priceRef, stale } = useBinanceTradeStream(symbol);
 
   useEffect(() => {
     let alive = true;
-    let ws: WebSocket | null = null;
-    let retry: number | undefined;
     setPoints([]);
     setOpen(null);
-    priceRef.current = null;
 
     // Seed the window with real 1-second closes so the line is instantly full.
     fetch(
@@ -63,32 +62,14 @@ export function LiveChart() {
       })
       .catch(() => {});
 
-    function connect() {
-      ws = new WebSocket(
-        `wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@trade`,
-      );
-      ws.onmessage = (e) => {
-        try {
-          const p = Number(JSON.parse(e.data as string).p);
-          if (Number.isFinite(p)) {
-            priceRef.current = p;
-            // If the kline seed failed (offline API), anchor "open" on the
-            // first streamed trade instead.
-            setOpen((o) => o ?? p);
-          }
-        } catch {}
-      };
-      ws.onclose = () => {
-        if (alive) retry = window.setTimeout(connect, 2000);
-      };
-    }
-    connect();
-
     // The march: fold the latest traded price into the window on a fixed beat,
     // so the line visibly moves even between trades.
     const id = window.setInterval(() => {
       const p = priceRef.current;
       if (p == null) return;
+      // If the kline seed failed (offline API), anchor "open" on the
+      // first streamed trade instead.
+      setOpen((o) => o ?? p);
       setPoints((prev) => {
         const next = [...prev, { t: Date.now(), v: p }];
         return next.length > CAP ? next.slice(next.length - KEEP) : next;
@@ -98,12 +79,8 @@ export function LiveChart() {
     return () => {
       alive = false;
       window.clearInterval(id);
-      window.clearTimeout(retry);
-      if (ws) {
-        ws.onclose = null;
-        ws.close();
-      }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- priceRef is a stable ref from the stream hook
   }, [symbol]);
 
   const n = points.length;
@@ -121,13 +98,23 @@ export function LiveChart() {
     <section className="card overflow-hidden">
       <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-baseline gap-3">
-          <span className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.18em] text-gain">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-[1px] bg-gain opacity-60" />
-              <span className="relative inline-flex h-2 w-2 rounded-[1px] bg-gain" />
+          {stale ? (
+            <span
+              className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.18em] text-accent"
+              role="status"
+            >
+              <span className="relative inline-flex h-2 w-2 rounded-[1px] bg-accent" />
+              stale · reconnecting
             </span>
-            live
-          </span>
+          ) : (
+            <span className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.18em] text-gain">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-[1px] bg-gain opacity-60" />
+                <span className="relative inline-flex h-2 w-2 rounded-[1px] bg-gain" />
+              </span>
+              live
+            </span>
+          )}
           <h3 className="font-display text-sm font-semibold tracking-tight text-dim">
             {symbol.replace("USDT", "/USDT")}
           </h3>
@@ -174,7 +161,9 @@ export function LiveChart() {
             className="grid place-items-center font-mono text-[11px] text-faint"
             style={{ height: H }}
           >
-            connecting to live tape…
+            {stale
+              ? "market data unreachable — retrying in the background"
+              : "connecting to live tape…"}
           </div>
         ) : (
           <LiveTape
