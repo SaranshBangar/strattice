@@ -5,6 +5,15 @@ import "./globals.css";
 import { Nav } from "@/components/Nav";
 import { ToastProvider } from "@/components/Toast";
 import { Walkthrough } from "@/components/Walkthrough";
+import { JsonLd } from "@/components/JsonLd";
+import {
+  SITE_URL,
+  SITE_NAME,
+  SITE_DESCRIPTION,
+  SITE_KEYWORDS,
+  organizationSchema,
+  websiteSchema,
+} from "@/lib/seo";
 
 const display = Archivo({
   subsets: ["latin"],
@@ -19,28 +28,55 @@ const mono = IBM_Plex_Mono({
   display: "swap",
 });
 
-const SITE_URL = process.env.BETTER_AUTH_URL || "https://strattice.in";
-
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: { default: "Strattice", template: "%s · Strattice" },
-  description:
-    "Run algorithmic trading strategies on your own CoinDCX account. Non-custodial, paper-trading first, every number net of India's fees and TDS.",
+  title: {
+    default: "Strattice · Algorithmic crypto trading on your own CoinDCX account",
+    template: "%s · Strattice",
+  },
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  keywords: SITE_KEYWORDS,
+  authors: [{ name: SITE_NAME, url: SITE_URL }],
+  creator: SITE_NAME,
+  publisher: SITE_NAME,
+  category: "finance",
+  alternates: { canonical: "/" },
+  // Give crawlers explicit permission for the rich SERP treatments (large image
+  // previews, full text snippets) instead of the conservative defaults.
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
   openGraph: {
-    siteName: "Strattice",
+    siteName: SITE_NAME,
     type: "website",
     locale: "en_IN",
-    title: "Strattice",
-    description:
-      "Run algorithmic trading strategies on your own CoinDCX account. Non-custodial, paper-trading first, every number net of India's fees and TDS.",
-    images: [{ url: "/favicon-512.png", width: 512, height: 512 }],
+    url: SITE_URL,
+    title: "Strattice · Algorithmic crypto trading on your own CoinDCX account",
+    description: SITE_DESCRIPTION,
+    // 1200x630 branded card generated at /opengraph-image (see opengraph-image.tsx).
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: "Strattice — algorithmic trading on your own CoinDCX account",
+      },
+    ],
   },
   twitter: {
-    card: "summary",
-    title: "Strattice",
-    description:
-      "Run algorithmic trading strategies on your own CoinDCX account.",
-    images: ["/favicon-512.png"],
+    card: "summary_large_image",
+    title: "Strattice · Algorithmic crypto trading on your own CoinDCX account",
+    description: SITE_DESCRIPTION,
+    images: ["/opengraph-image"],
   },
   icons: {
     icon: [
@@ -62,6 +98,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${display.variable} ${mono.variable}`}>
       <body className="min-h-screen">
+        {/* Site-wide structured data: identifies the brand + site to crawlers. */}
+        <JsonLd schema={organizationSchema()} />
+        <JsonLd schema={websiteSchema()} />
         <a
           href="#main"
           className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-accent focus:px-3 focus:py-1.5 focus:text-sm focus:font-medium focus:text-accent-ink"

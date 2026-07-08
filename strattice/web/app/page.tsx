@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import { HeroCta } from "@/components/HeroCta";
+import { JsonLd } from "@/components/JsonLd";
 import { LiveChart } from "@/components/LiveChart";
 import { Reveal } from "@/components/Reveal";
 import { StrategyDemo } from "@/components/StrategyDemo";
 import { StrategyQuiz } from "@/components/StrategyQuiz";
 import { Term } from "@/components/Term";
 import { STRATEGY_META } from "@/lib/strategies";
+import { faqPageSchema, softwareApplicationSchema } from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: "Strattice · Algorithmic trading on your own CoinDCX account",
@@ -155,6 +157,11 @@ const FAQ: [string, string][] = [
 export default function Home() {
   return (
     <div className="space-y-24">
+      {/* Rich-result structured data. FAQPage is built from the same FAQ array
+          rendered below, so the schema always matches the visible content. */}
+      <JsonLd schema={softwareApplicationSchema()} />
+      <JsonLd schema={faqPageSchema(FAQ)} />
+
       {/* Hero - left-aligned, with a strategy ledger as the signature */}
       <section className="rise grid items-center gap-10 pt-6 lg:grid-cols-[1.05fr_0.95fr] lg:gap-14">
         <div>
