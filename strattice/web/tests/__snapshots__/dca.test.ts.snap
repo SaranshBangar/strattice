@@ -1,0 +1,14 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`simulateDca > snapshot: weekly ₹1000 on the fixture stays stable 1`] = `
+{
+  "avgCost": "167.12",
+  "buys": 72,
+  "finalValue": "106309.71",
+  "invested": 72000,
+  "lumpSumNetPct": "140.97",
+  "maxDrawdownPct": "41.32",
+  "netIfSoldPct": "45.83",
+  "units": "430.8223",
+}
+`;

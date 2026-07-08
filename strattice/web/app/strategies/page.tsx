@@ -3,6 +3,8 @@ import { getUser } from "@/lib/session";
 import * as q from "@/lib/queries";
 import { StrategyManager } from "@/components/StrategyManager";
 import { StrategyQuiz } from "@/components/StrategyQuiz";
+import { DcaPreview } from "@/components/DcaPreview";
+import { DCA_META } from "@/lib/strategies";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +48,27 @@ export default async function StrategiesPage() {
         </section>
       )}
       <StrategyManager strategies={strategies} />
+
+      {/* Recurring buy (DCA): simulator only until the engine can run it live. */}
+      <section className="card p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-medium text-fg">
+              {DCA_META.label}
+              <span className="ml-2 rounded-sm bg-inset px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-faint">
+                {DCA_META.kind}
+              </span>
+            </h2>
+            <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted">
+              {DCA_META.blurb}
+            </p>
+          </div>
+          <span className="rounded-md border border-accent/40 bg-accent/10 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider text-accent">
+            preview only
+          </span>
+        </div>
+        <DcaPreview />
+      </section>
     </div>
   );
 }
