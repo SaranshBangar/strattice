@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { HeroCta } from "@/components/HeroCta";
 import { LiveChart } from "@/components/LiveChart";
 import { Reveal } from "@/components/Reveal";
@@ -5,6 +6,19 @@ import { StrategyDemo } from "@/components/StrategyDemo";
 import { StrategyQuiz } from "@/components/StrategyQuiz";
 import { Term } from "@/components/Term";
 import { STRATEGY_META } from "@/lib/strategies";
+
+export const metadata: Metadata = {
+  title: "Strattice · Algorithmic trading on your own CoinDCX account",
+  description:
+    "Backtest-proven strategy templates, a visual strategy builder and a paper-trading-first bot that runs on your own CoinDCX account. Non-custodial - your keys, your exchange, your money.",
+  alternates: { canonical: "/" },
+  openGraph: {
+    title: "Strattice · Algorithmic trading on your own CoinDCX account",
+    description:
+      "Backtest-proven strategy templates, a visual strategy builder and a paper-trading-first bot. Non-custodial - your keys, your exchange, your money.",
+    url: "/",
+  },
+};
 
 // The strategy templates that actually ship - shown as a terminal-style ledger.
 // The ACTIVE daily lineup (research/FINDINGS.md), each on its venue-robust market.
