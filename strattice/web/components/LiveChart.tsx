@@ -1,16 +1,25 @@
 "use client";
 // Landing-page live tape. Streams real trades from Binance WebSocket (free,
-// no key, no rate-limit pain) and marches a rolling ~60s line every 500ms.
+// no key, no rate-limit pain) and appends to a rolling window every 500ms.
 // Seeded from Binance 1s klines so the line is full on first paint.
+// Rendering is the fixed-axis LiveTape engine: still gridlines and tick
+// labels, a gold 20-tick average, a dashed "open" reference and a green/red
+// wash for time spent above/below it.
 // Display-only: the bot itself still trades INR pairs on CoinDCX.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { LiveTape, type LiveTapePoint } from "@/components/chart/LiveTape";
+import { C } from "@/components/chart/primitives";
 
 const SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"] as const;
 type Symbol = (typeof SYMBOLS)[number];
 
-const POINTS = 120; // rolling window size
-const TICK_MS = 500; // append cadence -> POINTS * TICK_MS = 60s on screen
-const W = 1000;
+const WINDOW_MS = 60_000; // visible span
+const TICK_MS = 500; // append cadence
+// Buffer: one window on screen + slack so the SMA is warm at the left edge.
+// Prune rarely (in chunks) - each prune shifts the tape's time epoch, which
+// briefly suspends the scroll transition for one frame.
+const KEEP = 200;
+const CAP = 240;
 const H = 220;
 
 const fmt = (n: number) =>
@@ -21,7 +30,8 @@ const fmt = (n: number) =>
 
 export function LiveChart() {
   const [symbol, setSymbol] = useState<Symbol>("BTCUSDT");
-  const [points, setPoints] = useState<number[]>([]);
+  const [points, setPoints] = useState<LiveTapePoint[]>([]);
+  const [open, setOpen] = useState<number | null>(null);
   const priceRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -29,21 +39,26 @@ export function LiveChart() {
     let ws: WebSocket | null = null;
     let retry: number | undefined;
     setPoints([]);
+    setOpen(null);
     priceRef.current = null;
 
     // Seed the window with real 1-second closes so the line is instantly full.
     fetch(
-      `https://data-api.binance.vision/api/v3/klines?symbol=${symbol}&interval=1s&limit=${POINTS}`,
+      `https://data-api.binance.vision/api/v3/klines?symbol=${symbol}&interval=1s&limit=${KEEP}`,
     )
       .then((r) => r.json())
       .then((rows: unknown) => {
         if (!alive || !Array.isArray(rows)) return;
-        const closes = rows
-          .map((row) => Number((row as string[])[4]))
-          .filter(Number.isFinite);
-        if (closes.length) {
-          priceRef.current = closes[closes.length - 1];
-          setPoints(closes);
+        const seeded: LiveTapePoint[] = rows
+          .map((row) => ({
+            t: Number((row as (string | number)[])[0]),
+            v: Number((row as string[])[4]),
+          }))
+          .filter((p) => Number.isFinite(p.t) && Number.isFinite(p.v));
+        if (seeded.length) {
+          priceRef.current = seeded[seeded.length - 1].v;
+          setPoints(seeded);
+          setOpen(seeded[seeded.length - 1].v);
         }
       })
       .catch(() => {});
@@ -55,7 +70,12 @@ export function LiveChart() {
       ws.onmessage = (e) => {
         try {
           const p = Number(JSON.parse(e.data as string).p);
-          if (Number.isFinite(p)) priceRef.current = p;
+          if (Number.isFinite(p)) {
+            priceRef.current = p;
+            // If the kline seed failed (offline API), anchor "open" on the
+            // first streamed trade instead.
+            setOpen((o) => o ?? p);
+          }
         } catch {}
       };
       ws.onclose = () => {
@@ -69,7 +89,10 @@ export function LiveChart() {
     const id = window.setInterval(() => {
       const p = priceRef.current;
       if (p == null) return;
-      setPoints((prev) => [...prev.slice(-(POINTS - 1)), p]);
+      setPoints((prev) => {
+        const next = [...prev, { t: Date.now(), v: p }];
+        return next.length > CAP ? next.slice(next.length - KEEP) : next;
+      });
     }, TICK_MS);
 
     return () => {
@@ -84,37 +107,15 @@ export function LiveChart() {
   }, [symbol]);
 
   const n = points.length;
-  const last = points[n - 1];
-  const prev = points[n - 2];
-  const first = points[0];
+  const last = n ? points[n - 1].v : 0;
+  const prev = n > 1 ? points[n - 2].v : last;
+  // Direction + % change measured across the visible window, not the buffer.
+  const cutoff = n ? points[n - 1].t - WINDOW_MS : 0;
+  const firstVisible = points.find((p) => p.t >= cutoff)?.v ?? points[0]?.v;
   const dir = last > prev ? 1 : last < prev ? -1 : 0;
-  const up = n > 1 && last >= first;
-  const stroke = up ? "#16B97D" : "#F0584F";
-  const change = first ? ((last - first) / first) * 100 : 0;
-
-  const { path, area, endX, endY } = useMemo(() => {
-    if (n < 2) return { path: "", area: "", endX: 0, endY: 0 };
-    const lo = Math.min(...points);
-    const hi = Math.max(...points);
-    const pad = (hi - lo) * 0.15 || Math.abs(hi) * 0.001 || 1;
-    const span = hi - lo + pad * 2;
-    const x = (i: number) => (i / (POINTS - 1)) * W;
-    const y = (v: number) => ((hi + pad - v) / span) * H;
-    // Right-align a partially filled window so the line grows in from the right.
-    const off = POINTS - n;
-    const d = points
-      .map(
-        (v, i) =>
-          `${i === 0 ? "M" : "L"}${x(off + i).toFixed(1)} ${y(v).toFixed(1)}`,
-      )
-      .join(" ");
-    return {
-      path: d,
-      area: `${d} L${W} ${H} L${x(off)} ${H} Z`,
-      endX: 100,
-      endY: (y(points[n - 1]) / H) * 100,
-    };
-  }, [points, n]);
+  const up = n > 1 && firstVisible != null && last >= firstVisible;
+  const stroke = up ? C.gain : C.loss;
+  const change = firstVisible ? ((last - firstVisible) / firstVisible) * 100 : 0;
 
   return (
     <section className="card overflow-hidden">
@@ -135,7 +136,7 @@ export function LiveChart() {
               <span
                 className="font-mono text-lg font-semibold tnum transition-colors duration-300"
                 style={{
-                  color: dir > 0 ? "#16B97D" : dir < 0 ? "#F0584F" : undefined,
+                  color: dir > 0 ? C.gain : dir < 0 ? C.loss : undefined,
                 }}
               >
                 ${fmt(last)}
@@ -167,67 +168,45 @@ export function LiveChart() {
         </div>
       </div>
 
-      <div className="relative px-3 pb-3" style={{ height: H }}>
+      <div className="px-3 pb-3">
         {n < 2 ? (
-          <div className="grid h-full place-items-center font-mono text-[11px] text-faint">
+          <div
+            className="grid place-items-center font-mono text-[11px] text-faint"
+            style={{ height: H }}
+          >
             connecting to live tape…
           </div>
         ) : (
-          <>
-            <svg
-              viewBox={`0 0 ${W} ${H}`}
-              preserveAspectRatio="none"
-              width="100%"
-              height="100%"
-              style={{ display: "block" }}
-              role="img"
-              aria-label={`${symbol} live price, last 60 seconds`}
-            >
-              <defs>
-                <linearGradient id="livefill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={stroke} stopOpacity={0.22} />
-                  <stop offset="100%" stopColor={stroke} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <path d={area} fill="url(#livefill)" />
-              <path
-                d={path}
-                fill="none"
-                stroke={stroke}
-                strokeWidth={2}
-                vectorEffect="non-scaling-stroke"
-                strokeLinejoin="round"
-                strokeLinecap="round"
-              />
-            </svg>
-            {/* Pulsing head of the tape, in HTML so animate-ping just works */}
-            <div
-              className="pointer-events-none absolute"
-              style={{
-                left: `calc(${endX}% - 4px)`,
-                top: `${endY}%`,
-                transform: "translateY(-50%)",
-                transition: "top 0.4s linear",
-              }}
-            >
-              <span className="relative flex h-2 w-2">
-                <span
-                  className="absolute inline-flex h-full w-full animate-ping rounded-[1px] opacity-70"
-                  style={{ backgroundColor: stroke }}
-                />
-                <span
-                  className="relative inline-flex h-2 w-2 rounded-[1px]"
-                  style={{ backgroundColor: stroke }}
-                />
-              </span>
-            </div>
-          </>
+          <LiveTape
+            points={points}
+            windowMs={WINDOW_MS}
+            tickMs={TICK_MS}
+            height={H}
+            fmtY={(v) => `$${fmt(v)}`}
+            overlays={[
+              {
+                id: "sma20",
+                label: "20-tick avg",
+                period: 20,
+                kind: "sma",
+                color: C.accent,
+              },
+            ]}
+            baseline={open}
+            domainKey={symbol}
+            ariaLabel={`${symbol} live price, last 60 seconds`}
+          />
         )}
       </div>
 
-      <div className="flex items-center justify-between bg-white/[0.03] px-4 py-2 font-mono text-[11px] text-faint">
-        <span>last 60 seconds · tick every trade</span>
-        <span>Binance public stream · display only, bots trade on CoinDCX</span>
+      <div className="flex flex-col gap-1 bg-white/[0.03] px-4 py-2 font-mono text-[11px] text-faint sm:flex-row sm:items-center sm:justify-between">
+        <span>
+          strategies watch lines like the gold average — price crossing it is
+          the kind of signal a bot acts on
+        </span>
+        <span className="shrink-0">
+          Binance public stream · display only, bots trade on CoinDCX
+        </span>
       </div>
     </section>
   );

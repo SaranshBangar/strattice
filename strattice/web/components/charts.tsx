@@ -1,100 +1,70 @@
 // Zero-dependency SVG charts. Server-renderable (no client JS). Palette matches
 // tailwind.config.ts exactly. No gradients - solid low-opacity fills only.
-import type { ReactNode } from "react";
+// Shared axis chrome, reference lines and highlight primitives live in
+// ./chart/primitives; pure series math (SMA, high-water-mark, paths) in
+// lib/chart-math.
+import {
+  C,
+  ChartEmpty,
+  ChartFrame,
+  GridLines,
+  LegendKey,
+  PlotLabel,
+  RefLine,
+  ticksDown,
+} from "./chart/primitives";
+import { bandPath, highWaterMark } from "@/lib/chart-math";
 
-const C = {
-  gain: "#16B97D",
-  loss: "#F0584F",
-  accent: "#C9A24B",
-  line: "#232838",
-  axis: "#39415A",
-  faint: "#5A6379",
-  muted: "#828AA0",
-} as const;
+export { ChartEmpty, ChartFrame, ticksDown };
 
-function ChartEmpty({ height, label }: { height: number; label: string }) {
-  return (
-    <div
-      className="grid place-items-center rounded-md border border-dashed border-line text-xs text-faint"
-      style={{ height }}
-    >
-      {label}
-    </div>
-  );
-}
-
-/**
- * Axis chrome around a stretched (preserveAspectRatio="none") SVG plot: a left
- * Y-gutter with tick values aligned to the plot's gridlines, and a bottom X-gutter
- * with tick labels. The plot's own gridlines must sit at the same even fractions
- * (i / (yTicks.length - 1)) so labels line up. Y ticks run top → bottom.
- */
-export function ChartFrame({
-  height,
-  yTicks,
-  xTicks,
-  fmtY,
-  children,
-}: {
-  height: number;
-  yTicks: number[];
-  xTicks: string[];
-  fmtY: (n: number) => string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="grid" style={{ gridTemplateColumns: "3.75rem 1fr" }}>
-      {/* Y axis */}
-      <div className="relative" style={{ height }}>
-        {yTicks.map((v, i) => (
-          <span
-            key={i}
-            className="absolute right-2 -translate-y-1/2 whitespace-nowrap font-mono text-[10px] leading-none tabular-nums text-faint"
-            style={{ top: `${(i / (yTicks.length - 1)) * 100}%` }}
-          >
-            {fmtY(v)}
-          </span>
-        ))}
-      </div>
-      {/* Plot */}
-      <div style={{ height }}>{children}</div>
-      {/* Corner + X axis */}
-      <div />
-      <div className="flex justify-between gap-1 overflow-hidden pt-1.5 font-mono text-[10px] tabular-nums text-faint">
-        {xTicks.map((t, i) => (
-          <span key={i} className="shrink-0 whitespace-nowrap">
-            {t}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// Evenly spaced tick values from hi (top) down to lo (bottom), inclusive.
-function ticksDown(lo: number, hi: number, n = 4) {
-  return Array.from({ length: n + 1 }, (_, i) => hi - (i / n) * (hi - lo));
-}
-
-/** Filled line chart for a value that trends over time (e.g. account equity). */
+/** Filled line chart for a value that trends over time (e.g. account equity).
+ *  Optional finery: a dashed high-water-mark step line (`hwm`), red shading of
+ *  the gap between peak and equity (`ddShade`), a labelled starting-value
+ *  reference (`baseline`), a legend, and a one-time draw-in animation. */
 export function EquityCurve({
   points,
   height = 200,
   fmt = (n: number) => n.toFixed(2),
   xTicks = [],
+  hwm = false,
+  ddShade = false,
+  baseline,
+  legend = false,
+  drawIn = false,
+  emptySub,
+  emptyAction,
 }: {
   points: number[];
   height?: number;
   fmt?: (n: number) => string;
   xTicks?: string[]; // time labels sampled left → right under the plot
+  hwm?: boolean;
+  ddShade?: boolean;
+  baseline?: { value: number; label: string };
+  legend?: boolean;
+  drawIn?: boolean;
+  emptySub?: string;
+  emptyAction?: { href: string; label: string };
 }) {
   if (points.length < 2)
-    return <ChartEmpty height={height} label="Not enough history yet." />;
+    return (
+      <ChartEmpty
+        height={height}
+        label="Not enough history yet."
+        sub={emptySub}
+        action={emptyAction}
+      />
+    );
   const W = 1000;
   const H = 300;
   const N = 4; // gridline / tick count
-  const min = Math.min(...points);
-  const max = Math.max(...points);
+  const hwmSeries = hwm || ddShade ? highWaterMark(points) : null;
+  let min = Math.min(...points);
+  let max = Math.max(...points);
+  if (baseline) {
+    min = Math.min(min, baseline.value);
+    max = Math.max(max, baseline.value);
+  }
   // Pad the domain ~6% so the line doesn't graze the top/bottom edges; axis ticks
   // are computed over the padded domain so labels align with the gridlines.
   const pad = (max - min) * 0.06 || Math.abs(max) * 0.06 || 1;
@@ -112,9 +82,39 @@ export function EquityCurve({
   const up = points[points.length - 1] >= points[0];
   const stroke = up ? C.gain : C.loss;
   const yTicks = ticksDown(lo, hi, N);
+  // Peak line drawn as steps: it only ever moves up, and holds flat in between.
+  let hwmPath = "";
+  if (hwmSeries) {
+    hwmPath = `M${x(0).toFixed(1)} ${y(hwmSeries[0]).toFixed(1)}`;
+    for (let i = 1; i < hwmSeries.length; i++) {
+      hwmPath += ` L${x(i).toFixed(1)} ${y(hwmSeries[i - 1]).toFixed(1)} L${x(i).toFixed(1)} ${y(hwmSeries[i]).toFixed(1)}`;
+    }
+  }
+  const legendNode = legend ? (
+    <LegendKey
+      items={[
+        { label: "equity", color: stroke, kind: "line" },
+        ...(hwm
+          ? [{ label: "peak", color: C.accent, kind: "dash" as const }]
+          : []),
+        ...(ddShade
+          ? [{ label: "drawdown", color: C.loss, kind: "area" as const }]
+          : []),
+        ...(baseline
+          ? [{ label: baseline.label, color: C.faint, kind: "dash" as const }]
+          : []),
+      ]}
+    />
+  ) : undefined;
 
   return (
-    <ChartFrame height={height} yTicks={yTicks} xTicks={xTicks} fmtY={fmt}>
+    <ChartFrame
+      height={height}
+      yTicks={yTicks}
+      xTicks={xTicks}
+      fmtY={fmt}
+      legend={legendNode}
+    >
       <svg
         viewBox={`0 0 ${W} ${H}`}
         preserveAspectRatio="none"
@@ -123,21 +123,7 @@ export function EquityCurve({
         role="img"
         aria-label="Equity over time"
       >
-        {yTicks.map((_, i) => {
-          const gy = (i / N) * H;
-          return (
-            <line
-              key={i}
-              x1={0}
-              x2={W}
-              y1={gy}
-              y2={gy}
-              stroke={C.line}
-              strokeWidth={1}
-              vectorEffect="non-scaling-stroke"
-            />
-          );
-        })}
+        <GridLines n={N} W={W} H={H} />
         {/* Vertical guidelines matching the evenly spaced time labels below */}
         {Array.from({ length: Math.max(2, xTicks.length || N + 1) }, (_, j) => (
           <line
@@ -148,14 +134,39 @@ export function EquityCurve({
             y2={H}
             stroke={C.line}
             strokeWidth={1}
-            strokeDasharray="2 4"
+            strokeOpacity={0.6}
             vectorEffect="non-scaling-stroke"
           />
         ))}
         {/* Axis frame: y-axis left, x-axis bottom */}
         <line x1={0} x2={0} y1={0} y2={H} stroke={C.axis} strokeWidth={1} vectorEffect="non-scaling-stroke" />
         <line x1={0} x2={W} y1={H} y2={H} stroke={C.axis} strokeWidth={1} vectorEffect="non-scaling-stroke" />
-        <path d={area} fill={stroke} fillOpacity={0.08} />
+        {baseline && <RefLine y={y(baseline.value)} W={W} />}
+        <path
+          d={area}
+          fill={stroke}
+          fillOpacity={0.08}
+          className={drawIn ? "chart-fade" : undefined}
+        />
+        {ddShade && hwmSeries && (
+          <path
+            d={bandPath(hwmSeries, points, x, y)}
+            fill={C.loss}
+            fillOpacity={0.08}
+            className={drawIn ? "chart-fade" : undefined}
+          />
+        )}
+        {hwm && hwmSeries && (
+          <path
+            d={hwmPath}
+            fill="none"
+            stroke={C.accent}
+            strokeWidth={1.25}
+            strokeDasharray="5 4"
+            vectorEffect="non-scaling-stroke"
+            className={drawIn ? "chart-fade" : undefined}
+          />
+        )}
         <path
           d={path}
           fill="none"
@@ -164,6 +175,8 @@ export function EquityCurve({
           vectorEffect="non-scaling-stroke"
           strokeLinejoin="round"
           strokeLinecap="round"
+          pathLength={drawIn ? 1 : undefined}
+          className={drawIn ? "chart-draw" : undefined}
         />
         <circle
           cx={x(points.length - 1)}
@@ -173,8 +186,43 @@ export function EquityCurve({
           vectorEffect="non-scaling-stroke"
         />
       </svg>
+      {baseline && (
+        <PlotLabel yFrac={y(baseline.value) / H} xFrac={0.99} color={C.faint}>
+          {baseline.label}
+        </PlotLabel>
+      )}
     </ChartFrame>
   );
+}
+
+// Bar with the data end rounded and the baseline end square - a rect's rx would
+// wrongly round both.
+function barPath(
+  x0: number,
+  w: number,
+  top: number,
+  bottom: number,
+  roundTop: boolean,
+) {
+  const r = Math.min(4, w / 2, Math.abs(bottom - top));
+  if (roundTop) {
+    return [
+      `M${(x0).toFixed(1)} ${bottom.toFixed(1)}`,
+      `L${x0.toFixed(1)} ${(top + r).toFixed(1)}`,
+      `Q${x0.toFixed(1)} ${top.toFixed(1)} ${(x0 + r).toFixed(1)} ${top.toFixed(1)}`,
+      `L${(x0 + w - r).toFixed(1)} ${top.toFixed(1)}`,
+      `Q${(x0 + w).toFixed(1)} ${top.toFixed(1)} ${(x0 + w).toFixed(1)} ${(top + r).toFixed(1)}`,
+      `L${(x0 + w).toFixed(1)} ${bottom.toFixed(1)} Z`,
+    ].join(" ");
+  }
+  return [
+    `M${x0.toFixed(1)} ${top.toFixed(1)}`,
+    `L${(x0 + w).toFixed(1)} ${top.toFixed(1)}`,
+    `L${(x0 + w).toFixed(1)} ${(bottom - r).toFixed(1)}`,
+    `Q${(x0 + w).toFixed(1)} ${bottom.toFixed(1)} ${(x0 + w - r).toFixed(1)} ${bottom.toFixed(1)}`,
+    `L${(x0 + r).toFixed(1)} ${bottom.toFixed(1)}`,
+    `Q${x0.toFixed(1)} ${bottom.toFixed(1)} ${x0.toFixed(1)} ${(bottom - r).toFixed(1)} Z`,
+  ].join(" ");
 }
 
 /** Diverging bars around a zero baseline (e.g. daily realized P&L). */
@@ -182,13 +230,26 @@ export function PnlBars({
   data,
   height = 200,
   fmt = (n: number) => n.toFixed(0),
+  annotateExtremes = false,
+  emptySub,
+  emptyAction,
 }: {
   data: { label: string; value: number }[];
   height?: number;
   fmt?: (n: number) => string;
+  annotateExtremes?: boolean;
+  emptySub?: string;
+  emptyAction?: { href: string; label: string };
 }) {
   if (data.length === 0)
-    return <ChartEmpty height={height} label="No closed trades yet." />;
+    return (
+      <ChartEmpty
+        height={height}
+        label="No closed trades yet."
+        sub={emptySub}
+        action={emptyAction}
+      />
+    );
   const W = 1000;
   const H = 300;
   const N = 4; // gridline / tick count
@@ -198,7 +259,7 @@ export function PnlBars({
   const span = max - min || 1;
   const n = data.length;
   const slot = W / n;
-  const bw = Math.min(slot * 0.62, 46);
+  const bw = Math.max(1, Math.min(slot * 0.62, 46, slot - 2));
   const y = (v: number) => ((max - v) / span) * H;
   const zeroY = y(0);
   const yTicks = ticksDown(min, max, N);
@@ -211,6 +272,21 @@ export function PnlBars({
           { length: k },
           (_, j) => data[Math.round((j * (n - 1)) / (k - 1))].label,
         );
+  // Direct-label only the best and the worst day - the two bars a newcomer
+  // actually asks about. Values wear text ink, not the bar color.
+  let bestIdx = 0;
+  let worstIdx = 0;
+  for (let i = 1; i < n; i++) {
+    if (vals[i] > vals[bestIdx]) bestIdx = i;
+    if (vals[i] < vals[worstIdx]) worstIdx = i;
+  }
+  const extremes =
+    annotateExtremes && n > 1
+      ? [
+          ...(vals[bestIdx] > 0 ? [bestIdx] : []),
+          ...(vals[worstIdx] < 0 && worstIdx !== bestIdx ? [worstIdx] : []),
+        ]
+      : [];
 
   return (
     <ChartFrame height={height} yTicks={yTicks} xTicks={xTicks} fmtY={fmt}>
@@ -249,24 +325,37 @@ export function PnlBars({
         />
         {data.map((d, i) => {
           const cx = i * slot + slot / 2;
-          const top = d.value >= 0 ? y(d.value) : zeroY;
-          const h = Math.max(1, Math.abs(zeroY - y(d.value)));
+          const pos = d.value >= 0;
+          const top = pos ? y(d.value) : zeroY;
+          const bottom = pos ? zeroY : y(d.value);
+          const h = Math.max(1, bottom - top);
           return (
-            <rect
+            <path
               key={i}
-              x={cx - bw / 2}
-              y={top}
-              width={bw}
-              height={h}
-              fill={d.value >= 0 ? C.gain : C.loss}
+              d={barPath(cx - bw / 2, bw, top, top + h, pos)}
+              fill={pos ? C.gain : C.loss}
               fillOpacity={0.85}
-              rx={1}
+              className="chart-bar"
             >
               <title>{`${d.label}: ${fmt(d.value)}`}</title>
-            </rect>
+            </path>
           );
         })}
       </svg>
+      {extremes.map((i) => {
+        const v = vals[i];
+        const cx = (i * slot + slot / 2) / W;
+        const edgeY = y(v) / H;
+        const yFrac = Math.min(
+          0.94,
+          Math.max(0.05, v >= 0 ? edgeY - 0.07 : edgeY + 0.07),
+        );
+        return (
+          <PlotLabel key={i} xFrac={cx} yFrac={yFrac} align="center" color="#AEB6C8">
+            {fmt(v)}
+          </PlotLabel>
+        );
+      })}
     </ChartFrame>
   );
 }
@@ -358,10 +447,12 @@ export function DrawdownCurve({
   points,
   height = 180,
   xTicks = [],
+  guide = false,
 }: {
   points: number[];
   height?: number;
   xTicks?: string[];
+  guide?: boolean; // dashed reference at the deepest drawdown, labelled
 }) {
   if (points.length < 2)
     return <ChartEmpty height={height} label="Not enough history yet." />;
@@ -383,6 +474,7 @@ export function DrawdownCurve({
   let troughIdx = 0;
   for (let i = 1; i < points.length; i++)
     if (points[i] > points[troughIdx]) troughIdx = i;
+  const showGuide = guide && points[troughIdx] > 0.05;
 
   return (
     <ChartFrame
@@ -399,18 +491,7 @@ export function DrawdownCurve({
         role="img"
         aria-label="Drawdown from peak over time"
       >
-        {yTicks.map((_, i) => (
-          <line
-            key={i}
-            x1={0}
-            x2={W}
-            y1={(i / N) * H}
-            y2={(i / N) * H}
-            stroke={C.line}
-            strokeWidth={1}
-            vectorEffect="non-scaling-stroke"
-          />
-        ))}
+        <GridLines n={N} W={W} H={H} />
         <line
           x1={0}
           x2={W}
@@ -420,6 +501,9 @@ export function DrawdownCurve({
           strokeWidth={1}
           vectorEffect="non-scaling-stroke"
         />
+        {showGuide && (
+          <RefLine y={y(points[troughIdx])} W={W} color={C.loss} opacity={0.5} />
+        )}
         <path d={area} fill={C.loss} fillOpacity={0.12} />
         <path
           d={path}
@@ -442,6 +526,15 @@ export function DrawdownCurve({
           </circle>
         )}
       </svg>
+      {showGuide && (
+        <PlotLabel
+          yFrac={Math.min(0.93, y(points[troughIdx]) / H + 0.05)}
+          xFrac={0.99}
+          color={C.loss}
+        >
+          max -{points[troughIdx].toFixed(1)}%
+        </PlotLabel>
+      )}
     </ChartFrame>
   );
 }
@@ -495,35 +588,21 @@ export function PnlHistogram({
         role="img"
         aria-label="Distribution of daily profit and loss"
       >
-        {yTicks.map((_, i) => (
-          <line
-            key={i}
-            x1={0}
-            x2={W}
-            y1={(i / N) * H}
-            y2={(i / N) * H}
-            stroke={C.line}
-            strokeWidth={1}
-            vectorEffect="non-scaling-stroke"
-          />
-        ))}
+        <GridLines n={N} W={W} H={H} />
         {counts.map((c, i) => {
           if (c === 0) return null;
           const center = lo + (i + 0.5) * w;
           const h = (c / maxC) * (H - 6);
           return (
-            <rect
+            <path
               key={i}
-              x={i * slot + (slot - bw) / 2}
-              y={H - h}
-              width={bw}
-              height={h}
+              d={barPath(i * slot + (slot - bw) / 2, bw, H - h, H, true)}
               fill={center < 0 ? C.loss : C.gain}
               fillOpacity={0.8}
-              rx={1}
+              className="chart-bar"
             >
               <title>{`${fmt(lo + i * w)} to ${fmt(lo + (i + 1) * w)}: ${c} day${c === 1 ? "" : "s"}`}</title>
-            </rect>
+            </path>
           );
         })}
         <line
@@ -547,11 +626,13 @@ export function Sparkline({
   width = 120,
   height = 32,
   color,
+  area = false,
 }: {
   data: number[];
   width?: number;
   height?: number;
   color?: string;
+  area?: boolean;
 }) {
   if (data.length < 2) return <div style={{ height }} />;
   const min = Math.min(...data);
@@ -573,6 +654,13 @@ export function Sparkline({
       preserveAspectRatio="none"
       aria-hidden="true"
     >
+      {area && (
+        <path
+          d={`${path} L${width} ${height} L0 ${height} Z`}
+          fill={stroke}
+          fillOpacity={0.08}
+        />
+      )}
       <path
         d={path}
         fill="none"
