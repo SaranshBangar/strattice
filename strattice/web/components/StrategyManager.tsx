@@ -251,7 +251,7 @@ export function StrategyManager({ strategies }: { strategies: StrategyRow[] }) {
       <section className="overflow-hidden card">
         <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
           <h2 className="eyebrow">02 · {meta.label} - config &amp; preview</h2>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Select
               size="sm"
               ariaLabel="Market"

@@ -349,15 +349,15 @@ export function StrategyPreview({
                     : "")}
             </span>
           </div>
-          <div className="mt-2 grid grid-cols-5 gap-1.5">
+          <div className="mt-2 grid grid-cols-5 gap-1 sm:gap-1.5">
             {wf.folds.map((f) => (
               <div
                 key={f.fold}
-                className="rounded bg-panel/60 px-2 py-1.5 text-center"
+                className="min-w-0 rounded bg-panel/60 px-1 py-1.5 text-center sm:px-2"
                 title={`${tsShort(f.fromT, "1d")} – ${tsShort(f.toT, "1d")} · ${f.closed} closed trade${f.closed === 1 ? "" : "s"}${f.profitFactor !== null ? ` · profit factor ${f.profitFactor.toFixed(2)}` : ""} · max drawdown ${f.maxDrawdownPct.toFixed(1)}%`}
               >
                 <div
-                  className={`font-mono text-xs font-semibold tabular-nums ${
+                  className={`font-mono text-[11px] font-semibold tabular-nums sm:text-xs ${
                     f.closed === 0
                       ? "text-faint"
                       : f.netPct >= 0
