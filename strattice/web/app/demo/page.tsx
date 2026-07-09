@@ -18,6 +18,8 @@ import {
 } from "@/components/charts";
 import { strategyLabel } from "@/lib/strategies";
 import { demoData } from "@/lib/demo-data";
+import { JsonLd } from "@/components/JsonLd";
+import { breadcrumbSchema } from "@/lib/seo";
 
 // The sample data is deterministic - only the date labels move with the clock
 // (they roll at UTC midnight). Hourly ISR lets the CDN serve cached HTML
@@ -87,6 +89,12 @@ export default function DemoPage() {
 
   return (
     <div className="space-y-6">
+      <JsonLd
+        schema={breadcrumbSchema([
+          ["Home", "/"],
+          ["Demo dashboard", "/demo"],
+        ])}
+      />
       {/* Demo banner - always visible, so nobody mistakes this for real data */}
       <div className="card flex flex-wrap items-center justify-between gap-3 px-4 py-3">
         <div>

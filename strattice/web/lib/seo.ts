@@ -6,23 +6,28 @@
 export const SITE_URL = process.env.BETTER_AUTH_URL || "https://strattice.in";
 export const SITE_NAME = "Strattice";
 
-// Description reused across metadata + Organization schema. Kept under ~155
-// chars so Google shows it whole in the SERP snippet.
+// Description reused across metadata + Organization schema. Leads with the exact
+// high-intent phrase people search ("automated/auto crypto trading in India")
+// and stays under ~160 chars so Google shows it whole in the SERP snippet.
 export const SITE_DESCRIPTION =
-  "Run backtest-proven algorithmic trading strategies on your own CoinDCX account. Non-custodial, paper-trading first, every number net of India's fees, GST and TDS.";
+  "Automated crypto trading in India, on your own CoinDCX account. Backtest-proven algo strategies, non-custodial, paper-trading first — net of fees, GST & TDS.";
 
-// High-intent terms an Indian crypto trader actually types. Order roughly by
-// intent strength. `keywords` no longer moves Google's ranking directly, but it
-// still feeds some engines and documents our target vocabulary in one place.
+// High-intent terms an Indian crypto trader actually types, ordered by intent
+// strength and led by the exact-match queries we most want to rank for.
+// `keywords` no longer moves Google's ranking directly, but it still feeds some
+// engines and documents our target vocabulary in one place.
 export const SITE_KEYWORDS = [
-  "algorithmic trading India",
+  "crypto auto trading India",
+  "automated crypto trading India",
+  "auto trading crypto",
   "crypto trading bot India",
+  "algorithmic trading India",
+  "algo trading crypto India",
   "CoinDCX trading bot",
   "CoinDCX API trading",
-  "automated crypto trading",
-  "algo trading crypto",
+  "automated crypto trading platform",
   "backtesting crypto strategies",
-  "paper trading crypto",
+  "paper trading crypto India",
   "non-custodial trading bot",
   "trading strategy builder",
   "Bitcoin trading bot India",
@@ -73,8 +78,14 @@ export function softwareApplicationSchema() {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     name: SITE_NAME,
+    // Alternate names mirror how people phrase the search, so the entity matches
+    // "automated/auto crypto trading" queries as well as the brand term.
+    alternateName: [
+      "Strattice — Automated Crypto Trading India",
+      "Strattice CoinDCX Trading Bot",
+    ],
     applicationCategory: "FinanceApplication",
-    applicationSubCategory: "Algorithmic Trading Platform",
+    applicationSubCategory: "Automated Crypto Trading Platform",
     operatingSystem: "Web",
     url: SITE_URL,
     description: SITE_DESCRIPTION,
@@ -109,6 +120,23 @@ export function faqPageSchema(faq: readonly (readonly [string, string])[]) {
       "@type": "Question",
       name: question,
       acceptedAnswer: { "@type": "Answer", text: answer },
+    })),
+  } as const;
+}
+
+// BreadcrumbList gives Google the site hierarchy for the breadcrumb SERP treatment
+// (the "strattice.in › Demo" trail under the title) instead of a bare URL.
+export function breadcrumbSchema(
+  trail: readonly (readonly [string, string])[],
+) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: trail.map(([name, path], i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name,
+      item: absoluteUrl(path),
     })),
   } as const;
 }
