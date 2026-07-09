@@ -559,6 +559,7 @@ export function StrategyBuilder() {
               />
             </div>
             {compare.length ? (
+              <div className="overflow-x-auto">
               <table className="w-full text-left font-mono text-[11px]">
                 <thead className="bg-inset text-faint">
                   <tr>
@@ -604,6 +605,7 @@ export function StrategyBuilder() {
                   ))}
                 </tbody>
               </table>
+              </div>
             ) : (
               <p className="px-4 py-6 text-center text-xs text-muted">
                 {windowsLoading
