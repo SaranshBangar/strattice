@@ -48,10 +48,15 @@ def _decision_window_bars(strategy) -> int:
 def run(strategy, candles: list[dict], capital: float,
         stop_loss_pct: float = 0.0, take_profit_pct: float = 0.0,
         slippage: float | None = None, interval: str = "1h",
-        chandelier_k: float = 0.0, atr_period: int = 14, max_hold_bars: int = 0) -> dict:
+        chandelier_k: float = 0.0, atr_period: int = 14, max_hold_bars: int = 0,
+        trade_from: int = 0) -> dict:
     """All friction (fee+GST per side, TDS per sell, slippage on fills) comes from costs.py
     so the backtest, DRY_RUN, and live accounting can never diverge. slippage=None uses the
     configured slippage_bps; pass an explicit fraction to override.
+
+    trade_from: first bar index allowed to trade/score. Earlier bars still feed indicator
+    windows (via the decision-window slice), but no orders are placed and no metrics count
+    before it - so walk_forward can warm up on train bars yet measure ONLY the test window.
 
     Exits (same precedence as the live engine): stop-loss, take-profit (target), time-stop
     (max_hold_bars), then an ATR chandelier trailing stop (peak - chandelier_k*ATR)."""
@@ -75,7 +80,10 @@ def run(strategy, candles: list[dict], capital: float,
         sell_notional += gross
         return gross - fee - t
 
-    start = max(strategy.min_candles, 2)
+    # Warmup bars before trade_from still populate the decision-window slice, but the loop
+    # (and therefore every trade and every metric) begins at trade_from - the position starts
+    # flat, so a fold measures only its out-of-sample test window.
+    start = max(strategy.min_candles, 2, trade_from)
     window_bars = _decision_window_bars(strategy)
     for i in range(start, len(candles)):
         window = candles[max(0, i + 1 - window_bars): i + 1]
@@ -168,30 +176,81 @@ def run(strategy, candles: list[dict], capital: float,
 
 
 def walk_forward(strategy, candles: list[dict], capital: float,
-                 train: int, test: int, **run_kw) -> list[dict]:
-    """Item 9: rolling walk-forward. Slide non-overlapping `test` windows forward; each fold
-    is fed `train` preceding bars as out-of-sample indicator warmup/context, then evaluated.
-    Strategies are non-parametric (no fit step), so 'train' is warmup context, not a fit.
-    Reports net expectancy per test window. ponytail: plain loop, no param search."""
+                 train: int, test: int, **run_kw) -> dict:
+    """Rolling out-of-sample walk-forward. Slide non-overlapping `test` windows forward; each
+    fold warms indicators on the preceding `train` bars but TRADES AND SCORES ONLY the test
+    window (run(trade_from=train)), so every fold is genuinely out-of-sample and starts flat.
+
+    Reports per-fold metrics, a stitched OOS summary (compounded return, hit rate, worst/best,
+    cross-fold consistency), and an in-sample-vs-out-of-sample return gap as an overfitting
+    signal. Strategies here are non-parametric, so that gap flags REGIME FRAGILITY (an edge
+    that only shows up when the model sees the whole span at once) rather than classic
+    parameter overfit. ponytail: plain rolling loop, no param search."""
     n = len(candles)
-    folds = []
+    folds: list[dict] = []
     start = train
     while start + test <= n:
         seg = candles[start - train: start + test]
-        res = run(strategy, seg, capital, **run_kw)
-        folds.append({"test_start": start, "test_end": start + test,
-                      "trades": res["trades"], "expectancy": res["expectancy"],
-                      "net_pnl": res["net_pnl"], "total_tds": res["total_tds"]})
+        res = run(strategy, seg, capital, trade_from=train, **run_kw)
+        res["test_start"], res["test_end"] = start, start + test
+        folds.append(res)
         start += test
-    print(f"\nwalk-forward {strategy.name} train={train} test={test} -> {len(folds)} folds")
+
+    print(f"\nwalk-forward {strategy.name} train={train} test={test} -> {len(folds)} OOS folds")
     for f in folds:
-        print(f"  bars[{f['test_start']:>5}:{f['test_end']:<5}] "
-              f"trades={f['trades']:>3} expectancy={f['expectancy']:>10} net={f['net_pnl']:>10} "
-              f"tds={f['total_tds']}")
-    if folds:
-        avg_exp = sum(f["expectancy"] for f in folds) / len(folds)
-        print(f"  mean net expectancy across folds: {round(avg_exp, 4)}")
-    return folds
+        print(f"  bars[{f['test_start']:>6}:{f['test_end']:<6}] trades={f['trades']:>3} "
+              f"ret={f['return_pct']:>7}% win={f['win_rate']:>5}% PF={f['profit_factor']:>5} "
+              f"maxDD={f['max_drawdown_pct']:>6}% net={f['net_pnl']:>10}")
+
+    if not folds:
+        print("  (no complete folds - need more history, or a smaller --test/--train)")
+        return {"folds": [], "summary": {}}
+
+    k = len(folds)
+    rets = [f["return_pct"] for f in folds]
+    profitable = sum(1 for r in rets if r > 0)
+    compounded = 1.0                      # stitched OOS equity: fold returns compounded in sequence
+    for r in rets:
+        compounded *= 1 + r / 100
+    oos_return = (compounded - 1) * 100
+    mean_ret = sum(rets) / k
+    if k > 1:
+        sd = math.sqrt(sum((r - mean_ret) ** 2 for r in rets) / (k - 1))
+        consistency = round(mean_ret / sd, 2) if sd else float("inf")
+    else:
+        consistency = 0.0
+
+    # In-sample baseline: one full-history run (holds across boundaries, sees everything at
+    # once). The gap to the disciplined stitched-OOS return is the overfitting/fragility flag.
+    is_res = run(strategy, candles, capital, **run_kw)
+
+    summary = {
+        "oos_folds": k,
+        "oos_folds_profitable": profitable,
+        "oos_hit_rate_pct": round(profitable / k * 100, 1),
+        "oos_return_compounded_pct": round(oos_return, 2),
+        "oos_mean_fold_return_pct": round(mean_ret, 2),
+        "oos_median_fold_return_pct": round(sorted(rets)[k // 2], 2),
+        "oos_worst_fold_pct": round(min(rets), 2),
+        "oos_best_fold_pct": round(max(rets), 2),
+        "oos_consistency": consistency,
+        "oos_mean_expectancy": round(sum(f["expectancy"] for f in folds) / k, 4),
+        "oos_mean_sharpe": round(sum(f["sharpe_annualized"] for f in folds) / k, 2),
+        "insample_return_pct": is_res["return_pct"],
+        "insample_sharpe": is_res["sharpe_annualized"],
+        "is_minus_oos_return_pct": round(is_res["return_pct"] - oos_return, 2),
+    }
+
+    print(f"\n  OOS summary: {profitable}/{k} folds profitable ({summary['oos_hit_rate_pct']}%)")
+    print(f"    compounded OOS return : {summary['oos_return_compounded_pct']}%")
+    print(f"    mean / median fold    : {summary['oos_mean_fold_return_pct']}% / {summary['oos_median_fold_return_pct']}%")
+    print(f"    worst / best fold     : {summary['oos_worst_fold_pct']}% / {summary['oos_best_fold_pct']}%")
+    print(f"    consistency (mean/sd) : {summary['oos_consistency']}")
+    print(f"    mean expectancy/Sharpe: {summary['oos_mean_expectancy']} / {summary['oos_mean_sharpe']}")
+    print(f"  overfitting check - in-sample {summary['insample_return_pct']}% vs OOS "
+          f"{summary['oos_return_compounded_pct']}% (gap {summary['is_minus_oos_return_pct']} pts; "
+          f"large positive gap = edge is fragile out-of-sample)")
+    return {"folds": folds, "summary": summary}
 
 
 def _candles(closes: list[float], highs=None, lows=None, vols=None) -> list[dict]:
@@ -428,6 +487,33 @@ def _selftest_static_invariants() -> None:
         assert spot.match(s["market"]), f"non-spot market in config: {s['market']}"
 
 
+def _selftest_walkforward() -> None:
+    """trade_from gates trading to the test window, so a round trip in the warmup region is
+    excluded once the fold skips past it - the core out-of-sample guarantee."""
+    from .strategies.base import Strategy
+
+    class _Stub(Strategy):
+        min_candles = 2
+
+        def decide(self, candles):
+            c = candles[-1]["close"]
+            return "BUY" if c <= 101 else "SELL" if c >= 109 else "HOLD"
+
+    # Warmup bars carry a full buy(100.5)->sell(109) round trip; the test region is flat.
+    cs = _candles([100, 100, 100.5, 108, 109, 105, 105, 105])
+    full = run(_Stub("s", "X", {}), cs, 1000, slippage=0.0)
+    oos = run(_Stub("s", "X", {}), cs, 1000, slippage=0.0, trade_from=5)
+    assert full["trades"] == 1, ("warmup round trip should count with trade_from=0", full["trades"])
+    assert oos["trades"] == 0, ("trade_from must exclude the warmup round trip", oos["trades"])
+    assert oos["return_pct"] == 0.0, oos["return_pct"]
+
+    # walk_forward now returns a summary dict with the OOS/overfitting fields populated.
+    wf = walk_forward(_Stub("s", "X", {}), _candles([100 + (i % 7) for i in range(60)]),
+                      1000, train=10, test=10, slippage=0.0)
+    assert set(wf) == {"folds", "summary"} and wf["summary"]["oos_folds"] >= 1, wf
+    assert "is_minus_oos_return_pct" in wf["summary"]
+
+
 def demo() -> None:
     costs.demo()
     _selftest_costs()
@@ -437,6 +523,7 @@ def demo() -> None:
     _selftest_sizing()
     _selftest_sleeves()
     _selftest_static_invariants()
+    _selftest_walkforward()
     print("ALL backtest self-checks OK")
 
 
