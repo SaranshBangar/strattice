@@ -31,7 +31,8 @@ const mono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "Strattice · Algorithmic crypto trading on your own CoinDCX account",
+    default:
+      "Strattice · Automated Crypto Trading in India on Your Own CoinDCX Account",
     template: "%s · Strattice",
   },
   description: SITE_DESCRIPTION,
@@ -42,6 +43,15 @@ export const metadata: Metadata = {
   publisher: SITE_NAME,
   category: "finance",
   alternates: { canonical: "/" },
+  // Search Console / Bing Webmaster ownership tokens. Set the env vars in the
+  // deploy environment to emit the verification <meta> tags; without them these
+  // resolve to undefined and Next omits the tags entirely (no empty meta).
+  verification: {
+    google: process.env.GOOGLE_SITE_VERIFICATION || undefined,
+    other: process.env.BING_SITE_VERIFICATION
+      ? { "msvalidate.01": process.env.BING_SITE_VERIFICATION }
+      : {},
+  },
   // Give crawlers explicit permission for the rich SERP treatments (large image
   // previews, full text snippets) instead of the conservative defaults.
   robots: {
@@ -60,7 +70,8 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_IN",
     url: SITE_URL,
-    title: "Strattice · Algorithmic crypto trading on your own CoinDCX account",
+    title:
+      "Strattice · Automated Crypto Trading in India on Your Own CoinDCX Account",
     description: SITE_DESCRIPTION,
     // 1200x630 branded card generated at /opengraph-image (see opengraph-image.tsx).
     images: [
@@ -74,18 +85,28 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Strattice · Algorithmic crypto trading on your own CoinDCX account",
+    title:
+      "Strattice · Automated Crypto Trading in India on Your Own CoinDCX Account",
     description: SITE_DESCRIPTION,
     images: ["/opengraph-image"],
   },
+  // Google's SERP favicon crawler requests /favicon.ico directly and wants a
+  // square raster that's a multiple of 48px; browsers prefer the SVG. We list
+  // the .ico first (classic fallback), then the SVG, then rasters down from 96px
+  // so every consumer - Google, Safari, legacy browsers - finds a size it takes.
   icons: {
     icon: [
+      { url: "/favicon.ico", sizes: "any" },
       { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon-96.png", sizes: "96x96", type: "image/png" },
+      { url: "/favicon-48.png", sizes: "48x48", type: "image/png" },
       { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
       { url: "/favicon-16.png", sizes: "16x16", type: "image/png" },
     ],
+    shortcut: "/favicon.ico",
     apple: "/apple-touch-icon.png",
   },
+  manifest: "/manifest.webmanifest",
 };
 
 export const viewport: Viewport = { themeColor: "#0a0a0a" };
