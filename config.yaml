@@ -36,7 +36,8 @@ costs:
   fee_rate: 0.002 # 0.2% per side (CoinDCX maker == taker)
   gst_on_fee: 0.18 # 18% GST on the fee
   tds_rate: 0.01 # 1% TDS on SELL consideration (India VDA)
-  slippage_bps: 5.0 # modelled in BACKTEST only (5 bps = 0.05% per fill)
+  slippage_bps: 5.0 # adverse market-order slippage, BACKTEST + DRY_RUN fills (5 bps = 0.05%)
+  max_fill_notional: 0.0 # DRY_RUN partial-fill liquidity cap per order; 0 = unlimited (full fill)
   edge_margin_pct: 0.002 # extra move a signal must clear beyond round-trip fee+gst
 
 # Hard risk ceilings — FRACTIONS of live equity, computed at check-time (constraint C).
@@ -56,6 +57,16 @@ risk:
     #   bot/risk.py). Daily strategies average ~7 trades per YEAR
     #   each; 6/day is pure runaway protection, not a target
   kill_switch_file: "KILL" # presence of this file => cancel open orders + halt
+  # Drawdown auto-derisk + circuit breaker (constraint D). Unlike daily_loss_frac
+  # (a runaway-BUG breaker), this IS an opt-in MARKET-risk cap measured against an
+  # all-time equity high-water-mark that survives restarts. OFF by default so the
+  # engine's stance is unchanged ("user accepts full market loss") until you choose
+  # to bound it. To enable, set drawdown_derisk_frac > 0. Realized-basis, same as
+  # daily_loss (open positions marked at cost; an unrealized loss counts only once
+  # closed). Protective exits (stops/chandeliers/take-profit) are NEVER blocked.
+  drawdown_derisk_frac: 0.0 # peak-to-trough DD at which NEW entries size down. e.g. 0.08 = 8%
+  drawdown_derisk_mult: 0.5 # size multiplier while in the derisk band (0.5 = half size)
+  drawdown_kill_frac: 0.0 # DD at which NEW entries are blocked entirely. e.g. 0.15 = 15%
 
 # Each strategy: its own market + params + position tracking + capital sleeve `weight`.
 # `weight` is RELATIVE (default 1.0 => equal split). sleeve_frac = allocation_frac*weight/sum(weights).

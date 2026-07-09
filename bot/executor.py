@@ -124,12 +124,28 @@ class Executor:
                 ]))
                 return {"status": "error", "reason": str(e), "client_order_id": coid}
 
-        # simulate/record fill at `price` (market order assumption) and update position
-        new_qty, new_avg, realized = _apply_fill(old_qty, old_avg, side, qty, price)
-        tds_paid = costs.tds(side, notional)  # cash drag, tracked separately from P&L
+        # Fill realism. LIVE takes the real exchange price/qty; DRY_RUN simulates the spread
+        # cost (adverse slippage) and, for oversized orders, a partial fill against a
+        # liquidity cap - so paper P&L reflects what a market order really pays. No-op when
+        # slippage_bps and max_fill_notional are 0. risk.check() already cleared the FULL
+        # notional, so a partial fill only ever takes LESS exposure than was approved.
+        if config.LIVE:
+            fill_price, fill_qty = price, qty
+        else:
+            fill_price = costs.fill_price(side, price)
+            fill_qty = self.client.round_qty(market, costs.fillable_qty(qty, price))
+            if fill_qty <= 0:
+                log.warning("simulated fill of 0 for %s (liquidity cap too small), skipping", market)
+                return {"status": "skipped", "reason": "no_fill", "client_order_id": coid}
+        fill_notional = fill_qty * fill_price
+        partial = fill_qty < qty
+
+        # simulate/record fill and update position
+        new_qty, new_avg, realized = _apply_fill(old_qty, old_avg, side, fill_qty, fill_price)
+        tds_paid = costs.tds(side, fill_notional)  # cash drag, tracked separately from P&L
         audit.log_order({
             "client_order_id": coid, "strategy": strategy, "market": market,
-            "side": side, "qty": qty, "price": price, "notional": notional,
+            "side": side, "qty": fill_qty, "price": fill_price, "notional": fill_notional,
             "status": status, "dry_run": not config.LIVE,
             "exchange_order_id": exchange_order_id, "realized_pnl": realized,
             "tds": tds_paid, "response": response,
@@ -145,23 +161,24 @@ class Executor:
         audit.set_position(strategy, market, new_qty, new_avg, peak, entry_ts_val)
 
         tag = "LIVE" if config.LIVE else "DRY_RUN"
-        log.info("%s %s %s %s qty=%s @%s notional=%.2f pnl=%.2f",
-                 tag, strategy, market, side, qty, price, notional, realized)
-        pnl_pct = (realized / notional * 100) if notional else 0.0
+        log.info("%s %s %s %s qty=%s @%s notional=%.2f pnl=%.2f%s",
+                 tag, strategy, market, side, fill_qty, fill_price, fill_notional, realized,
+                 f" PARTIAL(req {qty})" if partial else "")
+        pnl_pct = (realized / fill_notional * 100) if fill_notional else 0.0
         ts_str = datetime.datetime.utcfromtimestamp(candle_ts / 1000).strftime("%Y-%m-%d %H:%M:%S UTC")
         notify.send(notify.table(f"{tag} TRADE FILLED", [
             ("Side", side.upper()),
             ("Market", market),
-            ("Quantity", f"{qty}"),
-            ("Price", f"{price}"),
-            ("Notional", f"{notional:.2f}"),
+            ("Quantity", f"{fill_qty}" + (f" (partial of {qty})" if partial else "")),
+            ("Price", f"{fill_price}"),
+            ("Notional", f"{fill_notional:.2f}"),
             ("Fee", f"{realized:.2f}") if increasing
             else ("P&L", f"{realized:+.2f} ({pnl_pct:+.2f}%)"),
             ("Strategy", strategy),
             ("Time", ts_str),
         ]))
-        notify.email_trade(side=side, market=market, qty=qty, price=price, notional=notional,
-                           strategy=strategy, dry_run=not config.LIVE)
+        notify.email_trade(side=side, market=market, qty=fill_qty, price=fill_price,
+                           notional=fill_notional, strategy=strategy, dry_run=not config.LIVE)
         return {"status": status, "client_order_id": coid, "realized_pnl": realized}
 
     def kill(self) -> None:

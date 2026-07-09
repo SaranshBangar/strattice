@@ -1,4 +1,6 @@
 .env
+.env.local
+.env*.local
 data/
 *.db
 *.log
@@ -11,3 +13,7 @@ KILL
 .ssh.pub
 *.stackdump
 .wrangler/
+node_modules/
+.next/
+next-env.d.ts
+*.tsbuildinfo

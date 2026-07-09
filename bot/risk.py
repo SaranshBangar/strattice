@@ -29,6 +29,9 @@ class RiskManager:
         self.max_position_frac = float(r.get("max_position_frac", 1.0))
         self.max_total_capital_at_risk_frac = float(r.get("max_total_capital_at_risk_frac", 1.0))
         self.daily_loss_frac = float(r.get("daily_loss_frac", 0.5))
+        # Opt-in market-risk cap: peak-to-trough equity drawdown that blocks NEW entries.
+        # 0 disables it (default), leaving the "user accepts full market loss" stance intact.
+        self.drawdown_kill_frac = float(r.get("drawdown_kill_frac", 0.0) or 0.0)
         self.max_trades_per_day = int(r["max_trades_per_day"])
         self.kill_file = config.ROOT / r["kill_switch_file"]
 
@@ -49,6 +52,17 @@ class RiskManager:
         sod_equity = eq - s["realized_today"]
         if sod_equity > 0 and s["realized_today"] <= -self.daily_loss_frac * sod_equity:
             return RiskDecision(False, f"DAILY_LOSS_LIMIT hit (realized {s['realized_today']:.2f})")
+        # Drawdown circuit breaker (opt-in): peak-to-trough equity decline past a fraction
+        # blocks NEW entries only - protective exits (increasing=False) always pass, so a
+        # tripped breaker can still stop out of open risk. sizing.drawdown() also refreshes
+        # the high-water-mark. Disabled when drawdown_kill_frac <= 0.
+        if increasing and self.drawdown_kill_frac > 0:
+            dd = sizing.drawdown()
+            if dd >= self.drawdown_kill_frac:
+                return RiskDecision(
+                    False,
+                    f"DRAWDOWN_CIRCUIT_BREAKER (dd {dd:.1%} >= {self.drawdown_kill_frac:.0%})",
+                )
         # Churn cap applies to INCREASING orders only: a position-closing sell (stop-loss,
         # chandelier, take-profit, kill path) must never be blocked by the day's trade count.
         # Runaway sells are still contained by per-candle idempotency, the daily-loss breaker
@@ -97,4 +111,20 @@ if __name__ == "__main__":
     assert not d.ok and "MAX_TRADES_PER_DAY" in d.reason, ("cap must block entries", d.reason)
     d = rm.check(40, 0, strategy="a", market="X", increasing=False)
     assert d.ok, ("cap must NOT block a closing sell", d.reason)
+    # drawdown circuit breaker: blocks NEW entries past the frac, exits still allowed;
+    # disabled when frac == 0.
+    audit.today_stats = lambda: {"trades_today": 0, "realized_today": 0.0,  # type: ignore[assignment]
+                                 "tds_today": 0.0, "capital_at_risk": 0.0}
+    sizing.drawdown = lambda *a, **k: 0.20  # type: ignore[assignment]  # 20% below peak
+    ddm = RiskManager({"risk": {
+        "max_position_frac": 1.0, "max_total_capital_at_risk_frac": 1.0,
+        "daily_loss_frac": 0.5, "max_trades_per_day": 20, "kill_switch_file": "KILL",
+        "drawdown_kill_frac": 0.15,
+    }})
+    d = ddm.check(40, 40, strategy="a", market="X", increasing=True)
+    assert not d.ok and "DRAWDOWN_CIRCUIT_BREAKER" in d.reason, ("dd must block entries", d.reason)
+    d = ddm.check(40, 0, strategy="a", market="X", increasing=False)
+    assert d.ok, ("dd must NOT block a closing sell", d.reason)
+    # disabled (frac 0) => same 20% drawdown does not block.
+    assert rm.check(40, 40, strategy="a", market="X", increasing=True).ok, "dd breaker must be off when frac=0"
     print("risk self-check OK")

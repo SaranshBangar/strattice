@@ -76,6 +76,10 @@ def init() -> None:
                 entry_ts   INTEGER NOT NULL DEFAULT 0,-- entry candle ts (ms) for the time-stop
                 PRIMARY KEY (strategy, market)
             );
+            CREATE TABLE IF NOT EXISTS meta (
+                key   TEXT PRIMARY KEY,
+                value REAL NOT NULL
+            );
             """
         )
         # ponytail: lazy migrations for DBs created before these columns existed.
@@ -214,6 +218,31 @@ def total_realized() -> float:
             "SELECT COALESCE(SUM(realized_pnl),0) AS pnl FROM orders "
             "WHERE status IN ('placed','dry_run')"
         ).fetchone()["pnl"]
+
+
+def equity_peak() -> float:
+    """Persisted all-time high-water-mark of equity (quote currency). 0.0 if never
+    recorded yet - the first bump_equity_peak() bootstraps it."""
+    with _lock, _conn() as c:
+        row = c.execute("SELECT value FROM meta WHERE key='equity_peak'").fetchone()
+    return float(row["value"]) if row else 0.0
+
+
+def bump_equity_peak(equity: float) -> float:
+    """Raise the stored equity high-water-mark to `equity` if it's a new high; return the
+    resulting peak. Monotonic and restart-durable, so drawdown is always measured from the
+    best equity the account has ever reached - not just this session's."""
+    with _lock, _conn() as c:
+        row = c.execute("SELECT value FROM meta WHERE key='equity_peak'").fetchone()
+        peak = float(row["value"]) if row else 0.0
+        if equity > peak:
+            peak = equity
+            c.execute(
+                "INSERT INTO meta(key,value) VALUES('equity_peak',?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                (peak,),
+            )
+    return peak
 
 
 def position_held_by_other(strategy: str, market: str) -> bool:

@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import { LiveTape, type LiveTapePoint } from "@/components/chart/LiveTape";
 import { useBinanceTradeStream } from "@/components/chart/useBinanceTradeStream";
 import { C } from "@/components/chart/primitives";
+import { useAutoFx } from "@/lib/geo-currency";
 
 const SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"] as const;
 type Symbol = (typeof SYMBOLS)[number];
@@ -23,13 +24,21 @@ const KEEP = 200;
 const CAP = 240;
 const H = 220;
 
-const fmt = (n: number) =>
-  n.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: n < 10 ? 4 : 2,
-  });
-
 export function LiveChart() {
+  // Binance quotes are USD; localize the displayed price to the visitor's
+  // currency once detection resolves (defaults to USD before then).
+  const fx = useAutoFx();
+  const sym = fx.ready ? fx.symbol : "$";
+  const rate = fx.ready ? fx.usdRate : 1;
+  const loc = fx.ready ? fx.locale : "en-US";
+  const price = (n: number) => {
+    const v = n * rate;
+    return `${sym}${v.toLocaleString(loc, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: v < 10 ? 4 : 2,
+    })}`;
+  };
+
   const [symbol, setSymbol] = useState<Symbol>("BTCUSDT");
   const [points, setPoints] = useState<LiveTapePoint[]>([]);
   const [open, setOpen] = useState<number | null>(null);
@@ -126,7 +135,7 @@ export function LiveChart() {
                   color: dir > 0 ? C.gain : dir < 0 ? C.loss : undefined,
                 }}
               >
-                ${fmt(last)}
+                {price(last)}
               </span>
               <span
                 className="font-mono text-xs tnum"
@@ -171,7 +180,7 @@ export function LiveChart() {
             windowMs={WINDOW_MS}
             tickMs={TICK_MS}
             height={H}
-            fmtY={(v) => `$${fmt(v)}`}
+            fmtY={(v) => price(v)}
             overlays={[
               {
                 id: "sma20",

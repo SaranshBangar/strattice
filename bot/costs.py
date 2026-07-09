@@ -14,7 +14,8 @@ _DEFAULTS = {
     "fee_rate": 0.002,        # 0.2% per side (maker == taker on CoinDCX)
     "gst_on_fee": 0.18,       # 18% GST levied on the fee itself
     "tds_rate": 0.01,         # 1% TDS on SELL consideration (India VDA)
-    "slippage_bps": 0.0,      # modelled in BACKTEST only (live is fire-and-forget at price)
+    "slippage_bps": 0.0,      # adverse market-order slippage, modelled in BACKTEST + DRY_RUN fills
+    "max_fill_notional": 0.0, # DRY_RUN partial-fill liquidity cap per order; 0 = unlimited (full fill)
     "edge_margin_pct": 0.002, # extra move a signal must clear beyond round-trip fee+gst
 }
 
@@ -51,8 +52,28 @@ def round_trip_cost_pct() -> float:
 
 
 def slippage() -> float:
-    """Per-fill slippage as a fraction (backtest only)."""
+    """Per-fill adverse slippage as a fraction (from slippage_bps)."""
     return params()["slippage_bps"] / 10_000.0
+
+
+def fill_price(side: str, price: float) -> float:
+    """Market-order fill price after adverse slippage: a BUY lifts the ask (pays up), a
+    SELL hits the bid (receives less). Used for DRY_RUN fills so paper P&L reflects the
+    spread cost a real market order pays. No-op when slippage_bps == 0."""
+    slip = slippage()
+    if slip <= 0 or price <= 0:
+        return price
+    return price * (1 + slip) if side == "buy" else price * (1 - slip)
+
+
+def fillable_qty(qty: float, price: float) -> float:
+    """Quantity that fills against simulated top-of-book liquidity. A market order larger
+    than max_fill_notional fills only up to that cap (a partial fill); the rest is dropped
+    for this candle. 0 cap (default) = unlimited, i.e. always a full fill."""
+    cap = float(params().get("max_fill_notional", 0.0) or 0.0)
+    if cap <= 0 or price <= 0 or qty <= 0:
+        return qty
+    return min(qty, cap / price)
 
 
 def clears_costs(expected_move_pct: float) -> bool:
@@ -68,6 +89,11 @@ def demo() -> None:
     assert tds("buy", 100) == 0.0
     assert clears_costs(0.10) is True
     assert clears_costs(0.0) is False
+    # fill model: slippage is adverse (buy up, sell down); fillable caps at max_fill_notional.
+    slip = slippage()
+    assert abs(fill_price("buy", 100) - 100 * (1 + slip)) < 1e-12
+    assert abs(fill_price("sell", 100) - 100 * (1 - slip)) < 1e-12
+    assert fillable_qty(5, 100) == 5  # unlimited by default
     print("costs self-check OK:", p)
 
 

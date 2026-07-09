@@ -542,13 +542,9 @@ export default function Home() {
         </Reveal>
       </section>
 
-      {/* Final CTA - one quiet band, set apart by a gold hairline on its top edge */}
+      {/* Final CTA - one quiet band */}
       <Reveal>
         <section className="card relative overflow-hidden px-6 py-12 text-center sm:px-10">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 top-0 h-px bg-accent/30"
-          />
           <div className="relative">
             <p className="eyebrow">Start in DRY_RUN</p>
             <h2 className="mx-auto mt-3 max-w-xl font-display text-3xl font-bold leading-tight tracking-tight">

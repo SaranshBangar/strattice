@@ -89,6 +89,41 @@ def free_balance(client: Client | None = None) -> float:
     return equity() - audit.today_stats()["capital_at_risk"]
 
 
+def drawdown(client: Client | None = None) -> float:
+    """Current equity drawdown from the all-time high-water-mark, as a fraction in [0, 1].
+
+    Side effect: bumps the persisted HWM (monotonic) to the current equity, so the peak
+    always reflects the best equity ever reached even across restarts. Realized-basis, matching
+    equity() - open positions are marked at cost, so an unrealized loss only shows up here once
+    the position is closed (same basis as the daily-loss breaker in risk.py)."""
+    eq = equity(client)
+    peak = audit.bump_equity_peak(eq)
+    if peak <= 0:
+        return 0.0
+    return max(0.0, (peak - eq) / peak)
+
+
+def derisk_mult(client: Client | None = None) -> float:
+    """Position-size multiplier from the drawdown auto-derisk ladder (constraint D):
+        dd < derisk band          -> 1.0  (full size)
+        derisk <= dd < kill band  -> drawdown_derisk_mult   (e.g. 0.5 = half size)
+        dd >= kill band           -> 0.0  (no new size; risk.check() also hard-blocks)
+    Disabled (returns 1.0) when drawdown_derisk_frac is unset or <= 0, so the default engine
+    behaviour is unchanged. See config.yaml risk.drawdown_*."""
+    r = _cfg().get("risk", {})
+    warn = float(r.get("drawdown_derisk_frac", 0.0) or 0.0)
+    if warn <= 0:
+        return 1.0
+    kill = float(r.get("drawdown_kill_frac", 0.0) or 0.0)
+    mult = float(r.get("drawdown_derisk_mult", 0.5))
+    dd = drawdown(client)
+    if kill > 0 and dd >= kill:
+        return 0.0
+    if dd >= warn:
+        return max(0.0, min(1.0, mult))
+    return 1.0
+
+
 def _floor_qty(client: Client, market: str, qty: float) -> float:
     """Round DOWN to the pair's step/precision so notional never exceeds balance."""
     m = client.markets().get(market)
@@ -112,7 +147,9 @@ def target_qty(market: str, price: float, client: Client | None = None,
     p = costs.params()
     frac = allocation_frac() if sleeve_frac is None else sleeve_frac
     headroom = free_balance(c) / (1 + p["fee_rate"] * (1 + p["gst_on_fee"]))
-    target_notional = min(frac * equity(c), headroom)
+    # Auto-derisk: shrink (or zero) the sleeve while in a drawdown band. mult == 1.0
+    # when the feature is disabled, so this is a no-op by default.
+    target_notional = min(frac * equity(c) * derisk_mult(c), headroom)
     if target_notional <= 0:
         return 0.0
     qty = _floor_qty(c, market, target_notional / price)
