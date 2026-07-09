@@ -14,6 +14,7 @@ Usage:
 import argparse
 import json
 import math
+import time
 
 from . import config, costs
 from .client import Client
@@ -445,6 +446,8 @@ def main() -> None:
     p.add_argument("--market", default="B-BTC_USDT")
     p.add_argument("--interval", default="1h")
     p.add_argument("--limit", type=int, default=1000)
+    p.add_argument("--years", type=float, default=0.0,
+                   help="fetch N years of history, paginated past the ~1000-bar API cap; overrides --limit")
     p.add_argument("--capital", type=float, default=1000.0)
     p.add_argument("--params", default="{}", help="JSON strategy params")
     p.add_argument("--stop-loss", type=float, default=0.0, help="stop-loss fraction, e.g. 0.04 = 4%%")
@@ -474,6 +477,9 @@ def main() -> None:
             candles = [{"time": int(r["time"]), "open": float(r["open"]), "high": float(r["high"]),
                         "low": float(r["low"]), "close": float(r["close"]), "volume": float(r["volume"])}
                        for r in _csv.DictReader(f)]
+    elif a.years and a.years > 0:
+        since = int((time.time() - a.years * 365.25 * 86400) * 1000)
+        candles = Client().candles(a.market, a.interval, since_ms=since)
     else:
         candles = Client().candles(a.market, a.interval, a.limit)
     strat = REGISTRY[a.module]("backtest", a.market, json.loads(a.params))

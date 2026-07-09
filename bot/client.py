@@ -42,6 +42,30 @@ _BALANCE_CACHE_TTL = 3.0  # seconds - collapses the handful of free_balance() ca
                           # trade decision makes (sizing.equity/free_balance x risk.check) into
                           # one real signed HTTP call, while staying fresh enough between decisions
 
+# CoinDCX's public candles endpoint returns at most ~1000 bars per request. Multi-year
+# history is stitched from sized backward windows (see Client.candles).
+MAX_CANDLES_PER_REQ = 1000
+
+_INTERVAL_UNIT_MS = {"m": 60_000, "h": 3_600_000, "d": 86_400_000, "w": 604_800_000}
+
+
+def _interval_ms(interval: str) -> int:
+    """Milliseconds per bar for a CoinDCX interval like '15m', '1h', '1d', '1w'.
+    Raises ValueError for unsupported units (e.g. '1M' month) so pagination never
+    silently mis-sizes a window."""
+    # Case-sensitive: CoinDCX uses 'm' for minute and 'M' for month, so never lowercase.
+    interval = interval.strip()
+    unit = interval[-1:]
+    if unit not in _INTERVAL_UNIT_MS:
+        raise ValueError(f"unsupported candle interval for pagination: {interval!r}")
+    try:
+        n = int(interval[:-1])
+    except ValueError as e:
+        raise ValueError(f"unsupported candle interval for pagination: {interval!r}") from e
+    if n <= 0:
+        raise ValueError(f"unsupported candle interval for pagination: {interval!r}")
+    return n * _INTERVAL_UNIT_MS[unit]
+
 
 class Client:
     def __init__(self, key: str = config.API_KEY, secret: str = config.SECRET_KEY):
@@ -52,13 +76,16 @@ class Client:
         self._balance_cache: dict[str, tuple[float, float]] = {}  # currency -> (value, fetched_at)
 
     # ---------- public ----------
-    def candles(self, pair: str, interval: str, limit: int = 200) -> list[dict]:
-        """Newest-first list of {open,high,low,close,volume,time(ms)}. Returned oldest-first."""
-        r = self._http.get(
-            f"{PUBLIC}/market_data/candles",
-            params={"pair": pair, "interval": interval, "limit": limit},
-            timeout=20,
-        )
+    def _candles_page(self, pair: str, interval: str, limit: int,
+                      end_time: int | None = None) -> list[dict]:
+        """One candles request (<= MAX_CANDLES_PER_REQ bars), oldest-first. When end_time is
+        given, a matching startTime is sent too: the endpoint ignores endTime unless a
+        startTime bounds the window (verified against the live API)."""
+        params: dict = {"pair": pair, "interval": interval, "limit": limit}
+        if end_time is not None:
+            params["endTime"] = end_time
+            params["startTime"] = end_time - limit * _interval_ms(interval)
+        r = self._http.get(f"{PUBLIC}/market_data/candles", params=params, timeout=20)
         r.raise_for_status()
         # CoinDCX public API intermittently returns 200 with an empty/non-JSON body;
         # treat as a transient blip and skip this poll cycle rather than crashing.
@@ -72,7 +99,50 @@ class Client:
             log.warning("non-JSON candles response for %s %s: %.80r; skipping cycle",
                         pair, interval, text)
             return []
+        if not isinstance(data, list):
+            # e.g. an error object {"message": ...} when the params are rejected
+            log.warning("unexpected candles payload for %s %s: %.120r; skipping cycle",
+                        pair, interval, data)
+            return []
         return list(reversed(data))  # oldest-first for strategy math
+
+    def candles(self, pair: str, interval: str, limit: int = 200,
+                since_ms: int | None = None) -> list[dict]:
+        """Oldest-first {open,high,low,close,volume,time(ms)} bars.
+
+        CoinDCX caps a single request at ~1000 bars, so multi-year history is stitched from
+        sized backward windows. Pass `since_ms` (epoch ms) to fetch every bar since that
+        instant; otherwise the newest `limit` bars are returned (paginated when limit > 1000).
+        The hot live-poll path (small limit, no since_ms) stays a single request."""
+        if since_ms is None and limit <= MAX_CANDLES_PER_REQ:
+            return self._candles_page(pair, interval, limit)
+
+        step = _interval_ms(interval)
+        collected: dict[int, dict] = {}  # ts -> bar, dedups overlapping windows
+        end: int | None = None           # None = newest page; then walk backward
+        # Safety bound so a misbehaving endpoint can't loop forever (>15y of daily bars).
+        for i in range(64):
+            page = self._candles_page(pair, interval, MAX_CANDLES_PER_REQ, end_time=end)
+            if not page:
+                break
+            for b in page:
+                collected[b["time"]] = b
+            oldest = page[0]["time"]  # oldest-first page -> first element is oldest
+            enough = since_ms is not None and oldest <= since_ms
+            enough = enough or (since_ms is None and len(collected) >= limit)
+            if enough:
+                break
+            new_end = oldest - step
+            if end is not None and new_end >= end:
+                break  # no backward progress -> stop
+            if len(page) < MAX_CANDLES_PER_REQ and end is not None:
+                break  # window fell before the listing date -> history exhausted
+            end = new_end
+            time.sleep(0.2)  # be gentle on the public endpoint across paginated requests
+        bars = sorted(collected.values(), key=lambda b: b["time"])
+        if since_ms is not None:
+            return [b for b in bars if b["time"] >= since_ms]
+        return bars[-limit:] if limit else bars
 
     def markets(self) -> dict:
         if self._markets is None:
