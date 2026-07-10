@@ -10,7 +10,7 @@ export function HeroCta() {
   const signedIn = !!data?.user;
 
   return (
-    <div className="mt-8 flex flex-wrap items-center gap-3">
+    <div className="mt-5 flex flex-wrap items-center gap-3">
       <Link
         href={signedIn ? "/dashboard" : "/sign-up"}
         className="rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-accent-ink transition-colors hover:bg-accent-hi focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"

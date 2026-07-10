@@ -22,7 +22,7 @@ const TICK_MS = 500; // append cadence
 // briefly suspends the scroll transition for one frame.
 const KEEP = 200;
 const CAP = 240;
-const H = 220;
+const H = 280;
 
 export function LiveChart() {
   // Binance quotes are USD; localize the displayed price to the visitor's
@@ -198,12 +198,9 @@ export function LiveChart() {
       </div>
 
       <div className="flex flex-col gap-1 bg-white/[0.03] px-4 py-2 font-mono text-[11px] text-faint sm:flex-row sm:items-center sm:justify-between">
-        <span>
-          strategies watch lines like the gold average — price crossing it is
-          the kind of signal a bot acts on
-        </span>
+        <span>strategies act on lines like the gold average</span>
         <span className="shrink-0">
-          Binance public stream · display only, bots trade on CoinDCX
+          Binance stream · display only, bots trade on CoinDCX
         </span>
       </div>
     </section>

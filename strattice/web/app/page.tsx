@@ -44,15 +44,15 @@ const NUMBERS: [string, string][] = [
 const STEPS: [string, string][] = [
   [
     "Connect your exchange",
-    "Add a CoinDCX API key with trading on and withdrawals off - the bot can trade for you but can never take money out. Stored encrypted; never shown back to anyone.",
+    "Add a CoinDCX API key with withdrawals off - the bot can trade for you, never take money out.",
   ],
   [
     "Pick a ready-made strategy",
-    "See exactly how each one would have traded - every entry and exit marked on real market data - before you commit to anything.",
+    "Every entry and exit marked on real market data before you commit to anything.",
   ],
   [
     "Let it practice first",
-    "The bot starts in paper mode: real prices, fake money. Watch it work, and only flip to live when the numbers have earned your trust.",
+    "Paper mode first: real prices, fake money. Flip to live only when the numbers earn it.",
   ],
 ];
 
@@ -99,27 +99,27 @@ const COST_ROWS: [string, string, string][] = [
 const FEATURES: [string, string][] = [
   [
     "Every strategy template",
-    "Trend, momentum, breakout and volatility systems that survived a real-data cost study - plus an experimental AI forecaster, every template unlocked.",
+    "Trend, momentum, breakout and volatility systems that survived a real-data cost study.",
   ],
   [
     "Entry / exit previews",
-    "Every strategy is simulated on real candles before you add it, with entries and exits marked on the chart.",
+    "Simulated on real candles, entries and exits on the chart, before you add it.",
   ],
   [
     "Build your own",
-    "Compose entry rules from indicator blocks and backtest them across four history windows while you design.",
+    "Compose entry rules from indicator blocks and backtest while you design.",
   ],
   [
     "Full analytics dashboard",
-    "Equity curve, drawdown, daily P&L, win rate and per-strategy breakdown - plus a pro view with technical metrics.",
+    "Equity curve, drawdown, daily P&L, win rate, per-strategy breakdown.",
   ],
   [
     "Risk-managed executor",
-    "Hard stops, take-profits, ATR trailing stops, daily loss limits and a kill switch on every strategy.",
+    "Hard stops, trailing stops, daily loss limits and a kill switch.",
   ],
   [
     "DRY_RUN first",
-    "Paper-trade any setup with realistic fills, fees and TDS before a single rupee goes live.",
+    "Realistic paper fills with fees and TDS before a single rupee goes live.",
   ],
 ];
 
@@ -175,8 +175,7 @@ export default function Home() {
           </h1>
           <p className="mt-5 max-w-lg text-lg text-muted">
             Pick a rulebook, watch it practice with fake money on real prices,
-            and only go live when it has earned your trust. Your funds never
-            leave CoinDCX. We hold the keys to run the strategies, nothing else.
+            and only go live when it has earned your trust.
           </p>
           <HeroCta />
           <p className="mt-4 font-mono text-[11px] uppercase tracking-wider text-faint">
@@ -245,10 +244,9 @@ export default function Home() {
                 A strategy is a rulebook
               </h3>
               <p className="mt-1.5 text-sm leading-relaxed text-muted">
-                A <Term k="strategy">strategy</Term> is just written-down
-                rules: if the price does X, buy; if it does Y, sell. Because
-                the rules are exact, they can be tested on years of history (a{" "}
-                <Term k="backtest">backtest</Term>) before touching real money.
+                A <Term k="strategy">strategy</Term> is written-down rules: if
+                the price does X, buy; if Y, sell. Exact rules can be tested on
+                years of history (a <Term k="backtest">backtest</Term>) first.
               </p>
             </div>
             <div className="card p-5">
@@ -256,10 +254,9 @@ export default function Home() {
                 The bot never sleeps or panics
               </h3>
               <p className="mt-1.5 text-sm leading-relaxed text-muted">
-                The bot checks the market on a schedule and applies the same
-                rules every time. It never revenge-trades a loss, never chases
-                a green candle at 3am - it waits for a{" "}
-                <Term k="signal">signal</Term> and follows the plan.
+                It applies the same rules every time - no revenge trades, no
+                3am chases. It waits for a <Term k="signal">signal</Term> and
+                follows the plan.
               </p>
             </div>
             <div className="card p-5">
@@ -268,9 +265,8 @@ export default function Home() {
               </h3>
               <p className="mt-1.5 text-sm leading-relaxed text-muted">
                 Everything starts in{" "}
-                <Term k="paper trading">paper trading</Term> mode. Every trade
-                carries a <Term k="stop-loss">stop-loss</Term>, daily loss
-                limits apply, there&rsquo;s a kill switch - and your funds
+                <Term k="paper trading">paper trading</Term>. Every trade
+                carries a <Term k="stop-loss">stop-loss</Term>, and your funds
                 never leave your own exchange account.
               </p>
             </div>
@@ -388,25 +384,12 @@ export default function Home() {
             Every round trip on an Indian exchange costs about 1.5% before you
             earn a rupee.
           </p>
-          <p className="mt-4 max-w-xl text-sm leading-relaxed text-dim">
-            Every buy-and-sell round trip costs real fees - this is the part
-            most tools quietly hide.
-          </p>
-          <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted">
-            Exchange fees on both legs, 18% GST on those fees, and 1% TDS on
-            every sell. A strategy that looks brilliant gross can be a slow
-            bleed net. In our own multi-year backtests, some fast configurations
-            paid more in friction than their starting capital. Frequency is the
-            enemy: the more round trips, the more of your P&amp;L friction eats.
-          </p>
-          <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted">
-            So every preview, backtest and DRY_RUN fill on Strattice is computed{" "}
-            <span className="text-fg">net of the full friction stack</span> -
-            and it is why the engine trades <span className="text-fg">daily
-            bars</span>: our multi-year study found slow trend-following is the
-            only style that stays net-positive after this toll. DRY_RUN is the
-            default: watch fees as a share of P&amp;L in paper mode, and only go
-            live if the numbers still work after friction.
+          <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted">
+            Fees on both legs, GST on those fees, 1% TDS on every sell - every
+            number on Strattice is{" "}
+            <span className="text-fg">net of the full friction stack</span>,
+            which is why the engine trades slow{" "}
+            <span className="text-fg">daily bars</span>.
           </p>
         </Reveal>
         <Reveal>
@@ -443,6 +426,33 @@ export default function Home() {
                 </tr>
               </tbody>
             </table>
+            {/* Where the ₹147.20 goes - TDS dominates. Labels carry identity;
+                red carries the story. */}
+            <div className="px-4 pb-4 pt-1">
+              <div
+                className="flex h-2.5 gap-[2px] overflow-hidden rounded-[2px]"
+                role="img"
+                aria-label="Friction split of ₹147.20: exchange fees ₹40, GST ₹7.20, TDS ₹100"
+              >
+                <div className="bg-muted" style={{ width: "27.2%" }} />
+                <div className="bg-faint" style={{ width: "4.9%" }} />
+                <div className="bg-loss" style={{ width: "67.9%" }} />
+              </div>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[10px] uppercase tracking-wider text-faint">
+                <span className="flex items-center gap-1.5">
+                  <span aria-hidden="true" className="h-1.5 w-1.5 bg-muted" />
+                  fees ₹40.00
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span aria-hidden="true" className="h-1.5 w-1.5 bg-faint" />
+                  gst ₹7.20
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span aria-hidden="true" className="h-1.5 w-1.5 bg-loss" />
+                  tds ₹100.00
+                </span>
+              </div>
+            </div>
             <div className="bg-white/[0.03] px-4 py-2.5 font-mono text-[11px] text-faint">
               ≈ 1.47% of notional. simulations here start from this number, not
               from zero.
@@ -495,8 +505,7 @@ export default function Home() {
           <div className="mb-5">
             <h2 className="eyebrow">Not sure where to start?</h2>
             <p className="mt-2 max-w-2xl font-display text-2xl font-semibold tracking-tight">
-              Five questions, and we&rsquo;ll point you at a strategy that fits
-              your temperament.
+              Five questions, one honest starting point.
             </p>
           </div>
         </Reveal>
@@ -514,10 +523,6 @@ export default function Home() {
           <h2 className="eyebrow">Straight answers</h2>
           <p className="mt-2 font-display text-2xl font-semibold tracking-tight">
             The questions a skeptical trader should ask.
-          </p>
-          <p className="mt-3 max-w-sm text-sm leading-relaxed text-muted">
-            If yours isn&rsquo;t here, the footer disclaimer is the fine print.
-            There is no other fine print.
           </p>
         </Reveal>
         <Reveal stagger>
@@ -543,17 +548,13 @@ export default function Home() {
       </section>
 
       {/* Final CTA - one quiet band */}
-      <Reveal>
+      <Reveal className="!mt-12">
         <section className="card relative overflow-hidden px-6 py-12 text-center sm:px-10">
           <div className="relative">
             <p className="eyebrow">Start in DRY_RUN</p>
             <h2 className="mx-auto mt-3 max-w-xl font-display text-3xl font-bold leading-tight tracking-tight">
               Watch a strategy trade your account without spending a rupee.
             </h2>
-            <p className="mx-auto mt-3 max-w-md text-sm text-muted">
-              Link a key, add a template, and let the paper trades convince you,
-              or not. Either answer costs nothing.
-            </p>
             <div className="flex justify-center">
               <HeroCta />
             </div>
