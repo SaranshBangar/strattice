@@ -56,8 +56,8 @@ _inr_per_usdt_cache: tuple[float, float] | None = None  # (value, fetched_at)
 def inr_per_usdt() -> float:
     """Live USDT->INR from CoinDCX's own public ticker (no key, same rate the bot trades at).
     Falls back to INR_PER_USDT env / 85 if the call fails. Display-only value (never used in
-    sizing/risk) - short TTL cache since bot.server's /api/status calls this on every request,
-    and the dashboard PWA polls that every few seconds."""
+    sizing/risk) - short TTL cache so frequent callers (e.g. `python -m bot.status`) don't
+    hammer the ticker endpoint."""
     global _inr_per_usdt_cache
     now = time.monotonic()
     if _inr_per_usdt_cache is not None and now - _inr_per_usdt_cache[1] < _INR_PER_USDT_TTL:

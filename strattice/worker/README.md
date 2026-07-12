@@ -21,6 +21,7 @@ honors `CONFIG_PATH` / `BOT_DB_PATH` / `BOT_LOG_PATH` env overrides.)
 | `store.py`         | Cloudflare D1 (REST): read desired state, write observed (trades/positions/equity/heartbeat). |
 | `supervisor.py`    | The loop: reconcile engine subprocesses, project SQLite → D1.                                 |
 | `seed.py`          | Insert 2 demo users for a DRY_RUN proof.                                                      |
+| `migrate_owner.py` | One-shot: migrate the repo owner from the single-tenant bot into a regular Strattice user (creds, tier, strategies, optional history import). |
 | `selfcheck.py`     | Generated config boots the real engine (no infra).                                            |
 | `../db/schema.sql` | D1 (SQLite) schema, incl. Better Auth tables.                                                 |
 

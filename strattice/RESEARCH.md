@@ -16,9 +16,9 @@ The repo is a **single-tenant** Python trading bot:
 | Exchange client  | `bot/client.py`                        | Signs with `config.API_KEY/SECRET_KEY` (module globals).                                      |
 | Risk gate        | `bot/risk.py`                          | `max_trades_per_day`, loss breaker, exposure caps — read from config.                         |
 | Persistence      | `data/bot.db` (SQLite)                 | Positions/orders/signals keyed by `(strategy, market)` — **no user_id**.                      |
-| Status API       | `bot/server.py`                        | stdlib HTTP, one token, reads the single DB.                                                  |
+| Status API       | `bot/server.py`                        | stdlib HTTP, one token, reads the single DB. _(removed 2026-07)_                              |
 | Strategies       | `bot/strategies/*.py`                  | Pure functions: candles in → BUY/SELL/HOLD out. 9 modules.                                    |
-| Dashboard        | `web/` (Next.js)                       | Single-user PWA hitting `bot/server.py`. **Leave untouched.**                                 |
+| Dashboard        | `web/` (Next.js)                       | Single-user PWA hitting `bot/server.py`. _(removed 2026-07 — owner migrated to Strattice; see `worker/migrate_owner.py`)_ |
 
 **The hard part is NOT Next.js or Cashfree.** It is making this single-tenant bot
 multi-tenant: per-user keys, per-user isolation, per-user trade caps, per-user DB rows.

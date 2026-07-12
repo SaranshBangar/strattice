@@ -23,8 +23,7 @@ def _conn() -> sqlite3.Connection:
     reconnecting per query). All access is still serialized by `_lock`, and every call site
     keeps using it as a `with conn:` context manager, so per-call commit/rollback semantics
     are unchanged - only the connection object itself is now long-lived. `check_same_thread`
-    is off because `bot.server`'s ThreadingHTTPServer calls into this module from request
-    threads as well as the engine's main-loop thread; `_lock` is what actually serializes
+    stays off so any multi-threaded caller is safe; `_lock` is what actually serializes
     access, not sqlite3's own thread affinity check."""
     global _conn_obj
     if _conn_obj is None:
@@ -90,7 +89,7 @@ def init() -> None:
             # plain column (not generated: older sqlite3 builds may lack that support),
             # backfilled once, kept current going forward by log_order(). Replaces the
             # unindexable `substr(ts,1,10)=?` scan in today_stats(), hit on every risk
-            # check and every /api/status poll.
+            # check.
             c.execute("ALTER TABLE orders ADD COLUMN day TEXT")
             c.execute("UPDATE orders SET day = substr(ts,1,10) WHERE day IS NULL")
         c.execute("CREATE INDEX IF NOT EXISTS idx_orders_status_day ON orders(status, day)")
