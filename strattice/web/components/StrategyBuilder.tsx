@@ -5,7 +5,7 @@
 // table), plus a head-to-head against the stock templates on the same market.
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { addStrategyAction } from "@/app/actions";
+import { addStrategiesAction } from "@/app/actions";
 import { ACTIVE_TEMPLATES } from "@/lib/entitlements";
 import { STRATEGY_META } from "@/lib/strategies";
 import {
@@ -253,11 +253,9 @@ export function StrategyBuilder() {
     if (!cleanDef) return;
     start(async () => {
       try {
-        const fd = new FormData();
-        fd.set("template", "custom");
-        fd.set("market", market);
-        fd.set("params", JSON.stringify(cleanDef));
-        await addStrategyAction(fd);
+        await addStrategiesAction([
+          { template: "custom", market, params: JSON.stringify(cleanDef) },
+        ]);
         toast(`Saved "${cleanDef.name}" on ${marketLabel(market)}`, "success");
         router.push("/strategies");
       } catch (e: any) {

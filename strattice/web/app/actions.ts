@@ -35,39 +35,59 @@ export async function saveCredentialsAction(formData: FormData) {
   revalidatePath("/account");
 }
 
-export async function addStrategyAction(formData: FormData) {
-  const userId = await requireUserId();
-  const template = String(formData.get("template"));
-  const market = String(formData.get("market") || "")
+// Validate + sanitize one (template, market, rawParams) into an insert-ready row.
+// params are user input: re-validate server-side regardless of what the UI enforced.
+function prepareStrategyInsert(
+  template: string,
+  marketRaw: string,
+  rawParams: unknown,
+): { template: string; market: string; params: string | null } {
+  const market = String(marketRaw || "")
     .trim()
     .toUpperCase();
   if (!/^[A-Z0-9_-]{3,24}$/.test(market))
-    throw new Error("Enter a valid market id, e.g. I-BTC_INR");
+    throw new Error(`Enter a valid market id, e.g. I-BTC_INR (got "${market}")`);
 
-  // params are user input: re-validate server-side regardless of what the UI enforced.
-  const raw = formData.get("params");
-  let paramsJson: string | null = null;
+  let params: string | null = null;
   if (template === "custom") {
-    paramsJson = JSON.stringify(sanitizeCustomDef(String(raw ?? "")));
-  } else if (raw) {
-    // New adds are restricted to ACTIVE templates: retired ones (mean reversion)
-    // keep resolving for legacy rows but can no longer be added.
+    params = JSON.stringify(sanitizeCustomDef(String(rawParams ?? "")));
+  } else {
+    // New adds are restricted to ACTIVE/EXPERIMENTAL templates: retired ones (mean
+    // reversion) keep resolving for legacy rows but can no longer be added.
     if (
       !(ACTIVE_TEMPLATES as readonly string[]).includes(template) &&
       !(EXPERIMENTAL_TEMPLATES as readonly string[]).includes(template)
     )
       throw new Error("unknown template");
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(String(raw));
-    } catch {
-      throw new Error("Invalid strategy parameters.");
+    if (rawParams) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(String(rawParams));
+      } catch {
+        throw new Error("Invalid strategy parameters.");
+      }
+      const clean = sanitizeParams(template as PickableTemplate, parsed);
+      params = clean ? JSON.stringify(clean) : null;
     }
-    const clean = sanitizeParams(template as PickableTemplate, parsed);
-    paramsJson = clean ? JSON.stringify(clean) : null;
   }
+  return { template, market, params };
+}
 
-  await q.addStrategy(userId, template, market, paramsJson);
+/** Add one template across several coins, or several distinct template+market pairs,
+ *  in a single call. Backs both the multi-coin add form and the "best strategy"
+ *  cross-coin comparison, which each add several rows at once. */
+export async function addStrategiesAction(
+  items: { template: string; market: string; params?: string | null }[],
+) {
+  const userId = await requireUserId();
+  if (!Array.isArray(items) || items.length === 0)
+    throw new Error("Select at least one coin.");
+  if (items.length > 60) throw new Error("Too many strategies at once.");
+  const prepared = items.map((it) =>
+    prepareStrategyInsert(String(it.template), it.market, it.params ?? null),
+  );
+  for (const p of prepared)
+    await q.addStrategy(userId, p.template, p.market, p.params);
   revalidatePath("/strategies");
 }
 

@@ -4,6 +4,6 @@
 -- NOT idempotent (SQLite has no "add column if not exists"); only run once.
 --
 -- Apply (from repo root):
---   wrangler d1 execute coindcx --file strattice/db/migrations/0003_strategy_weight.sql --remote
+--   wrangler d1 execute strattice --file strattice/db/migrations/0003_strategy_weight.sql --remote
 
 alter table user_strategies add column weight real not null default 1.0;

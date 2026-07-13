@@ -6,7 +6,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import {
-  addStrategyAction,
+  addStrategiesAction,
   toggleStrategyAction,
   removeStrategyAction,
   setStrategyWeightsAction,
@@ -32,7 +32,6 @@ import {
 } from "@/lib/custom-strategy";
 import { StrategyPreview } from "@/components/StrategyPreview";
 import { BestStrategyFinder } from "@/components/BestStrategyFinder";
-import { Select } from "@/components/Select";
 import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Spinner";
 
@@ -44,7 +43,6 @@ export const MARKETS = [
   "I-BNB_INR",
   "I-DOGE_INR",
 ];
-const CUSTOM_MARKET = "__custom__";
 
 const marketLabel = (m: string) => m.replace(/^I-/, "").replace("_", "/");
 
@@ -101,9 +99,9 @@ function ConfigRow({ k, v }: { k: string; v: string }) {
 export function StrategyManager({ strategies }: { strategies: StrategyRow[] }) {
   const [pending, start] = useTransition();
   const [tpl, setTpl] = useState<PickableTemplate>(ACTIVE_TEMPLATES[0]);
-  const [marketSel, setMarketSel] = useState<string>(
+  const [selectedMarkets, setSelectedMarkets] = useState<string[]>([
     TEMPLATE_CONFIG[ACTIVE_TEMPLATES[0]].market,
-  );
+  ]);
   const [customMarket, setCustomMarket] = useState("");
   const [edits, setEdits] = useState<Record<string, number>>({});
   const [err, setErr] = useState<string | null>(null);
@@ -111,9 +109,10 @@ export function StrategyManager({ strategies }: { strategies: StrategyRow[] }) {
 
   const meta = STRATEGY_META[tpl];
   const cfg = TEMPLATE_CONFIG[tpl];
-  const market =
-    marketSel === CUSTOM_MARKET ? customMarket.trim().toUpperCase() : marketSel;
-  const marketValid = /^[A-Z0-9_-]{3,24}$/.test(market);
+  // The first checked coin drives the single-market live preview.
+  const market = selectedMarkets[0] ?? "";
+  const marketValid =
+    selectedMarkets.length > 0 && /^[A-Z0-9_-]{3,24}$/.test(market);
 
   // Current param values = stock + edits; only genuine diffs are sent to the server.
   const paramValues = useMemo(() => {
@@ -149,7 +148,24 @@ export function StrategyManager({ strategies }: { strategies: StrategyRow[] }) {
   function pickTemplate(t: PickableTemplate) {
     setTpl(t);
     setEdits({});
-    if (marketSel !== CUSTOM_MARKET) setMarketSel(TEMPLATE_CONFIG[t].market);
+    setSelectedMarkets([TEMPLATE_CONFIG[t].market]);
+  }
+
+  function toggleMarket(m: string) {
+    setSelectedMarkets((cur) =>
+      cur.includes(m) ? cur.filter((x) => x !== m) : [...cur, m],
+    );
+  }
+
+  function addCustomMarket() {
+    const m = customMarket.trim().toUpperCase();
+    if (!/^[A-Z0-9_-]{3,24}$/.test(m)) {
+      setErr("Enter a valid market id, e.g. I-BTC_INR");
+      return;
+    }
+    setErr(null);
+    setSelectedMarkets((cur) => (cur.includes(m) ? cur : [...cur, m]));
+    setCustomMarket("");
   }
 
   const exits = cfg.exits;
@@ -238,13 +254,10 @@ export function StrategyManager({ strategies }: { strategies: StrategyRow[] }) {
           </Link>
         </div>
 
-        {/* not sure which one? compare all templates on live data and auto-pick */}
+        {/* not sure which one? compare every template on every coin over a chosen
+            range, then add any of the winners in one go */}
         <div className="mt-3">
-          <BestStrategyFinder
-            market={marketValid ? market : TEMPLATE_CONFIG[tpl].market}
-            disabled={pending}
-            onPick={(t) => pickTemplate(t)}
-          />
+          <BestStrategyFinder markets={MARKETS} disabled={pending} />
         </div>
       </section>
 
@@ -252,47 +265,94 @@ export function StrategyManager({ strategies }: { strategies: StrategyRow[] }) {
       <section className="overflow-hidden card">
         <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
           <h2 className="eyebrow">02 · {meta.label} - config &amp; preview</h2>
-          <div className="flex flex-wrap items-center gap-2">
-            <Select
-              size="sm"
-              ariaLabel="Market"
-              value={marketSel}
-              onChange={setMarketSel}
-              options={[
-                ...MARKETS.map((m) => ({ value: m, label: marketLabel(m) })),
-                { value: CUSTOM_MARKET, label: "Custom…" },
-              ]}
-            />
-            {marketSel === CUSTOM_MARKET && (
-              <input
-                value={customMarket}
-                onChange={(e) => setCustomMarket(e.target.value)}
-                placeholder="I-BTC_INR"
-                aria-label="Custom market id"
-                className="w-32 rounded-md border border-line bg-inset px-2.5 py-1.5 font-mono text-xs uppercase text-fg placeholder-faint focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              />
-            )}
-            <button
-              type="button"
-              disabled={pending || !marketValid || !!ruleErr}
-              onClick={() =>
-                run(
-                  async () => {
-                    const fd = new FormData();
-                    fd.set("template", tpl);
-                    fd.set("market", market);
-                    if (customised) fd.set("params", JSON.stringify(diffs));
-                    await addStrategyAction(fd);
-                  },
-                  `Added ${meta.label} on ${marketLabel(market)}`,
-                )
+          <button
+            type="button"
+            disabled={pending || selectedMarkets.length === 0 || !!ruleErr}
+            onClick={() =>
+              run(
+                () =>
+                  addStrategiesAction(
+                    selectedMarkets.map((m) => ({
+                      template: tpl,
+                      market: m,
+                      params: customised ? JSON.stringify(diffs) : null,
+                    })),
+                  ),
+                `Added ${meta.label} to ${selectedMarkets.length} ${
+                  selectedMarkets.length === 1 ? "coin" : "coins"
+                }`,
+              )
+            }
+            className="inline-flex items-center justify-center gap-2 rounded-md bg-accent px-4 py-1.5 text-sm font-medium text-accent-ink transition-colors hover:bg-accent-hi focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {pending && <Spinner className="h-4 w-4" />}
+            {selectedMarkets.length > 1
+              ? `Add to ${selectedMarkets.length} coins`
+              : "Add strategy"}
+          </button>
+        </div>
+
+        {/* pick one or more coins: this template gets added to every checked coin */}
+        <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-3">
+          <span className="mr-1 font-mono text-[10px] uppercase tracking-wider text-faint">
+            Coins
+          </span>
+          {MARKETS.map((m) => {
+            const on = selectedMarkets.includes(m);
+            return (
+              <button
+                key={m}
+                type="button"
+                role="checkbox"
+                aria-checked={on}
+                onClick={() => toggleMarket(m)}
+                className={[
+                  "rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                  on
+                    ? "bg-accent/15 text-accent ring-1 ring-accent/50"
+                    : "bg-white/[0.03] text-dim hover:bg-panel",
+                ].join(" ")}
+              >
+                {marketLabel(m)}
+              </button>
+            );
+          })}
+          {/* custom coins the user typed that aren't presets */}
+          {selectedMarkets
+            .filter((m) => !MARKETS.includes(m))
+            .map((m) => (
+              <button
+                key={m}
+                type="button"
+                role="checkbox"
+                aria-checked
+                onClick={() => toggleMarket(m)}
+                title="Remove"
+                className="rounded-md bg-accent/15 px-2.5 py-1 text-xs font-medium text-accent ring-1 ring-accent/50 transition-colors hover:bg-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                {marketLabel(m)} ✕
+              </button>
+            ))}
+          <input
+            value={customMarket}
+            onChange={(e) => setCustomMarket(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addCustomMarket();
               }
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-accent px-4 py-1.5 text-sm font-medium text-accent-ink transition-colors hover:bg-accent-hi focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {pending && <Spinner className="h-4 w-4" />}
-              Add strategy
-            </button>
-          </div>
+            }}
+            placeholder="I-BTC_INR"
+            aria-label="Custom market id"
+            className="w-32 rounded-md border border-line bg-inset px-2.5 py-1 font-mono text-xs uppercase text-fg placeholder-faint focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          />
+          <button
+            type="button"
+            onClick={addCustomMarket}
+            className="rounded-md bg-white/5 px-2.5 py-1 text-xs font-medium text-dim transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            Add coin
+          </button>
         </div>
 
         {err && (

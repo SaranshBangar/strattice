@@ -42,18 +42,9 @@ const NUMBERS: [string, string][] = [
 ];
 
 const STEPS: [string, string][] = [
-  [
-    "Connect your exchange",
-    "Add a CoinDCX API key with withdrawals off - the bot can trade for you, never take money out.",
-  ],
-  [
-    "Pick a ready-made strategy",
-    "Every entry and exit marked on real market data before you commit to anything.",
-  ],
-  [
-    "Let it practice first",
-    "Paper mode first: real prices, fake money. Flip to live only when the numbers earn it.",
-  ],
+  ["Connect your exchange", "Add a CoinDCX API key with withdrawals off - the bot can trade for you, never take money out."],
+  ["Pick a ready-made strategy", "Every entry and exit marked on real market data before you commit to anything."],
+  ["Let it practice first", "Paper mode first: real prices, fake money. Flip to live only when the numbers earn it."],
 ];
 
 // The engine's order path, stage by stage. This mirrors what the code actually
@@ -67,23 +58,14 @@ const PIPELINE: [string, string, string[]][] = [
   [
     "risk gate",
     "A blocked order is a normal outcome, not an error. Any breached limit stops the trade before it exists.",
-    [
-      "position size cap",
-      "daily loss limit",
-      "trades-per-day cap",
-      "capital-at-risk ceiling",
-    ],
+    ["position size cap", "daily loss limit", "trades-per-day cap", "capital-at-risk ceiling"],
   ],
   [
     "executor",
     "One order path for everything. Idempotent order ids survive restarts; protective exits override the strategy's own signal.",
     ["hard stop-loss", "take-profit / ATR trail", "DRY_RUN honored"],
   ],
-  [
-    "your exchange",
-    "The order lands on your own CoinDCX account, placed with your key. Fills, P&L and TDS are persisted per trade.",
-    [],
-  ],
+  ["your exchange", "The order lands on your own CoinDCX account, placed with your key. Fills, P&L and TDS are persisted per trade.", []],
 ];
 
 // One ₹10,000 round trip on an INR pair. These are the numbers most bots
@@ -97,30 +79,12 @@ const COST_ROWS: [string, string, string][] = [
 ];
 
 const FEATURES: [string, string][] = [
-  [
-    "Every strategy template",
-    "Trend, momentum, breakout and volatility systems that survived a real-data cost study.",
-  ],
-  [
-    "Entry / exit previews",
-    "Simulated on real candles, entries and exits on the chart, before you add it.",
-  ],
-  [
-    "Build your own",
-    "Compose entry rules from indicator blocks and backtest while you design.",
-  ],
-  [
-    "Full analytics dashboard",
-    "Equity curve, drawdown, daily P&L, win rate, per-strategy breakdown.",
-  ],
-  [
-    "Risk-managed executor",
-    "Hard stops, trailing stops, daily loss limits and a kill switch.",
-  ],
-  [
-    "DRY_RUN first",
-    "Realistic paper fills with fees and TDS before a single rupee goes live.",
-  ],
+  ["Every strategy template", "Trend, momentum, breakout and volatility systems that survived a real-data cost study."],
+  ["Entry / exit previews", "Simulated on real candles, entries and exits on the chart, before you add it."],
+  ["Build your own", "Compose entry rules from indicator blocks and backtest while you design."],
+  ["Full analytics dashboard", "Equity curve, drawdown, daily P&L, win rate, per-strategy breakdown."],
+  ["Risk-managed executor", "Hard stops, trailing stops, daily loss limits and a kill switch."],
+  ["DRY_RUN first", "Realistic paper fills with fees and TDS before a single rupee goes live."],
 ];
 
 const FAQ: [string, string][] = [
@@ -156,7 +120,7 @@ const FAQ: [string, string][] = [
 
 export default function Home() {
   return (
-    <div className="space-y-24">
+    <div className="space-y-24 -mt-24">
       {/* Rich-result structured data. FAQPage is built from the same FAQ array
           rendered below, so the schema always matches the visible content. */}
       <JsonLd schema={softwareApplicationSchema()} />
@@ -170,17 +134,13 @@ export default function Home() {
             Non-custodial · CoinDCX · Free during early access
           </div>
           <h1 className="mt-5 font-display text-4xl font-bold leading-[1.05] tracking-tight sm:text-5xl">
-            Algorithmic trading that runs on your{" "}
-            <span className="text-accent">own</span> account.
+            Algorithmic trading that runs on your <span className="text-accent">own</span> account.
           </h1>
           <p className="mt-5 max-w-lg text-lg text-muted">
-            Pick a rulebook, watch it practice with fake money on real prices,
-            and only go live when it has earned your trust.
+            Pick a rulebook, watch it practice with fake money on real prices, and only go live when it has earned your trust.
           </p>
           <HeroCta />
-          <p className="mt-4 font-mono text-[11px] uppercase tracking-wider text-faint">
-            no card · withdrawals stay disabled · DRY_RUN by default
-          </p>
+          <p className="mt-4 font-mono text-[11px] uppercase tracking-wider text-faint">no card · withdrawals stay disabled · DRY_RUN by default</p>
           <a
             href="#learn"
             className="mt-3 inline-block text-sm text-dim underline decoration-line underline-offset-4 transition-colors hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
@@ -192,32 +152,21 @@ export default function Home() {
         {/* Signature: the strategy ledger boots one row at a time, like a terminal */}
         <div id="templates" className="card scroll-mt-20 overflow-hidden">
           <div className="flex items-center justify-between bg-white/[0.03] px-4 py-2.5">
-            <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-faint">
-              strategy_templates
-            </span>
-            <span className="font-mono text-[11px] text-muted">
-              {STRATS.length} shipped
-            </span>
+            <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-faint">strategy_templates</span>
+            <span className="font-mono text-[11px] text-muted">{STRATS.length} shipped</span>
           </div>
           <ul className="boot">
             {STRATS.map(([name, market]) => (
-              <li
-                key={name}
-                className="flex items-center gap-3 px-4 py-2.5 font-mono text-[13px] transition-colors hover:bg-white/[0.03]"
-              >
+              <li key={name} className="flex items-center gap-3 px-4 py-2.5 font-mono text-[13px] transition-colors hover:bg-white/[0.03]">
                 <span className="text-gain">▸</span>
                 <span className="text-fg">{name.replace(/_/g, " ")}</span>
                 <span className="ml-auto tnum text-muted">{market}</span>
-                <span className="w-[88px] text-right text-[10px] uppercase tracking-wider text-faint">
-                  {STRATEGY_META[name].kind}
-                </span>
+                <span className="w-[88px] text-right text-[10px] uppercase tracking-wider text-faint">{STRATEGY_META[name].kind}</span>
               </li>
             ))}
           </ul>
           <div className="flex items-center justify-between bg-white/[0.03] px-4 py-2.5 font-mono text-[11px] text-faint">
-            <span className="caret">
-              exits: shared stop-loss / take-profit / ATR trail
-            </span>
+            <span className="caret">exits: shared stop-loss / take-profit / ATR trail</span>
             <span className="text-accent">+ build your own</span>
           </div>
         </div>
@@ -233,41 +182,29 @@ export default function Home() {
       <section id="learn" className="scroll-mt-20">
         <Reveal>
           <h2 className="eyebrow">New to trading?</h2>
-          <p className="mt-2 max-w-2xl font-display text-2xl font-semibold tracking-tight">
-            What is algorithmic trading?
-          </p>
+          <p className="mt-2 max-w-2xl font-display text-2xl font-semibold tracking-tight">What is algorithmic trading?</p>
         </Reveal>
         <Reveal stagger>
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
             <div className="card p-5">
-              <h3 className="font-display text-base font-semibold tracking-tight text-fg">
-                A strategy is a rulebook
-              </h3>
+              <h3 className="font-display text-base font-semibold tracking-tight text-fg">A strategy is a rulebook</h3>
               <p className="mt-1.5 text-sm leading-relaxed text-muted">
-                A <Term k="strategy">strategy</Term> is written-down rules: if
-                the price does X, buy; if Y, sell. Exact rules can be tested on
-                years of history (a <Term k="backtest">backtest</Term>) first.
+                A <Term k="strategy">strategy</Term> is written-down rules: if the price does X, buy; if Y, sell. Exact rules can be tested on years
+                of history (a <Term k="backtest">backtest</Term>) first.
               </p>
             </div>
             <div className="card p-5">
-              <h3 className="font-display text-base font-semibold tracking-tight text-fg">
-                The bot never sleeps or panics
-              </h3>
+              <h3 className="font-display text-base font-semibold tracking-tight text-fg">The bot never sleeps or panics</h3>
               <p className="mt-1.5 text-sm leading-relaxed text-muted">
-                It applies the same rules every time - no revenge trades, no
-                3am chases. It waits for a <Term k="signal">signal</Term> and
-                follows the plan.
+                It applies the same rules every time - no revenge trades, no 3am chases. It waits for a <Term k="signal">signal</Term> and follows the
+                plan.
               </p>
             </div>
             <div className="card p-5">
-              <h3 className="font-display text-base font-semibold tracking-tight text-fg">
-                You keep the controls
-              </h3>
+              <h3 className="font-display text-base font-semibold tracking-tight text-fg">You keep the controls</h3>
               <p className="mt-1.5 text-sm leading-relaxed text-muted">
-                Everything starts in{" "}
-                <Term k="paper trading">paper trading</Term>. Every trade
-                carries a <Term k="stop-loss">stop-loss</Term>, and your funds
-                never leave your own exchange account.
+                Everything starts in <Term k="paper trading">paper trading</Term>. Every trade carries a <Term k="stop-loss">stop-loss</Term>, and
+                your funds never leave your own exchange account.
               </p>
             </div>
           </div>
@@ -281,15 +218,10 @@ export default function Home() {
 
       {/* Numbers strip - four facts, no adjectives */}
       <Reveal stagger>
-        <section
-          aria-label="Key numbers"
-          className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
-        >
+        <section aria-label="Key numbers" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {NUMBERS.map(([n, body]) => (
             <div key={body} className="card px-5 py-4">
-              <div className="font-mono text-2xl font-semibold tnum tracking-tight text-fg">
-                {n}
-              </div>
+              <div className="font-mono text-2xl font-semibold tnum tracking-tight text-fg">{n}</div>
               <p className="mt-1 text-xs leading-relaxed text-muted">{body}</p>
             </div>
           ))}
@@ -306,12 +238,8 @@ export default function Home() {
             {STEPS.map(([title, body], i) => (
               <li key={title} className="card p-5">
                 <span className="font-mono text-sm text-accent">0{i + 1}</span>
-                <h3 className="mt-3 font-display text-base font-semibold tracking-tight text-fg">
-                  {title}
-                </h3>
-                <p className="mt-1.5 text-sm leading-relaxed text-muted">
-                  {body}
-                </p>
+                <h3 className="mt-3 font-display text-base font-semibold tracking-tight text-fg">{title}</h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-muted">{body}</p>
               </li>
             ))}
           </ol>
@@ -325,13 +253,10 @@ export default function Home() {
             <div>
               <h2 className="eyebrow">The execution path</h2>
               <p className="mt-2 max-w-2xl font-display text-2xl font-semibold tracking-tight">
-                Four stages between a signal and your exchange. Risk sits in the
-                middle, always.
+                Four stages between a signal and your exchange. Risk sits in the middle, always.
               </p>
             </div>
-            <span className="font-mono text-[11px] uppercase tracking-wider text-faint">
-              signal → risk → execute → fill
-            </span>
+            <span className="font-mono text-[11px] uppercase tracking-wider text-faint">signal → risk → execute → fill</span>
           </div>
         </Reveal>
         <Reveal stagger>
@@ -339,28 +264,18 @@ export default function Home() {
             {PIPELINE.map(([title, body, checks], i) => (
               <li key={title} className="card relative p-5">
                 <div className="flex items-center justify-between">
-                  <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-accent">
-                    {title}
-                  </span>
+                  <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-accent">{title}</span>
                   {i < PIPELINE.length - 1 && (
-                    <span
-                      aria-hidden="true"
-                      className="font-mono text-sm text-faint"
-                    >
+                    <span aria-hidden="true" className="font-mono text-sm text-faint">
                       →
                     </span>
                   )}
                 </div>
-                <p className="mt-2.5 text-sm leading-relaxed text-muted">
-                  {body}
-                </p>
+                <p className="mt-2.5 text-sm leading-relaxed text-muted">{body}</p>
                 {checks.length > 0 && (
                   <ul className="mt-3 space-y-1 rounded-lg bg-inset/70 p-3">
                     {checks.map((c) => (
-                      <li
-                        key={c}
-                        className="flex items-center gap-2 font-mono text-[11px] text-dim"
-                      >
+                      <li key={c} className="flex items-center gap-2 font-mono text-[11px] text-dim">
                         <span className="h-1 w-1 shrink-0 bg-faint" />
                         {c}
                       </li>
@@ -374,55 +289,37 @@ export default function Home() {
       </section>
 
       {/* Costs - the honest section. Most bots pretend friction doesn't exist. */}
-      <section
-        id="costs"
-        className="scroll-mt-20 grid items-start gap-10 lg:grid-cols-[1fr_0.9fr]"
-      >
+      <section id="costs" className="scroll-mt-20 grid items-start gap-10 lg:grid-cols-[1fr_0.9fr]">
         <Reveal>
           <h2 className="eyebrow">Costs, modeled honestly</h2>
           <p className="mt-2 font-display text-2xl font-semibold tracking-tight">
-            Every round trip on an Indian exchange costs about 1.5% before you
-            earn a rupee.
+            Every round trip on an Indian exchange costs about 1.5% before you earn a rupee.
           </p>
           <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted">
-            Fees on both legs, GST on those fees, 1% TDS on every sell - every
-            number on Strattice is{" "}
-            <span className="text-fg">net of the full friction stack</span>,
-            which is why the engine trades slow{" "}
+            Fees on both legs, GST on those fees, 1% TDS on every sell - every number on Strattice is{" "}
+            <span className="text-fg">net of the full friction stack</span>, which is why the engine trades slow{" "}
             <span className="text-fg">daily bars</span>.
           </p>
         </Reveal>
         <Reveal>
           <div className="card overflow-hidden">
             <div className="flex items-center justify-between bg-white/[0.03] px-4 py-2.5">
-              <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-faint">
-                round_trip · ₹10,000
-              </span>
+              <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-faint">round_trip · ₹10,000</span>
               <span className="font-mono text-[11px] text-muted">INR pair</span>
             </div>
             <table className="w-full font-mono text-[13px]">
               <tbody>
                 {COST_ROWS.map(([leg, what, amt], i) => (
                   <tr key={i} className="odd:bg-white/[0.015]">
-                    <td className="w-14 px-4 py-2.5 text-[10px] uppercase tracking-wider text-faint">
-                      {leg}
-                    </td>
+                    <td className="w-14 px-4 py-2.5 text-[10px] uppercase tracking-wider text-faint">{leg}</td>
                     <td className="py-2.5 pr-4 text-muted">{what}</td>
-                    <td className="tnum py-2.5 pr-4 text-right text-dim">
-                      ₹{amt}
-                    </td>
+                    <td className="tnum py-2.5 pr-4 text-right text-dim">₹{amt}</td>
                   </tr>
                 ))}
                 <tr className="bg-loss/[0.06]">
-                  <td className="px-4 py-3 text-[10px] uppercase tracking-wider text-faint">
-                    total
-                  </td>
-                  <td className="py-3 pr-4 font-medium text-fg">
-                    friction paid
-                  </td>
-                  <td className="tnum py-3 pr-4 text-right font-semibold text-loss">
-                    ₹147.20
-                  </td>
+                  <td className="px-4 py-3 text-[10px] uppercase tracking-wider text-faint">total</td>
+                  <td className="py-3 pr-4 font-medium text-fg">friction paid</td>
+                  <td className="tnum py-3 pr-4 text-right font-semibold text-loss">₹147.20</td>
                 </tr>
               </tbody>
             </table>
@@ -454,8 +351,7 @@ export default function Home() {
               </div>
             </div>
             <div className="bg-white/[0.03] px-4 py-2.5 font-mono text-[11px] text-faint">
-              ≈ 1.47% of notional. simulations here start from this number, not
-              from zero.
+              ≈ 1.47% of notional. simulations here start from this number, not from zero.
             </div>
           </div>
         </Reveal>
@@ -466,17 +362,10 @@ export default function Home() {
         <Reveal>
           <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h2 className="font-display text-2xl font-semibold tracking-tight">
-                Free while we&rsquo;re in early access. Everything included.
-              </h2>
-              <p className="mt-1 text-sm text-muted">
-                No plans, no card, no trading fees from us. Your exchange fees
-                apply as usual.
-              </p>
+              <h2 className="font-display text-2xl font-semibold tracking-tight">Free while we&rsquo;re in early access. Everything included.</h2>
+              <p className="mt-1 text-sm text-muted">No plans, no card, no trading fees from us. Your exchange fees apply as usual.</p>
             </div>
-            <span className="rounded-sm bg-gain/10 px-3 py-1 font-mono text-xs uppercase tracking-wider text-gain">
-              ₹0 / mo
-            </span>
+            <span className="rounded-sm bg-gain/10 px-3 py-1 font-mono text-xs uppercase tracking-wider text-gain">₹0 / mo</span>
           </div>
         </Reveal>
         <Reveal stagger>
@@ -484,15 +373,10 @@ export default function Home() {
             {FEATURES.map(([title, body]) => (
               <div key={title} className="card p-5">
                 <h3 className="flex items-center gap-2.5 font-display text-base font-semibold tracking-tight text-fg">
-                  <span
-                    aria-hidden="true"
-                    className="h-1.5 w-1.5 shrink-0 bg-accent"
-                  />
+                  <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 bg-accent" />
                   {title}
                 </h3>
-                <p className="mt-1.5 text-sm leading-relaxed text-muted">
-                  {body}
-                </p>
+                <p className="mt-1.5 text-sm leading-relaxed text-muted">{body}</p>
               </div>
             ))}
           </div>
@@ -504,9 +388,7 @@ export default function Home() {
         <Reveal>
           <div className="mb-5">
             <h2 className="eyebrow">Not sure where to start?</h2>
-            <p className="mt-2 max-w-2xl font-display text-2xl font-semibold tracking-tight">
-              Five questions, one honest starting point.
-            </p>
+            <p className="mt-2 max-w-2xl font-display text-2xl font-semibold tracking-tight">Five questions, one honest starting point.</p>
           </div>
         </Reveal>
         <Reveal>
@@ -515,15 +397,10 @@ export default function Home() {
       </section>
 
       {/* FAQ - the questions a skeptical trader actually asks */}
-      <section
-        id="faq"
-        className="scroll-mt-20 grid gap-10 lg:grid-cols-[0.8fr_1.2fr]"
-      >
+      <section id="faq" className="scroll-mt-20 grid gap-10 lg:grid-cols-[0.8fr_1.2fr]">
         <Reveal>
           <h2 className="eyebrow">Straight answers</h2>
-          <p className="mt-2 font-display text-2xl font-semibold tracking-tight">
-            The questions a skeptical trader should ask.
-          </p>
+          <p className="mt-2 font-display text-2xl font-semibold tracking-tight">The questions a skeptical trader should ask.</p>
         </Reveal>
         <Reveal stagger>
           <div className="space-y-2">
@@ -531,16 +408,11 @@ export default function Home() {
               <details key={question} className="card group px-5 py-4">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-medium text-fg [&::-webkit-details-marker]:hidden">
                   {question}
-                  <span
-                    aria-hidden="true"
-                    className="shrink-0 font-mono text-faint transition-transform group-open:rotate-90"
-                  >
+                  <span aria-hidden="true" className="shrink-0 font-mono text-faint transition-transform group-open:rotate-90">
                     ▸
                   </span>
                 </summary>
-                <p className="mt-2.5 max-w-xl text-sm leading-relaxed text-muted">
-                  {answer}
-                </p>
+                <p className="mt-2.5 max-w-xl text-sm leading-relaxed text-muted">{answer}</p>
               </details>
             ))}
           </div>

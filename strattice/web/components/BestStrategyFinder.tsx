@@ -1,152 +1,110 @@
 "use client";
-// "Choose the best strategy" - for users who don't know which template to pick.
-// Replays every ACTIVE template over live Binance DAILY candles (the interval the
-// engine actually trades), split into two ~16-month halves so one lucky stretch
-// can't crown a winner. Ranks on net-of-fees performance with enough closed trades
-// to mean something, auto-selects the winner and explains the choice in plain words.
-import { useState } from "react";
+// "Choose the best strategy" - for users who don't know which template/coin to pick.
+// Backtests every ACTIVE template against every coin over a user-chosen time range
+// (live Binance DAILY candles, the interval the engine actually trades), ranks the
+// combos on net-of-fees performance, then lets the user check off any number of
+// winners and add them all in one go.
+import { useState, useTransition } from "react";
 import { ACTIVE_TEMPLATES, type ActiveTemplate } from "@/lib/entitlements";
 import { STRATEGY_META } from "@/lib/strategies";
-import {
-  simulate,
-  FRICTION_PCT,
-  type Candle,
-  type SimResult,
-} from "@/lib/strategy-sim";
+import { simulate, FRICTION_PCT, type Candle } from "@/lib/strategy-sim";
+import { addStrategiesAction } from "@/app/actions";
+import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Spinner";
 
-// 1000 daily bars (Binance max) ≈ 2.7 years, evaluated as two halves.
-const WINDOWS = ["older", "recent"] as const;
-const LIMIT = 1000;
+const LIMIT = 1000; // Binance max daily bars (~2.7 years)
 const MIN_CLOSED = 3; // fewer closed trades than this = not enough evidence
+const RANGES = [
+  { label: "3 months", days: 90 },
+  { label: "6 months", days: 180 },
+  { label: "1 year", days: 365 },
+  { label: "2 years", days: 730 },
+  { label: "Max (~2.7y)", days: LIMIT },
+] as const;
 
-interface Verdict {
+interface Row {
+  key: string; // `${template}|${market}`
   template: ActiveTemplate;
-  net: number; // summed net % across windows, after friction
+  market: string;
+  net: number; // net % after friction, over the chosen range
   closed: number;
-  wins: number;
   winRate: number | null;
-  perWindow: Record<(typeof WINDOWS)[number], SimResult>;
+  buyHold: number; // hold the coin over the same range, for comparison
   eligible: boolean;
 }
 
 const pct = (n: number) => `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;
-
-function rank(candles: Record<(typeof WINDOWS)[number], Candle[]>): Verdict[] {
-  const verdicts: Verdict[] = ACTIVE_TEMPLATES.map((t) => {
-    const perWindow = {
-      older: simulate(t, candles["older"]),
-      recent: simulate(t, candles["recent"]),
-    };
-    const closed = perWindow["older"].closed + perWindow["recent"].closed;
-    const wins = perWindow["older"].wins + perWindow["recent"].wins;
-    return {
-      template: t,
-      net: perWindow["older"].totalNetPct + perWindow["recent"].totalNetPct,
-      closed,
-      wins,
-      winRate: closed ? (wins / closed) * 100 : null,
-      perWindow,
-      eligible: closed >= MIN_CLOSED,
-    };
-  });
-  // Eligible templates first, then best net return; win rate breaks ties.
-  return verdicts.sort(
-    (a, b) =>
-      Number(b.eligible) - Number(a.eligible) ||
-      b.net - a.net ||
-      (b.winRate ?? 0) - (a.winRate ?? 0),
-  );
-}
-
-function explain(
-  v: Verdict,
-  runnerUp: Verdict | undefined,
-  buyHold: number,
-  market: string,
-): string {
-  const label = STRATEGY_META[v.template].label;
-  const parts: string[] = [];
-  if (!v.eligible) {
-    return `${label} scored best, but no template closed ${MIN_CLOSED}+ trades on ${market} in these windows - the stock filters are deliberately picky and daily strategies only trade a handful of times a year. Treat this pick as weak evidence; try another market or keep the default.`;
-  }
-  parts.push(
-    `${label} came out on top: ${pct(v.net)} net of ~${FRICTION_PCT}% round-trip fees across the two test windows, from ${v.closed} closed trades (${v.winRate!.toFixed(0)}% winners).`,
-  );
-  if (v.net > buyHold) {
-    parts.push(
-      `That beats simply holding ${market} (${pct(buyHold)} over the ~2.7-year test stretch).`,
-    );
-  } else {
-    parts.push(
-      `Buy-and-hold did better over this exact stretch (${pct(buyHold)}) - the strategy's value is the stop-losses and exits, not raw return in a straight-up market.`,
-    );
-  }
-  if (runnerUp && runnerUp.eligible) {
-    parts.push(
-      `Runner-up: ${STRATEGY_META[runnerUp.template].label} at ${pct(runnerUp.net)}.`,
-    );
-  }
-  parts.push(
-    `It's a ${STRATEGY_META[v.template].kind.toLowerCase()} template - ${STRATEGY_META[v.template].blurb.toLowerCase()}`,
-  );
-  return parts.join(" ");
-}
+const marketLabel = (m: string) => m.replace(/^I-/, "").replace("_", "/");
 
 export function BestStrategyFinder({
-  market,
+  markets,
   disabled,
-  onPick,
 }: {
-  market: string;
+  markets: string[];
   disabled?: boolean;
-  /** Called with the winning template so the parent selects its card. */
-  onPick: (t: ActiveTemplate) => void;
 }) {
+  const [days, setDays] = useState<number>(730);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [result, setResult] = useState<{
-    verdicts: Verdict[];
-    note: string;
-    market: string;
-  } | null>(null);
+  const [rows, setRows] = useState<Row[] | null>(null);
+  const [ranDays, setRanDays] = useState<number>(730);
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [adding, startAdd] = useTransition();
+  const toast = useToast();
 
   async function run() {
     setBusy(true);
     setErr(null);
-    setResult(null);
+    setRows(null);
+    setSel(new Set());
     try {
-      const r = await fetch(
-        `/api/candles?pair=${encodeURIComponent(market)}&interval=1d&limit=${LIMIT}`,
+      // One fetch per coin (parallel), sliced to the chosen range.
+      const per = await Promise.all(
+        markets.map(async (m) => {
+          const r = await fetch(
+            `/api/candles?pair=${encodeURIComponent(m)}&interval=1d&limit=${LIMIT}`,
+          );
+          const j = await r.json().catch(() => ({}));
+          const all = Array.isArray(j.candles) ? (j.candles as Candle[]) : [];
+          return { market: m, candles: all.slice(-days) };
+        }),
       );
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok || !Array.isArray(j.candles) || j.candles.length < 300) {
-        throw new Error(`Could not load daily candles for ${market}.`);
+      const out: Row[] = [];
+      for (const { market, candles } of per) {
+        if (candles.length < 30) continue; // not enough data for this coin/range
+        const buyHold =
+          candles.length > 1
+            ? ((candles[candles.length - 1].c - candles[0].c) / candles[0].c) *
+              100
+            : 0;
+        for (const t of ACTIVE_TEMPLATES) {
+          const s = simulate(t, candles);
+          out.push({
+            key: `${t}|${market}`,
+            template: t,
+            market,
+            net: s.totalNetPct,
+            closed: s.closed,
+            winRate: s.winRate,
+            buyHold,
+            eligible: s.closed >= MIN_CLOSED,
+          });
+        }
       }
-      const all = j.candles as Candle[];
-      const mid = Math.floor(all.length / 2);
-      // Two ~16-month halves of the live 1d interval. The recent half also gets the
-      // older half as indicator warm-up context via slicing from a common array.
-      const candles = {
-        older: all.slice(0, mid),
-        recent: all.slice(mid),
-      } as Record<(typeof WINDOWS)[number], Candle[]>;
-      const verdicts = rank(candles);
-      const best = verdicts[0];
-      // Buy & hold benchmark across the full fetched stretch.
-      const buyHold =
-        all.length > 1 ? ((all[all.length - 1].c - all[0].c) / all[0].c) * 100 : 0;
-      onPick(best.template);
-      setResult({
-        verdicts,
-        note: explain(
-          best,
-          verdicts[1],
-          buyHold,
-          market.replace(/^I-/, "").replace("_", "/"),
-        ),
-        market,
-      });
+      if (out.length === 0)
+        throw new Error("Could not load daily candles for any coin. Try again.");
+      // Eligible first, then best net return; win rate breaks ties.
+      out.sort(
+        (a, b) =>
+          Number(b.eligible) - Number(a.eligible) ||
+          b.net - a.net ||
+          (b.winRate ?? 0) - (a.winRate ?? 0),
+      );
+      // Pre-check the single best eligible combo as a sensible default.
+      const best = out.find((r) => r.eligible);
+      setSel(best ? new Set([best.key]) : new Set());
+      setRanDays(days);
+      setRows(out);
     } catch (e) {
       setErr(
         e instanceof Error
@@ -158,21 +116,71 @@ export function BestStrategyFinder({
     }
   }
 
+  function toggle(key: string) {
+    setSel((s) => {
+      const n = new Set(s);
+      if (n.has(key)) n.delete(key);
+      else n.add(key);
+      return n;
+    });
+  }
+
+  function addSelected() {
+    if (!rows) return;
+    const items = rows
+      .filter((r) => sel.has(r.key))
+      .map((r) => ({ template: r.template, market: r.market }));
+    if (items.length === 0) return;
+    startAdd(async () => {
+      try {
+        await addStrategiesAction(items);
+        toast(
+          `Added ${items.length} ${items.length === 1 ? "strategy" : "strategies"}`,
+          "success",
+        );
+        setSel(new Set());
+      } catch (e: any) {
+        toast(e?.message ?? "Couldn't add the strategies", "error");
+      }
+    });
+  }
+
+  const rangeLabel =
+    RANGES.find((r) => r.days === ranDays)?.label ?? `${ranDays} days`;
+
   return (
     <div className="space-y-3">
-      <button
-        type="button"
-        disabled={busy || disabled}
-        onClick={run}
-        className="inline-flex items-center gap-2 rounded-md border border-accent/60 bg-accent/10 px-3 py-1.5 text-sm font-medium text-accent transition-colors hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {busy ? (
-          <Spinner className="h-4 w-4" />
-        ) : (
-          <span aria-hidden="true">✦</span>
-        )}
-        {busy ? "Comparing all templates…" : "Choose the best strategy for me"}
-      </button>
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="text-xs text-muted">
+          Compare every strategy across all coins over
+        </label>
+        <select
+          value={days}
+          onChange={(e) => setDays(Number(e.target.value))}
+          disabled={busy || disabled}
+          aria-label="Comparison time range"
+          className="rounded-md border border-line bg-inset px-2.5 py-1.5 text-sm text-fg focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+        >
+          {RANGES.map((r) => (
+            <option key={r.days} value={r.days}>
+              {r.label}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          disabled={busy || disabled}
+          onClick={run}
+          className="inline-flex items-center gap-2 rounded-md border border-accent/60 bg-accent/10 px-3 py-1.5 text-sm font-medium text-accent transition-colors hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {busy ? (
+            <Spinner className="h-4 w-4" />
+          ) : (
+            <span aria-hidden="true">✦</span>
+          )}
+          {busy ? "Comparing…" : "Choose the best strategy for me"}
+        </button>
+      </div>
 
       {err && (
         <p role="alert" className="text-xs text-loss">
@@ -180,33 +188,33 @@ export function BestStrategyFinder({
         </p>
       )}
 
-      {result && (
+      {rows && (
         <div className="rounded-lg border border-accent/40 bg-panel p-4">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="rounded-sm bg-accent/15 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-accent">
-              best fit · {result.market.replace(/^I-/, "").replace("_", "/")}
+              best fit · {markets.length} coins · {rangeLabel}
             </span>
-            <span className="text-sm font-semibold text-fg">
-              {STRATEGY_META[result.verdicts[0].template].label}
-            </span>
-            <span className="font-mono text-[10px] uppercase tracking-wider text-faint">
-              {STRATEGY_META[result.verdicts[0].template].kind}
+            <span className="text-xs text-muted">
+              Check the ones you want, then add them all.
             </span>
           </div>
-          <p className="mt-2 text-xs leading-relaxed text-dim">{result.note}</p>
 
           <div className="mt-3 overflow-x-auto">
             <table className="w-full text-left font-mono text-[11px]">
               <thead className="text-faint">
                 <tr>
+                  <th className="w-6 py-1 pr-2" />
                   <th className="py-1 pr-3 font-medium uppercase tracking-wider">
-                    Template
+                    Strategy
+                  </th>
+                  <th className="py-1 pr-3 font-medium uppercase tracking-wider">
+                    Coin
                   </th>
                   <th className="py-1 pr-3 text-right font-medium uppercase tracking-wider">
-                    Net · older half
+                    Net
                   </th>
                   <th className="py-1 pr-3 text-right font-medium uppercase tracking-wider">
-                    Net · recent half
+                    vs hold
                   </th>
                   <th className="py-1 pr-3 text-right font-medium uppercase tracking-wider">
                     Win rate
@@ -217,54 +225,71 @@ export function BestStrategyFinder({
                 </tr>
               </thead>
               <tbody className="[&>tr:nth-child(odd)]:bg-white/[0.015]">
-                {result.verdicts.map((v, i) => (
-                  <tr
-                    key={v.template}
-                    className={i === 0 ? "text-fg" : "text-muted"}
-                  >
-                    <td className="py-1.5 pr-3">
-                      {i === 0 && <span className="mr-1 text-accent">✦</span>}
-                      {STRATEGY_META[v.template].label}
-                      {!v.eligible && (
-                        <span
-                          className="ml-1.5 text-[9px] uppercase text-faint"
-                          title={`Fewer than ${MIN_CLOSED} closed trades - not enough evidence`}
-                        >
-                          low data
-                        </span>
-                      )}
-                    </td>
-                    <td
-                      className={`py-1.5 pr-3 text-right tnum ${v.perWindow["older"].totalNetPct >= 0 ? "text-gain" : "text-loss"}`}
+                {rows.map((r) => {
+                  const checked = sel.has(r.key);
+                  return (
+                    <tr
+                      key={r.key}
+                      className={checked ? "text-fg" : "text-muted"}
                     >
-                      {v.perWindow["older"].closed
-                        ? pct(v.perWindow["older"].totalNetPct)
-                        : "-"}
-                    </td>
-                    <td
-                      className={`py-1.5 pr-3 text-right tnum ${v.perWindow["recent"].totalNetPct >= 0 ? "text-gain" : "text-loss"}`}
-                    >
-                      {v.perWindow["recent"].closed
-                        ? pct(v.perWindow["recent"].totalNetPct)
-                        : "-"}
-                    </td>
-                    <td className="py-1.5 pr-3 text-right tnum">
-                      {v.winRate === null ? "-" : `${v.winRate.toFixed(0)}%`}
-                    </td>
-                    <td className="py-1.5 text-right tnum">{v.closed}</td>
-                  </tr>
-                ))}
+                      <td className="py-1.5 pr-2">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggle(r.key)}
+                          aria-label={`Add ${STRATEGY_META[r.template].label} on ${marketLabel(r.market)}`}
+                          className="h-3.5 w-3.5 accent-accent align-middle"
+                        />
+                      </td>
+                      <td className="py-1.5 pr-3">
+                        {STRATEGY_META[r.template].label}
+                        {!r.eligible && (
+                          <span
+                            className="ml-1.5 text-[9px] uppercase text-faint"
+                            title={`Fewer than ${MIN_CLOSED} closed trades - not enough evidence`}
+                          >
+                            low data
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-1.5 pr-3">{marketLabel(r.market)}</td>
+                      <td
+                        className={`py-1.5 pr-3 text-right tnum ${r.net >= 0 ? "text-gain" : "text-loss"}`}
+                      >
+                        {r.closed ? pct(r.net) : "-"}
+                      </td>
+                      <td className="py-1.5 pr-3 text-right tnum text-faint">
+                        {pct(r.buyHold)}
+                      </td>
+                      <td className="py-1.5 pr-3 text-right tnum">
+                        {r.winRate === null ? "-" : `${r.winRate.toFixed(0)}%`}
+                      </td>
+                      <td className="py-1.5 text-right tnum">{r.closed}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
-          <p className="mt-3 text-[10px] leading-relaxed text-faint">
-            Ranked by net return after ~{FRICTION_PCT}% round-trip friction on
-            1000 daily candles (~2.7 years, the interval the engine trades),
-            scored separately on the older and recent halves; templates need{" "}
-            {MIN_CLOSED}+ closed trades to qualify. Small sample - a good score
-            here is a starting point, not a promise of future returns.
-          </p>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="max-w-lg text-[10px] leading-relaxed text-faint">
+              Ranked by net return after ~{FRICTION_PCT}% round-trip friction on
+              daily candles over {rangeLabel}, the interval the engine trades;
+              templates need {MIN_CLOSED}+ closed trades to qualify. Small sample
+              - a good score here is a starting point, not a promise of future
+              returns.
+            </p>
+            <button
+              type="button"
+              disabled={adding || sel.size === 0}
+              onClick={addSelected}
+              className="inline-flex shrink-0 items-center gap-2 rounded-md bg-accent px-4 py-1.5 text-sm font-medium text-accent-ink transition-colors hover:bg-accent-hi focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {adding && <Spinner className="h-4 w-4" />}
+              Add {sel.size} selected
+            </button>
+          </div>
         </div>
       )}
     </div>
