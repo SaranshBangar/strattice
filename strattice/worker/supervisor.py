@@ -34,6 +34,9 @@ import config_gen
 import store
 
 REPO = Path(__file__).resolve().parents[2]   # strattice/worker -> strattice -> repo root
+sys.path.insert(0, str(REPO))  # so `bot.client` (repo-root package) is importable below
+from bot.client import Client  # noqa: E402  (needs sys.path fixup above)
+
 USERS_DIR = REPO / "data" / "users"
 load_dotenv(REPO / "strattice" / ".env")
 load_dotenv(REPO / ".env")  # fall back to repo .env if present
@@ -86,10 +89,24 @@ def _stop(proc: subprocess.Popen) -> None:
         proc.kill()
 
 
-def _project(db: Path) -> tuple[list[dict], list[dict], dict]:
-    """Read a user's engine SQLite (read-only) into (trades, positions, equity). Empty if absent."""
+def _live_book(u: dict, quote: str, car: float) -> float | None:
+    """Real free balance + capital-at-risk for a LIVE user, mirroring bot/sizing.py's
+    equity(). None on any exchange/network error, so callers can fall back rather than
+    fail the whole publish over a flaky balance fetch."""
+    try:
+        return Client(key=u["api_key"], secret=u["secret"]).free_balance(quote) + car
+    except Exception as e:
+        print(f"[supervisor] live balance fetch failed for {u['user_id']}: {e}", file=sys.stderr)
+        return None
+
+
+def _project(db: Path, u: dict, quote: str) -> tuple[list[dict], list[dict], dict]:
+    """Read a user's engine SQLite (read-only) into (trades, positions, equity). Empty if absent.
+    LIVE users get real exchange balance for equity; DRY_RUN keeps the fixed paper baseline."""
+    live = bool(u.get("live"))
     if not db.exists():
-        return [], [], {"equity": STARTING_EQUITY, "free": STARTING_EQUITY,
+        eq = (_live_book(u, quote, 0.0) if live else None) or STARTING_EQUITY
+        return [], [], {"equity": eq, "free": eq,
                         "realized_today": 0.0, "trades_today": 0}
     con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=5)
     con.row_factory = sqlite3.Row
@@ -115,7 +132,7 @@ def _project(db: Path) -> tuple[list[dict], list[dict], dict]:
         today = con.execute(
             """select count(*) n, coalesce(sum(realized_pnl),0) p from orders
                where status in ('placed','dry_run') and substr(ts,1,10)=?""", (day,)).fetchone()
-        equity = STARTING_EQUITY + total_realized  # DRY_RUN book; LIVE balance enrichment = later
+        equity = (_live_book(u, quote, car) if live else None) or (STARTING_EQUITY + total_realized)
         equity = {"equity": equity, "free": equity - car,
                   "realized_today": today["p"], "trades_today": today["n"]}
         return trades, [{"strategy": p["strategy"], "market": p["market"],
@@ -124,13 +141,14 @@ def _project(db: Path) -> tuple[list[dict], list[dict], dict]:
         con.close()
 
 
-def _publish_one(uid: str, db: Path) -> tuple[str, Exception | None]:
-    """Pure I/O (SQLite read-only + D1 REST) with no shared mutable state per user - runs in
-    the reconcile thread pool. `_procs[uid]` is only ever READ here; every write to `_procs`
-    happens on the main thread before/after the pool runs, never concurrently with it."""
+def _publish_one(uid: str, db: Path, u: dict, quote: str) -> tuple[str, Exception | None]:
+    """Pure I/O (SQLite read-only + D1 REST, plus a signed balance call for LIVE users) with
+    no shared mutable state per user - runs in the reconcile thread pool. `_procs[uid]` is only
+    ever READ here; every write to `_procs` happens on the main thread before/after the pool
+    runs, never concurrently with it."""
     try:
         db_client = _thread_db()
-        trades, positions, equity = _project(db)
+        trades, positions, equity = _project(db, u, quote)
         store.publish(db_client, uid, trades, positions, equity)
         rc = _procs[uid]["proc"].poll()
         store.heartbeat(db_client, uid, None if rc is None else f"engine exited rc={rc}")
@@ -142,7 +160,7 @@ def _publish_one(uid: str, db: Path) -> tuple[str, Exception | None]:
 def _reconcile(conn) -> None:
     users = store.active_users(conn)
     desired = set()
-    to_publish: list[tuple[str, Path]] = []
+    to_publish: list[tuple[str, Path, dict, str]] = []
     for u in users:
         uid = u["user_id"]
         desired.add(uid)
@@ -162,7 +180,7 @@ def _reconcile(conn) -> None:
             _procs[uid] = {"proc": _spawn(u, cfg_path, db, log), "hash": h}
             print(f"[supervisor] (re)started engine for {uid} (tier={u['tier']} live={u['live']})")
 
-        to_publish.append((uid, db))
+        to_publish.append((uid, db, u, cfg["quote_currency"]))
 
     # Project + publish + heartbeat are the I/O-bound part of the cycle (one SQLite read plus
     # a handful of D1 REST round trips per user) and don't touch _procs/_spawn/_stop, so they
@@ -170,7 +188,7 @@ def _reconcile(conn) -> None:
     # duration from growing linearly with the active-user count.
     if to_publish:
         with ThreadPoolExecutor(max_workers=min(8, len(to_publish))) as pool:
-            futures = [pool.submit(_publish_one, uid, db) for uid, db in to_publish]
+            futures = [pool.submit(_publish_one, uid, db, u, quote) for uid, db, u, quote in to_publish]
             for fut in as_completed(futures):
                 uid, err = fut.result()
                 if err is not None:
