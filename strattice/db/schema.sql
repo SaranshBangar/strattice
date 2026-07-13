@@ -99,6 +99,7 @@ create table if not exists user_strategies (
   params     text,                                  -- JSON string or NULL
   enabled    integer not null default 1,
   position   integer not null default 0,            -- ordering for the max_active cap
+  weight     real    not null default 1.0,           -- capital split among enabled strategies (normalized in bot/sizing.py)
   created_at text not null default (datetime('now'))
 );
 -- Composite: serves both the user_id filter and listStrategies()'s order-by-position.

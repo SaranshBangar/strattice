@@ -4,6 +4,7 @@ import * as q from "@/lib/queries";
 import { telegramConfigured } from "@/lib/telegram";
 import { NotificationSettings } from "@/components/NotificationSettings";
 import { CurrencySettings } from "@/components/CurrencySettings";
+import { AccountActions } from "@/components/AccountActions";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,8 @@ export default async function SettingsPage() {
         />
 
         <CurrencySettings initial={currency} />
+
+        <AccountActions />
       </div>
     </div>
   );

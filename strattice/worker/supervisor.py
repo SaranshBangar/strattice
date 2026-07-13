@@ -35,13 +35,17 @@ import store
 
 REPO = Path(__file__).resolve().parents[2]   # strattice/worker -> strattice -> repo root
 sys.path.insert(0, str(REPO))  # so `bot.client` (repo-root package) is importable below
-from bot.client import Client  # noqa: E402  (needs sys.path fixup above)
+from bot.client import Client, CoinDCXError  # noqa: E402  (needs sys.path fixup above)
 
 USERS_DIR = REPO / "data" / "users"
 load_dotenv(REPO / "strattice" / ".env")
 load_dotenv(REPO / ".env")  # fall back to repo .env if present
 POLL = int(os.getenv("SUPERVISOR_POLL", "30"))
 STARTING_EQUITY = 1000.0  # mirrors config_gen._BASE; DRY_RUN book equity baseline
+CRED_ERROR_MSG = (
+    "CoinDCX API keys look invalid, expired, or disabled - update them in "
+    "Account to resume live trading."
+)
 
 _procs: dict[str, dict] = {}  # uid -> {"proc": Popen, "hash": str}
 
@@ -89,25 +93,33 @@ def _stop(proc: subprocess.Popen) -> None:
         proc.kill()
 
 
-def _live_book(u: dict, quote: str, car: float) -> float | None:
+def _live_book(u: dict, quote: str, car: float) -> tuple[float | None, str | None]:
     """Real free balance + capital-at-risk for a LIVE user, mirroring bot/sizing.py's
-    equity(). None on any exchange/network error, so callers can fall back rather than
-    fail the whole publish over a flaky balance fetch."""
+    equity(). (None, None) on a flaky exchange/network error, so callers can fall back
+    rather than fail the whole publish. (None, CRED_ERROR_MSG) when a 401/403 means the
+    keys themselves are the problem - callers must not paper over that with a fake
+    balance (see _project)."""
     try:
-        return Client(key=u["api_key"], secret=u["secret"]).free_balance(quote) + car
+        return Client(key=u["api_key"], secret=u["secret"]).free_balance(quote) + car, None
     except Exception as e:
         print(f"[supervisor] live balance fetch failed for {u['user_id']}: {e}", file=sys.stderr)
-        return None
+        cred_error = CRED_ERROR_MSG if isinstance(e, CoinDCXError) and str(e)[:3] in ("401", "403") else None
+        return None, cred_error
 
 
-def _project(db: Path, u: dict, quote: str) -> tuple[list[dict], list[dict], dict]:
-    """Read a user's engine SQLite (read-only) into (trades, positions, equity). Empty if absent.
-    LIVE users get real exchange balance for equity; DRY_RUN keeps the fixed paper baseline."""
+def _project(db: Path, u: dict, quote: str) -> tuple[list[dict], list[dict], dict, str | None]:
+    """Read a user's engine SQLite (read-only) into (trades, positions, equity, cred_error).
+    Empty if absent. LIVE users get real exchange balance for equity; DRY_RUN keeps the fixed
+    paper baseline. cred_error is set when a LIVE user's own API keys are why their balance
+    can't be read - the equity dict still gets a number (so downstream code never sees a
+    hole), but it's the paper baseline, and callers must surface cred_error rather than
+    let that paper number pass as their real book equity."""
     live = bool(u.get("live"))
     if not db.exists():
-        eq = (_live_book(u, quote, 0.0) if live else None) or STARTING_EQUITY
+        book, cred_error = _live_book(u, quote, 0.0) if live else (None, None)
+        eq = book or STARTING_EQUITY
         return [], [], {"equity": eq, "free": eq,
-                        "realized_today": 0.0, "trades_today": 0}
+                        "realized_today": 0.0, "trades_today": 0}, cred_error
     con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=5)
     con.row_factory = sqlite3.Row
     try:
@@ -132,11 +144,12 @@ def _project(db: Path, u: dict, quote: str) -> tuple[list[dict], list[dict], dic
         today = con.execute(
             """select count(*) n, coalesce(sum(realized_pnl),0) p from orders
                where status in ('placed','dry_run') and substr(ts,1,10)=?""", (day,)).fetchone()
-        equity = (_live_book(u, quote, car) if live else None) or (STARTING_EQUITY + total_realized)
+        book, cred_error = _live_book(u, quote, car) if live else (None, None)
+        equity = book or (STARTING_EQUITY + total_realized)
         equity = {"equity": equity, "free": equity - car,
                   "realized_today": today["p"], "trades_today": today["n"]}
         return trades, [{"strategy": p["strategy"], "market": p["market"],
-                         "qty": p["qty"], "avg_price": p["avg_price"]} for p in pos], equity
+                         "qty": p["qty"], "avg_price": p["avg_price"]} for p in pos], equity, cred_error
     finally:
         con.close()
 
@@ -148,10 +161,13 @@ def _publish_one(uid: str, db: Path, u: dict, quote: str) -> tuple[str, Exceptio
     runs, never concurrently with it."""
     try:
         db_client = _thread_db()
-        trades, positions, equity = _project(db, u, quote)
+        trades, positions, equity, cred_error = _project(db, u, quote)
         store.publish(db_client, uid, trades, positions, equity)
         rc = _procs[uid]["proc"].poll()
-        store.heartbeat(db_client, uid, None if rc is None else f"engine exited rc={rc}")
+        # An exited engine is the more urgent problem; a credential error only shows once
+        # the engine is confirmed still running.
+        err = f"engine exited rc={rc}" if rc is not None else cred_error
+        store.heartbeat(db_client, uid, err)
         return uid, None
     except Exception as e:  # projection/publish must not kill the loop or the pool
         return uid, e

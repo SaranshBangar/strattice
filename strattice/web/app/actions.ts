@@ -83,6 +83,15 @@ export async function removeStrategyAction(id: string) {
   revalidatePath("/strategies");
 }
 
+export async function setStrategyWeightsAction(weights: Record<string, number>) {
+  const userId = await requireUserId();
+  for (const w of Object.values(weights)) {
+    if (!Number.isFinite(w) || w <= 0) throw new Error("Weights must be positive numbers");
+  }
+  await q.setStrategyWeights(userId, weights);
+  revalidatePath("/strategies");
+}
+
 // The supervisor turns bot_state.live into the engine's DRY_RUN=false +
 // LIVE_TRADING_CONFIRM pair, so this flag alone arms real-money trading. Enabling it
 // therefore goes through goLiveAction (typed confirmation + preconditions); this action

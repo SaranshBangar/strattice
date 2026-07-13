@@ -61,6 +61,12 @@ export default async function AccountPage() {
               CoinDCX API keys
             </h2>
 
+            {bot.last_error?.includes("API keys look invalid") && (
+              <p className="mt-3 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-sm text-warn">
+                {bot.last_error}
+              </p>
+            )}
+
             {creds.linked && (
               <p className="mt-3 flex items-center gap-2 rounded-md border border-gain/30 bg-gain/10 px-3 py-2 text-sm text-gain">
                 <svg
@@ -75,7 +81,7 @@ export default async function AccountPage() {
                     clipRule="evenodd"
                   />
                 </svg>
-                Linked ({creds.label}). Submit again to replace.
+                Linked ({creds.label}).
               </p>
             )}
 

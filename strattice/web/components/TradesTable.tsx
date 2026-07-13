@@ -3,6 +3,7 @@
 // export. The server passes a bounded window of rows (see dashboard) and all
 // interaction happens here - instant, no round-trips.
 import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Select } from "@/components/Select";
 import { strategyLabel } from "@/lib/strategies";
 
@@ -31,8 +32,12 @@ const fmt = (n: number) =>
 const fmtTs = (ts: string) => ts?.slice(0, 19).replace("T", " ") ?? "";
 
 export function TradesTable({ trades }: { trades: Trade[] }) {
+  // Deep-linked from the dashboard's "By strategy" breakdown - clicking a
+  // strategy there jumps here pre-filtered, so a losing strategy's trades are
+  // one click away from the number that flagged it.
+  const initialStrategy = useSearchParams().get("strategy") ?? "all";
   const [search, setSearch] = useState("");
-  const [strategy, setStrategy] = useState("all");
+  const [strategy, setStrategy] = useState(initialStrategy);
   const [side, setSide] = useState("all");
   const [mode, setMode] = useState("all");
   const [sort, setSort] = useState<SortKey>("ts");
@@ -140,7 +145,7 @@ export function TradesTable({ trades }: { trades: Trade[] }) {
     };
 
   return (
-    <section className="card">
+    <section id="trades" className="card scroll-mt-20">
       <div className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
         <h3 className="font-display text-sm font-semibold tracking-tight text-dim">
           Trade history

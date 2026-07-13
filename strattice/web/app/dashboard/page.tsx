@@ -9,46 +9,20 @@ import { DataTable, type Cell } from "@/components/DataTable";
 import { TradesTable, type Trade } from "@/components/TradesTable";
 import { PriceChart } from "@/components/PriceChart";
 import { ProToggle } from "@/components/ProToggle";
-import {
-  EquityCurve,
-  PnlBars,
-  WinRateDonut,
-  Sparkline,
-  DrawdownCurve,
-  PnlHistogram,
-} from "@/components/charts";
+import { WinRateDonut, Sparkline } from "@/components/charts";
+import { EquityCurveCard } from "@/components/EquityCurveCard";
+import { DrawdownCard } from "@/components/DrawdownCard";
+import { DailyPnlCard } from "@/components/DailyPnlCard";
+import { PnlHistogramCard } from "@/components/PnlHistogramCard";
 import { strategyLabel } from "@/lib/strategies";
 import { usdRate } from "@/lib/fx";
 import { currencySymbol } from "@/lib/currencies";
+import { fmt, inr } from "@/lib/dashboard-format";
 
 export const dynamic = "force-dynamic";
 
-function fmt(n: number) {
-  return n.toLocaleString("en-IN", {
-    maximumFractionDigits: 2,
-    minimumFractionDigits: 2,
-  });
-}
-function inr(n: number) {
-  return `₹${fmt(n)}`;
-}
 function num(n: number): Cell {
   return { v: fmt(n), align: "right" };
-}
-function shortDay(d: string) {
-  return d?.slice(5) ?? d;
-} // MM-DD
-function shortTs(ts: string) {
-  return ts?.slice(0, 16).replace("T", " ") ?? "";
-}
-
-// Evenly pick k items (endpoints included) from an array - for axis tick labels.
-function sample<T>(arr: T[], k: number): T[] {
-  if (arr.length <= k) return arr;
-  return Array.from(
-    { length: k },
-    (_, j) => arr[Math.round((j * (arr.length - 1)) / (k - 1))],
-  );
 }
 
 export default async function DashboardPage() {
@@ -98,10 +72,6 @@ export default async function DashboardPage() {
   const userMarkets = Array.from(new Set(strategies.map((s) => s.market)));
 
   // --- Pro-view technical metrics (computed from data already loaded above) ---
-  const equityXTicks = sample(
-    series.map((s) => shortTs(s.ts)),
-    5,
-  );
   // Max drawdown: largest peak-to-trough drop across the equity curve.
   let peak = -Infinity;
   let maxDD = 0;
@@ -409,45 +379,24 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {bot.last_error && (
-        <p className="rounded-lg border border-loss/40 bg-loss/10 px-3 py-2 text-sm text-loss">
-          Engine error: {bot.last_error}
-        </p>
-      )}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <section className="card lg:col-span-2">
-          <div className="flex items-center justify-between px-4 py-3">
-            <h3 className="font-display text-sm font-semibold tracking-tight text-dim">
-              Book equity curve
-            </h3>
-            <span className="font-mono text-[11px] text-faint">
-              {series.length} snapshots
-            </span>
-          </div>
-          <div className="p-4">
-            <EquityCurve
-              points={equityVals}
-              fmt={inr}
-              xTicks={equityXTicks}
-              hwm
-              ddShade
-              baseline={{ value: 1000, label: "start ₹1,000" }}
-              legend
-              drawIn
-              emptySub="No history yet — the chart starts filling in after the bot's first check-in."
-              emptyAction={
-                showSetup
-                  ? { href: "/account", label: "Finish setup" }
-                  : undefined
-              }
-            />
-          </div>
-          <p className="px-4 pb-3 text-[11px] leading-relaxed text-faint [html.pro_&]:hidden">
-            The line is the bot&apos;s balance. Gold dashes mark its best-ever
-            level, and the red shading shows how far below that best it dipped
-            (the drawdown).
+      {bot.last_error &&
+        (bot.last_error.includes("API keys look invalid") ? (
+          <p className="flex flex-wrap items-center gap-2 rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-sm text-warn">
+            <span>{bot.last_error}</span>
+            <Link
+              href="/account"
+              className="font-medium underline underline-offset-2 hover:text-warn"
+            >
+              Update API keys →
+            </Link>
           </p>
-        </section>
+        ) : (
+          <p className="rounded-lg border border-loss/40 bg-loss/10 px-3 py-2 text-sm text-loss">
+            Engine error: {bot.last_error}
+          </p>
+        ))}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <EquityCurveCard series={series} showSetup={showSetup} />
 
         <section className="card">
           <div className="flex items-center gap-1.5 px-4 py-3">
@@ -464,82 +413,59 @@ export default async function DashboardPage() {
 
       {/* Drawdown + P&L distribution - pro-view only. */}
       <div className="hidden grid-cols-1 gap-4 lg:grid-cols-2 [html.pro_&]:grid">
-        <section className="card">
-          <div className="flex items-center justify-between px-4 py-3">
-            <h3 className="font-display text-sm font-semibold tracking-tight text-dim">
-              Drawdown from peak
-            </h3>
-            <span className="font-mono text-[11px] text-faint">
-              max -{maxDD.toFixed(1)}%
-            </span>
-          </div>
-          <div className="p-4">
-            <DrawdownCurve
-              points={ddSeries.map((v) => -v)}
-              xTicks={equityXTicks}
-              guide
-            />
-          </div>
-          <p className="px-4 py-2 text-[11px] leading-relaxed text-faint">
-            How far below its own peak the account sat at each moment - depth
-            and recovery time matter more than any single losing day.
-          </p>
-        </section>
-
-        <section className="card">
-          <div className="flex items-center justify-between px-4 py-3">
-            <h3 className="font-display text-sm font-semibold tracking-tight text-dim">
-              Daily P&amp;L distribution
-            </h3>
-            <span className="font-mono text-[11px] text-faint">
-              last {daily.length}d
-            </span>
-          </div>
-          <div className="p-4">
-            <PnlHistogram values={dv} fmt={(n) => inr(n)} />
-          </div>
-          <p className="px-4 py-2 text-[11px] leading-relaxed text-faint">
-            The shape of your days: a healthy system clusters small red days
-            left of zero with a longer green tail to the right.
-          </p>
-        </section>
+        <DrawdownCard series={series} />
+        <PnlHistogramCard daily={daily} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <section className="card lg:col-span-2">
-          <div className="flex items-center justify-between px-4 py-3">
-            <h3 className="font-display text-sm font-semibold tracking-tight text-dim">
-              Daily realized P&L
-            </h3>
-            <span className="font-mono text-[11px] text-faint">
-              last {daily.length}d
-            </span>
-          </div>
-          <div className="p-4">
-            <PnlBars
-              data={daily.map((d) => ({
-                label: shortDay(d.day),
-                value: d.pnl,
-              }))}
-              fmt={(n) => inr(n)}
-              annotateExtremes
-              emptySub="Each bar will show one day's result once the bot closes its first trade."
-            />
-          </div>
-          <p className="px-4 pb-3 text-[11px] leading-relaxed text-faint [html.pro_&]:hidden">
-            Each bar is one day&apos;s result after all fees — green above the
-            line, red below. The best and worst days are labelled.
-          </p>
-        </section>
+        <DailyPnlCard daily={daily} />
 
         <DataTable
           title="By strategy"
-          head={["Strategy", "Trades", "Win%", "P&L"]}
-          align={["left", "right", "right", "right"]}
+          head={["Strategy", "Market", "Status", "Trades", "Win%", "P&L"]}
+          align={["left", "left", "left", "right", "right", "right"]}
           rows={breakdown.map((b): Cell[] => {
             const dec = b.wins + b.losses;
+            // Cross-reference against the live strategy list so a losing row also says
+            // whether it's still running - undefined means it's since been removed.
+            const live = strategies.find(
+              (s) => s.template === b.strategy && s.market === b.market,
+            );
+            const statusLabel = !live
+              ? "removed"
+              : live.enabled
+                ? "enabled"
+                : "disabled";
+            const statusDot = !live
+              ? "bg-faint"
+              : live.enabled
+                ? "bg-gain"
+                : "bg-loss/60";
             return [
-              strategyLabel(b.strategy),
+              {
+                v: (
+                  <Link
+                    href={`/dashboard?strategy=${encodeURIComponent(b.strategy)}#trades`}
+                    className="underline-offset-2 hover:text-fg hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+                    title="Jump to this strategy's trades"
+                  >
+                    {strategyLabel(b.strategy)}
+                  </Link>
+                ),
+              },
+              { v: b.market.replace(/^I-/, "").replace("_", "/"), tone: "muted" },
+              {
+                v: (
+                  <span className="inline-flex items-center gap-1.5 text-xs">
+                    <span
+                      className={`h-1.5 w-1.5 shrink-0 rounded-[1px] ${statusDot}`}
+                      aria-hidden="true"
+                    />
+                    {statusLabel}
+                  </span>
+                ),
+                tone: "muted",
+              },
               { v: b.trades, align: "right" },
               {
                 v: dec ? `${Math.round((b.wins / dec) * 100)}%` : "-",

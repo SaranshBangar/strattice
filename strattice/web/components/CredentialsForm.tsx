@@ -1,5 +1,6 @@
 "use client";
-import { useRef, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { saveCredentialsAction } from "@/app/actions";
 import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Spinner";
@@ -10,8 +11,12 @@ const labelClass = "block text-sm font-medium text-dim";
 
 export function CredentialsForm({ linked }: { linked: boolean }) {
   const [pending, start] = useTransition();
+  // Already-linked users land on a "Replace keys?" button, not the raw form -
+  // a fat-fingered submit shouldn't be one click away from overwriting a working key.
+  const [showForm, setShowForm] = useState(!linked);
   const toast = useToast();
   const formRef = useRef<HTMLFormElement>(null);
+  const router = useRouter();
 
   function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -24,10 +29,24 @@ export function CredentialsForm({ linked }: { linked: boolean }) {
           "success",
         );
         formRef.current?.reset();
+        setShowForm(false);
+        router.refresh();
       } catch (err: any) {
         toast(err?.message ?? "Couldn't save keys. Please try again.", "error");
       }
     });
+  }
+
+  if (linked && !showForm) {
+    return (
+      <button
+        type="button"
+        onClick={() => setShowForm(true)}
+        className="mt-4 rounded-md bg-white/5 px-3 py-1.5 text-sm font-medium text-dim transition-colors hover:bg-white/10 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        Replace keys?
+      </button>
+    );
   }
 
   return (
@@ -72,13 +91,25 @@ export function CredentialsForm({ linked }: { linked: boolean }) {
           Stored encrypted. We never display your secret back to you.
         </p>
       </div>
-      <button
-        disabled={pending}
-        className="inline-flex items-center justify-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-ink transition-colors hover:bg-accent-hi focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
-      >
-        {pending && <Spinner className="h-4 w-4" />}
-        {pending ? "Saving…" : linked ? "Replace keys" : "Link account"}
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          disabled={pending}
+          className="inline-flex items-center justify-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-ink transition-colors hover:bg-accent-hi focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+        >
+          {pending && <Spinner className="h-4 w-4" />}
+          {pending ? "Saving…" : linked ? "Replace keys" : "Link account"}
+        </button>
+        {linked && (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => setShowForm(false)}
+            className="rounded-md px-3 py-2 text-sm text-muted transition-colors hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+          >
+            Cancel
+          </button>
+        )}
+      </div>
     </form>
   );
 }

@@ -272,10 +272,11 @@ export interface StrategyRow {
   params: string | null;
   enabled: number;
   position: number;
+  weight: number;
 }
 export async function listStrategies(userId: string): Promise<StrategyRow[]> {
   return d1Query<StrategyRow>(
-    "select id, template, market, params, enabled, position from user_strategies where user_id = ? order by position",
+    "select id, template, market, params, enabled, position, weight from user_strategies where user_id = ? order by position",
     [userId],
   );
 }
@@ -322,6 +323,23 @@ export async function setStrategyEnabled(
   await d1Query(
     "update user_strategies set enabled = ? where id = ? and user_id = ?",
     [enabled ? 1 : 0, id, userId],
+  );
+}
+
+// Capital split among a user's enabled strategies. Weights are relative, not
+// percentages - bot/sizing.py normalizes by their sum, so {a: 1, b: 1} and
+// {a: 50, b: 50} behave identically. Only rows the caller passes are touched.
+export async function setStrategyWeights(
+  userId: string,
+  weights: Record<string, number>,
+) {
+  await Promise.all(
+    Object.entries(weights).map(([id, weight]) =>
+      d1Query(
+        "update user_strategies set weight = ? where id = ? and user_id = ?",
+        [weight, id, userId],
+      ),
+    ),
   );
 }
 
@@ -434,21 +452,24 @@ export async function dailyPnl(userId: string, days = 30): Promise<DailyPnl[]> {
 
 export interface StrategyStat {
   strategy: string;
+  market: string;
   trades: number;
   pnl: number;
   wins: number;
   losses: number;
 }
-/** Per-strategy aggregates. Wins/losses are counted on closing (sell) legs only - buy legs
- *  book their entry fee as a small negative realized_pnl, which is a cost, not a lost trade. */
+/** Per-strategy, per-market aggregates. Grouped by market too, not just template, so
+ *  running the same template on two markets doesn't hide which one is losing money.
+ *  Wins/losses are counted on closing (sell) legs only - buy legs book their entry fee
+ *  as a small negative realized_pnl, which is a cost, not a lost trade. */
 export async function strategyBreakdown(
   userId: string,
 ): Promise<StrategyStat[]> {
   return d1Query<StrategyStat>(
-    `select strategy, count(*) as trades, coalesce(sum(realized_pnl),0) as pnl,
+    `select strategy, market, count(*) as trades, coalesce(sum(realized_pnl),0) as pnl,
             coalesce(sum(case when side = 'sell' and realized_pnl > 0 then 1 else 0 end),0) as wins,
             coalesce(sum(case when side = 'sell' and realized_pnl < 0 then 1 else 0 end),0) as losses
-     from trades where user_id = ? and ${EXECUTED} group by strategy order by pnl desc`,
+     from trades where user_id = ? and ${EXECUTED} group by strategy, market order by pnl desc`,
     [userId],
   );
 }

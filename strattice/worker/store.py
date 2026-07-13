@@ -72,7 +72,7 @@ def active_users(db: D1) -> list[dict]:
     for batch in _chunked(uids, 200):
         placeholders = ",".join("?" for _ in batch)
         strat_rows = db.query(
-            f"""select user_id, template, market, params, enabled from user_strategies
+            f"""select user_id, template, market, params, enabled, weight from user_strategies
                where user_id in ({placeholders}) order by user_id, position, created_at""",
             list(batch),
         )

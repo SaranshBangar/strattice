@@ -9,6 +9,7 @@ export const {
   signIn,
   signUp,
   signOut,
+  deleteUser,
   useSession,
   requestPasswordReset,
   resetPassword,

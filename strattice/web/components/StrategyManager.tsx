@@ -9,6 +9,7 @@ import {
   addStrategyAction,
   toggleStrategyAction,
   removeStrategyAction,
+  setStrategyWeightsAction,
 } from "@/app/actions";
 import type { StrategyRow } from "@/lib/queries";
 import {
@@ -534,7 +535,106 @@ export function StrategyManager({ strategies }: { strategies: StrategyRow[] }) {
             })}
           </ul>
         )}
+        <StrategySplit strategies={strategies} />
       </section>
+    </div>
+  );
+}
+
+function StrategySplit({ strategies }: { strategies: StrategyRow[] }) {
+  const enabled = strategies.filter((s) => s.enabled);
+  const [edits, setEdits] = useState<Record<string, number>>({});
+  const [pending, start] = useTransition();
+  const toast = useToast();
+
+  if (enabled.length < 2) return null;
+
+  const value = (id: string, stock: number) => edits[id] ?? stock;
+  const total =
+    enabled.reduce((sum, s) => sum + value(s.id, s.weight), 0) || 1;
+  const dirty = enabled.some(
+    (s) => edits[s.id] !== undefined && edits[s.id] !== s.weight,
+  );
+
+  function save() {
+    const weights: Record<string, number> = {};
+    for (const s of enabled) weights[s.id] = value(s.id, s.weight);
+    start(async () => {
+      try {
+        await setStrategyWeightsAction(weights);
+        setEdits({});
+        toast("Capital split saved", "success");
+      } catch (e: any) {
+        toast(e?.message ?? "Couldn't save the split", "error");
+      }
+    });
+  }
+
+  return (
+    <div className="border-t border-line px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-mono text-[11px] uppercase tracking-wider text-faint">
+          Split capital across {enabled.length} active strategies
+        </h3>
+        <button
+          type="button"
+          onClick={() =>
+            setEdits(Object.fromEntries(enabled.map((s) => [s.id, 1])))
+          }
+          className="text-[11px] text-muted underline-offset-2 hover:text-fg hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+        >
+          Equal split
+        </button>
+      </div>
+      <div className="mt-2 space-y-1.5">
+        {enabled.map((s) => {
+          const v = value(s.id, s.weight);
+          const pct = Math.round((v / total) * 100);
+          const def = s.template === "custom" ? parseCustomDef(s.params) : null;
+          const label = def ? def.name : strategyLabel(s.template);
+          return (
+            <div key={s.id} className="flex items-center justify-between gap-3">
+              <span className="min-w-0 truncate text-xs text-dim">
+                {label} <span className="text-faint">· {s.market}</span>
+              </span>
+              <div className="flex shrink-0 items-center gap-2">
+                <input
+                  type="number"
+                  min={0.01}
+                  step={0.1}
+                  value={v}
+                  onChange={(e) => {
+                    const n = Number(e.target.value);
+                    if (Number.isFinite(n) && n > 0)
+                      setEdits((cur) => ({ ...cur, [s.id]: n }));
+                  }}
+                  aria-label={`Weight for ${label}`}
+                  className="w-16 rounded-md border border-line bg-inset px-2 py-1 text-right font-mono text-xs tabular-nums text-fg focus:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+                />
+                <span className="w-10 text-right font-mono text-xs tabular-nums text-faint">
+                  {pct}%
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <p className="text-[11px] leading-relaxed text-faint">
+          Higher weight = more capital per trade. Shares are relative, not
+          fixed percentages - 1/1 and 50/50 behave identically.
+        </p>
+        {dirty && (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={save}
+            className="shrink-0 rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-accent-ink transition-colors hover:bg-accent-hi focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+          >
+            {pending ? "Saving…" : "Save split"}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

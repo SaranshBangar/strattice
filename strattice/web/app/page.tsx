@@ -163,7 +163,7 @@ export default function Home() {
       <JsonLd schema={faqPageSchema(FAQ)} />
 
       {/* Hero - left-aligned, with a strategy ledger as the signature */}
-      <section className="rise grid items-center gap-10 pt-6 lg:grid-cols-[1.05fr_0.95fr] lg:gap-14">
+      <section className="rise grid items-center gap-10 pt-12 sm:pt-16 lg:grid-cols-[1.05fr_0.95fr] lg:gap-14 lg:pt-6">
         <div>
           <div className="eyebrow flex items-center gap-2">
             <span className="h-1.5 w-1.5 rounded-[1px] bg-gain" />

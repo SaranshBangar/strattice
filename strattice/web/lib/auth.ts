@@ -137,6 +137,15 @@ export const auth = betterAuth({
   account: {
     accountLinking: { enabled: true, trustedProviders: ["google"] },
   },
+  // Hard delete, no verification email step - every user-owned table (credentials,
+  // strategies, trades, equity_snapshots, bot_state, ...) has ON DELETE CASCADE in
+  // schema.sql, so removing the user row is enough. The supervisor's next poll (<=30s)
+  // naturally stops the now-orphaned engine subprocess - see strattice/worker/supervisor.py.
+  user: {
+    deleteUser: {
+      enabled: true,
+    },
+  },
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL: process.env.BETTER_AUTH_URL,
   // Origins allowed to call the auth API. baseURL is prod, so local dev and the

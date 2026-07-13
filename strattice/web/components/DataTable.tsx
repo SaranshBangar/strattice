@@ -1,9 +1,11 @@
+import type { ReactNode } from "react";
+
 export type CellTone = "default" | "good" | "bad" | "warn" | "muted" | "fg";
 
 export type Cell =
   | string
   | number
-  | { v: string | number; tone?: CellTone; align?: "left" | "right" };
+  | { v: ReactNode; tone?: CellTone; align?: "left" | "right" };
 
 export type DataTableProps = {
   title?: string;
@@ -62,9 +64,7 @@ export function DataTable({ title, head, rows, empty, align }: DataTableProps) {
                   {row.map((cell, j) => {
                     const obj =
                       typeof cell === "object" && cell !== null ? cell : null;
-                    const value: string | number = obj
-                      ? obj.v
-                      : (cell as string | number);
+                    const value: ReactNode = obj ? obj.v : (cell as ReactNode);
                     const tone: CellTone =
                       obj?.tone ?? (j === 0 ? "fg" : "default");
                     const cellAlign = obj?.align ?? align?.[j] ?? "left";

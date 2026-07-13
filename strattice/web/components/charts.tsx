@@ -33,6 +33,7 @@ export function EquityCurve({
   drawIn = false,
   emptySub,
   emptyAction,
+  pointLabels,
 }: {
   points: number[];
   height?: number;
@@ -45,6 +46,7 @@ export function EquityCurve({
   drawIn?: boolean;
   emptySub?: string;
   emptyAction?: { href: string; label: string };
+  pointLabels?: string[]; // one label per point, for hover tooltips (unlike the sampled xTicks)
 }) {
   if (points.length < 2)
     return (
@@ -185,6 +187,18 @@ export function EquityCurve({
           fill={stroke}
           vectorEffect="non-scaling-stroke"
         />
+        {points.map((v, i) => (
+          <circle
+            key={i}
+            cx={x(i)}
+            cy={y(v)}
+            r={9}
+            fill="transparent"
+            className="cursor-default"
+          >
+            <title>{`${pointLabels?.[i] ?? `#${i + 1}`}: ${fmt(v)}`}</title>
+          </circle>
+        ))}
       </svg>
       {baseline && (
         <PlotLabel yFrac={y(baseline.value) / H} xFrac={0.99} color={C.faint}>
@@ -448,11 +462,13 @@ export function DrawdownCurve({
   height = 180,
   xTicks = [],
   guide = false,
+  pointLabels,
 }: {
   points: number[];
   height?: number;
   xTicks?: string[];
   guide?: boolean; // dashed reference at the deepest drawdown, labelled
+  pointLabels?: string[]; // one label per point, for hover tooltips
 }) {
   if (points.length < 2)
     return <ChartEmpty height={height} label="Not enough history yet." />;
@@ -525,6 +541,18 @@ export function DrawdownCurve({
             <title>{`Max drawdown -${points[troughIdx].toFixed(1)}%`}</title>
           </circle>
         )}
+        {points.map((v, i) => (
+          <circle
+            key={i}
+            cx={x(i)}
+            cy={y(v)}
+            r={9}
+            fill="transparent"
+            className="cursor-default"
+          >
+            <title>{`${pointLabels?.[i] ?? `#${i + 1}`}: -${v.toFixed(1)}%`}</title>
+          </circle>
+        ))}
       </svg>
       {showGuide && (
         <PlotLabel
