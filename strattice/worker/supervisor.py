@@ -98,27 +98,40 @@ _price_client: Client | None = None
 
 def _mark_price(pair: str) -> float | None:
     """Last close for a market, via the public (no-auth) candles endpoint. None on any
-    failure - callers must treat that position's unrealized P&L as unknown, not zero."""
+    failure - callers must treat that position's unrealized P&L as unknown, not zero. The
+    endpoint wants the candle "pair" id (e.g. "I-SOL_INR"), which is exactly what positions
+    store, so no symbol translation is needed. A thin market can momentarily have no 1m bar,
+    so fall back to a coarser interval before giving up."""
     global _price_client
     if _price_client is None:
         _price_client = Client()
-    try:
-        bars = _price_client.candles(pair, "1m", limit=1)
-        return float(bars[-1]["close"]) if bars else None
-    except Exception as e:
-        print(f"[supervisor] mark price fetch failed for {pair}: {e}", file=sys.stderr)
-        return None
+    for interval in ("1m", "15m", "1d"):
+        try:
+            bars = _price_client.candles(pair, interval, limit=1)
+            if bars:
+                return float(bars[-1]["close"])
+        except Exception as e:
+            print(f"[supervisor] mark price fetch failed for {pair} @ {interval}: {e}",
+                  file=sys.stderr)
+    return None
 
 
 def _unrealized_pnl(pos: list[dict]) -> float:
     """Mark-to-market P&L on open positions (qty * (last price - avg cost)), summed across
     positions. Skips a position (contributes 0) if its price can't be fetched, rather than
-    failing the whole publish over one flaky market."""
+    failing the whole publish over one flaky market. Logs any markets it couldn't price so a
+    silent 0 is distinguishable from a genuine flat P&L."""
     total = 0.0
+    unpriced: list[str] = []
     for p in pos:
         mark = _mark_price(p["market"])
-        if mark is not None:
-            total += p["qty"] * (mark - p["avg_price"])
+        if mark is None:
+            unpriced.append(p["market"])
+            continue
+        total += p["qty"] * (mark - p["avg_price"])
+    if unpriced:
+        print(f"[supervisor] unrealized P&L: could not price {unpriced} - counted as 0 "
+              f"this cycle", file=sys.stderr)
     return total
 
 
@@ -187,6 +200,10 @@ def _project(db: Path, u: dict, quote: str) -> tuple[list[dict], list[dict], dic
         equity = {"equity": book_equity, "free": book_equity,
                   "unrealized_pnl": _unrealized_pnl(pos),
                   "realized_today": today["p"], "trades_today": today["n"]}
+        if pos:
+            print(f"[supervisor] {u['user_id'][:8]} book_equity={book_equity:.2f} "
+                  f"unrealized={equity['unrealized_pnl']:.2f} car={car:.2f} "
+                  f"positions={[p['market'] for p in pos]}", file=sys.stderr)
         return trades, [{"strategy": p["strategy"], "market": p["market"],
                          "qty": p["qty"], "avg_price": p["avg_price"]} for p in pos], equity, cred_error
     finally:
