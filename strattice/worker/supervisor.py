@@ -93,6 +93,35 @@ def _stop(proc: subprocess.Popen) -> None:
         proc.kill()
 
 
+_price_client: Client | None = None
+
+
+def _mark_price(pair: str) -> float | None:
+    """Last close for a market, via the public (no-auth) candles endpoint. None on any
+    failure - callers must treat that position's unrealized P&L as unknown, not zero."""
+    global _price_client
+    if _price_client is None:
+        _price_client = Client()
+    try:
+        bars = _price_client.candles(pair, "1m", limit=1)
+        return float(bars[-1]["close"]) if bars else None
+    except Exception as e:
+        print(f"[supervisor] mark price fetch failed for {pair}: {e}", file=sys.stderr)
+        return None
+
+
+def _unrealized_pnl(pos: list[dict]) -> float:
+    """Mark-to-market P&L on open positions (qty * (last price - avg cost)), summed across
+    positions. Skips a position (contributes 0) if its price can't be fetched, rather than
+    failing the whole publish over one flaky market."""
+    total = 0.0
+    for p in pos:
+        mark = _mark_price(p["market"])
+        if mark is not None:
+            total += p["qty"] * (mark - p["avg_price"])
+    return total
+
+
 def _live_book(u: dict, quote: str, car: float) -> tuple[float | None, str | None]:
     """Real free balance + capital-at-risk for a LIVE user, mirroring bot/sizing.py's
     equity(). (None, None) on a flaky exchange/network error, so callers can fall back
@@ -113,12 +142,20 @@ def _project(db: Path, u: dict, quote: str) -> tuple[list[dict], list[dict], dic
     paper baseline. cred_error is set when a LIVE user's own API keys are why their balance
     can't be read - the equity dict still gets a number (so downstream code never sees a
     hole), but it's the paper baseline, and callers must surface cred_error rather than
-    let that paper number pass as their real book equity."""
+    let that paper number pass as their real book equity.
+
+    "equity"/"free" are both the CASH-BASIS book figure (total minus the cost basis of whatever
+    is currently deployed in open positions) - this is what the dashboard shows as "Book equity",
+    so opening a trade visibly moves it. "unrealized_pnl" is the separate mark-to-market P&L on
+    open positions, via live pricing - added together they reconstruct true net worth without
+    needing the exchange app. This is purely a display projection; it does NOT feed
+    bot/sizing.py's own equity()/free_balance()/drawdown(), which the live engine and risk
+    breaker use and which intentionally stay mark-at-cost."""
     live = bool(u.get("live"))
     if not db.exists():
         book, cred_error = _live_book(u, quote, 0.0) if live else (None, None)
         eq = book or STARTING_EQUITY
-        return [], [], {"equity": eq, "free": eq,
+        return [], [], {"equity": eq, "free": eq, "unrealized_pnl": 0.0,
                         "realized_today": 0.0, "trades_today": 0}, cred_error
     con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=5)
     con.row_factory = sqlite3.Row
@@ -145,8 +182,10 @@ def _project(db: Path, u: dict, quote: str) -> tuple[list[dict], list[dict], dic
             """select count(*) n, coalesce(sum(realized_pnl),0) p from orders
                where status in ('placed','dry_run') and substr(ts,1,10)=?""", (day,)).fetchone()
         book, cred_error = _live_book(u, quote, car) if live else (None, None)
-        equity = book or (STARTING_EQUITY + total_realized)
-        equity = {"equity": equity, "free": equity - car,
+        raw_equity = book or (STARTING_EQUITY + total_realized)
+        book_equity = raw_equity - car
+        equity = {"equity": book_equity, "free": book_equity,
+                  "unrealized_pnl": _unrealized_pnl(pos),
                   "realized_today": today["p"], "trades_today": today["n"]}
         return trades, [{"strategy": p["strategy"], "market": p["market"],
                          "qty": p["qty"], "avg_price": p["avg_price"]} for p in pos], equity, cred_error

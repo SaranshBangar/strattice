@@ -133,11 +133,18 @@ function build() {
   ];
 
   const last = equity[equity.length - 1];
+  // Illustrative mark-to-market: each open position drifted a few percent from its
+  // average cost since entry - just enough to make the Unrealized P&L card non-zero.
+  const unrealizedPnl =
+    Math.round(
+      positions.reduce((a, p) => a + p.qty * p.avg_price * 0.025, 0) * 100,
+    ) / 100;
   return {
     equitySeries: series,
     equityVals: equity.slice(1),
     latestEquity: {
       equity: last,
+      unrealized_pnl: unrealizedPnl,
       realized_today: dailyPnl[dailyPnl.length - 1],
       trades_today: dailyPnl[dailyPnl.length - 1] === 0 ? 0 : 2,
       ts: series[series.length - 1].ts,

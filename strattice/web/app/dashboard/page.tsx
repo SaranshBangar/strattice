@@ -253,21 +253,33 @@ export default async function DashboardPage() {
           tone={bot.active ? (healthy ? "good" : "warn") : "default"}
           hint="Whether your trading engine is switched on and reporting in. DRY_RUN means it trades practice money; LIVE means real orders."
         />
-        {/* The supervisor computes this as ₹1,000 paper base + realized P&L - a book
-            figure, not the user's exchange balance. Say so on the card, not in fine print. */}
+        {/* Cash-basis: ₹1,000 paper base + realized P&L, minus whatever's currently
+            deployed in open positions (at cost) - a book figure, not the user's exchange
+            balance. Moves the moment a trade opens; see Unrealized P&L for the rest. */}
         <StatCard
           label="Book equity"
           value={equity ? inr(equity.equity) : "-"}
           sub={
-            equity
-              ? `₹1,000 paper base + realized P&L · as of ${equityAsOf}`
-              : ""
+            equity ? `Practice cash · as of ${equityAsOf}` : ""
           }
-          hint="The bot's own ledger: ₹1,000 of practice money plus everything it has won or lost — not your exchange wallet balance."
+          hint="Practice cash left after money currently deployed in open trades - not your exchange wallet balance. Add Unrealized P&L to see your full net worth."
           chart={
             equityVals.length > 1 ? (
               <Sparkline data={equityVals} area />
             ) : undefined
+          }
+        />
+        <StatCard
+          label="Unrealized P&L"
+          value={equity ? inr(equity.unrealized_pnl) : "-"}
+          sub="Open positions, mark-to-market"
+          hint="Paper gain or loss on positions that are still open, marked to the current price. Becomes realized P&L once the position closes."
+          tone={
+            equity && equity.unrealized_pnl < 0
+              ? "bad"
+              : equity && equity.unrealized_pnl > 0
+                ? "good"
+                : "default"
           }
         />
         <StatCard
@@ -313,8 +325,9 @@ export default async function DashboardPage() {
         P&amp;L is net of exchange fees and GST. TDS (1% on every sell) is a
         cash withholding tracked separately, not a cost inside P&amp;L. Win rate
         counts closed sells only. Book equity is the engine&apos;s ledger
-        (₹1,000 paper base + realized P&amp;L), not your CoinDCX wallet balance
-        - check the exchange for actual funds.
+        (₹1,000 paper base + realized P&amp;L, minus positions currently
+        deployed), not your CoinDCX wallet balance - check the exchange for
+        actual funds. Add Unrealized P&amp;L to see full net worth.
       </p>
 
       {/* Pro-view technical strip - hidden until "Pro view" is toggled on. */}

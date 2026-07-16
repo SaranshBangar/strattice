@@ -407,11 +407,12 @@ export async function latestEquity(userId: string) {
   return d1First<{
     equity: number;
     free: number;
+    unrealized_pnl: number;
     realized_today: number;
     trades_today: number;
     ts: string;
   }>(
-    "select equity, free, realized_today, trades_today, ts from equity_snapshots where user_id = ? order by ts desc limit 1",
+    "select equity, free, unrealized_pnl, realized_today, trades_today, ts from equity_snapshots where user_id = ? order by ts desc limit 1",
     [userId],
   );
 }
@@ -421,6 +422,7 @@ export interface EquityPoint {
   ts: string;
   equity: number;
   free: number;
+  unrealized_pnl: number;
   realized_today: number;
 }
 /** Equity snapshots in chronological order for the equity curve. */
@@ -429,7 +431,7 @@ export async function equitySeries(
   limit = 240,
 ): Promise<EquityPoint[]> {
   const rows = await d1Query<EquityPoint>(
-    "select ts, equity, free, realized_today from equity_snapshots where user_id = ? order by ts desc limit ?",
+    "select ts, equity, free, unrealized_pnl, realized_today from equity_snapshots where user_id = ? order by ts desc limit ?",
     [userId, limit],
   );
   return rows.reverse();

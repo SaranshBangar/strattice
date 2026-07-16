@@ -134,12 +134,25 @@ export function DemoDashboard({ data: d }: { data: ReturnType<typeof demoData> }
         <StatCard
           label="Book equity"
           value={money(d.latestEquity.equity)}
-          sub={`${base} paper base + realized P&L`}
-          hint={`The bot's own ledger: ${base} of practice money plus everything it has won or lost — not an exchange wallet balance.`}
+          sub="Practice cash"
+          hint={`Practice cash left after money currently deployed in open trades - not an exchange wallet balance. Add Unrealized P&L to see full net worth.`}
           chart={
             d.equityVals.length > 1 ? (
               <Sparkline data={d.equityVals} area />
             ) : undefined
+          }
+        />
+        <StatCard
+          label="Unrealized P&L"
+          value={money(d.latestEquity.unrealized_pnl)}
+          sub="Open positions, mark-to-market"
+          hint="Paper gain or loss on positions that are still open, marked to the current price. Becomes realized P&L once the position closes."
+          tone={
+            d.latestEquity.unrealized_pnl < 0
+              ? "bad"
+              : d.latestEquity.unrealized_pnl > 0
+                ? "good"
+                : "default"
           }
         />
         <StatCard

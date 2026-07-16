@@ -162,6 +162,7 @@ create table if not exists equity_snapshots (
   user_id        text not null references user(id) on delete cascade,
   equity         real not null,
   free           real not null,
+  unrealized_pnl real not null default 0,
   realized_today real not null,
   trades_today   integer not null,
   ts             text not null default (datetime('now'))

@@ -161,9 +161,9 @@ def publish(db: D1, user_id: str, trades: list[dict], positions: list[dict], equ
         _last_positions_sig[user_id] = sig
 
     db.query(
-        """insert into equity_snapshots(user_id,equity,free,realized_today,trades_today)
-           values (?,?,?,?,?)""",
-        [user_id, equity["equity"], equity["free"],
+        """insert into equity_snapshots(user_id,equity,free,unrealized_pnl,realized_today,trades_today)
+           values (?,?,?,?,?,?)""",
+        [user_id, equity["equity"], equity["free"], equity["unrealized_pnl"],
          equity["realized_today"], equity["trades_today"]],
     )
 
