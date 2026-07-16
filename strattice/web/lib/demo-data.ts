@@ -139,9 +139,22 @@ function build() {
     Math.round(
       positions.reduce((a, p) => a + p.qty * p.avg_price * 0.025, 0) * 100,
     ) / 100;
+
+  // Illustrative mark-to-market path for the Unrealized P&L card's sparkline: a gentle
+  // seeded walk the same length as the equity curve that lands on the current unrealizedPnl.
+  const unrealizedSeries: number[] = [];
+  let uw = unrealizedPnl * 0.3;
+  const uStep = Math.max(0.5, Math.abs(unrealizedPnl) * 0.18);
+  for (let i = 1; i < equity.length; i++) {
+    uw += (rnd() - 0.48) * uStep;
+    unrealizedSeries.push(Math.round(uw * 100) / 100);
+  }
+  unrealizedSeries[unrealizedSeries.length - 1] = unrealizedPnl;
+
   return {
     equitySeries: series,
     equityVals: equity.slice(1),
+    unrealizedSeries,
     latestEquity: {
       equity: last,
       unrealized_pnl: unrealizedPnl,

@@ -224,6 +224,18 @@ export function StrategyDemo() {
               />
             )}
 
+            <defs>
+              <linearGradient id="sd-price-fill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={C.gain} stopOpacity={0.28} />
+                <stop offset="100%" stopColor={C.gain} stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <path
+              d={`${pathUpTo(CLOSES, bar)} L${X(Math.min(bar, CLOSES.length - 1)).toFixed(1)} ${H} L${X(0).toFixed(1)} ${H} Z`}
+              fill="url(#sd-price-fill)"
+              stroke="none"
+            />
+
             <path
               d={pathUpTo(SLOW, bar)}
               fill="none"

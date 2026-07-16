@@ -2,30 +2,24 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getUser } from "@/lib/session";
 import * as q from "@/lib/queries";
-import { StatCard } from "@/components/StatCard";
-import { PnlCard } from "@/components/PnlCard";
+import { GraphStatCard } from "@/components/GraphStatCard";
 import { Metric } from "@/components/Metric";
 import { InfoHint } from "@/components/InfoHint";
 import { DataTable, type Cell } from "@/components/DataTable";
 import { TradesTable, type Trade } from "@/components/TradesTable";
+import { PositionsTable, type Position } from "@/components/PositionsTable";
 import { PriceChart } from "@/components/PriceChart";
 import { ProToggle } from "@/components/ProToggle";
 import { RefreshButton } from "@/components/RefreshButton";
-import { WinRateDonut, Sparkline } from "@/components/charts";
-import { EquityCurveCard } from "@/components/EquityCurveCard";
+import { WinRateDonut } from "@/components/charts";
 import { DrawdownCard } from "@/components/DrawdownCard";
-import { DailyPnlCard } from "@/components/DailyPnlCard";
 import { PnlHistogramCard } from "@/components/PnlHistogramCard";
 import { strategyLabel } from "@/lib/strategies";
 import { usdRate } from "@/lib/fx";
 import { currencySymbol } from "@/lib/currencies";
-import { fmt, inr } from "@/lib/dashboard-format";
+import { fmt, inr, shortTs } from "@/lib/dashboard-format";
 
 export const dynamic = "force-dynamic";
-
-function num(n: number): Cell {
-  return { v: fmt(n), align: "right" };
-}
 
 export default async function DashboardPage() {
   const user = await getUser();
@@ -72,6 +66,36 @@ export default async function DashboardPage() {
   const equityVals = series.map((s) => s.equity);
   const decided = stats.wins + stats.losses;
   const userMarkets = Array.from(new Set(strategies.map((s) => s.market)));
+
+  // Bot status drives the page title's colour (the Bot stat card is gone).
+  const botStatus = !bot.active ? "off" : healthy ? "running" : "stalled";
+  const titleTone =
+    botStatus === "running"
+      ? "text-gain"
+      : botStatus === "stalled"
+        ? "text-warn"
+        : "text-fg";
+  const statusDot =
+    botStatus === "running"
+      ? "bg-gain"
+      : botStatus === "stalled"
+        ? "bg-warn"
+        : "bg-faint";
+  const statusText =
+    botStatus === "running"
+      ? `Bot running${bot.live ? " · LIVE" : " · DRY_RUN"}`
+      : botStatus === "stalled"
+        ? "Bot stalled — no recent heartbeat"
+        : "Bot off";
+
+  // Sparkline inputs for the three stat cards.
+  const seriesLabels = series.map((s) => shortTs(s.ts));
+  const unrealizedVals = series.map((s) => s.unrealized_pnl);
+  // Net P&L trend = running total of daily realized P&L (the old daily bars folded into
+  // this card's sparkline instead of a chart of their own).
+  let netAcc = 0;
+  const netVals = daily.map((d) => (netAcc += d.pnl));
+  const netLabels = daily.map((d) => d.day.slice(5));
 
   // --- Pro-view technical metrics (computed from data already loaded above) ---
   // Max drawdown: largest peak-to-trough drop across the equity curve.
@@ -161,8 +185,23 @@ export default async function DashboardPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-semibold tracking-tight">
+          <h1
+            className={[
+              "flex items-center gap-2.5 font-display text-2xl font-semibold tracking-tight transition-colors",
+              titleTone,
+            ].join(" ")}
+            title={statusText}
+          >
+            <span
+              className={[
+                "h-2 w-2 shrink-0 rounded-full",
+                statusDot,
+                botStatus === "running" ? "animate-pulse" : "",
+              ].join(" ")}
+              aria-hidden="true"
+            />
             Dashboard
+            <span className="sr-only"> — {statusText}</span>
           </h1>
           <p className="mt-0.5 font-mono text-[11px] text-faint">
             {heartbeat
@@ -250,70 +289,51 @@ export default async function DashboardPage() {
         </section>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="Bot"
-          value={bot.active ? (healthy ? "Running" : "Stalled") : "Off"}
-          sub={bot.live ? "LIVE" : "DRY_RUN"}
-          tone={bot.active ? (healthy ? "good" : "warn") : "default"}
-          hint="Whether your trading engine is switched on and reporting in. DRY_RUN means it trades practice money; LIVE means real orders."
-        />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {/* Cash-basis: ₹1,000 paper base + realized P&L, minus whatever's currently
-            deployed in open positions (at cost) - a book figure, not the user's exchange
-            balance. Moves the moment a trade opens; see Unrealized P&L for the rest. */}
-        <StatCard
+            deployed in open positions (at cost) - a book figure, not the exchange balance. */}
+        <GraphStatCard
           label="Book equity"
           value={equity ? inr(equity.equity) : "-"}
-          sub={
-            equity ? `Practice cash · as of ${equityAsOf}` : ""
-          }
+          sub={equity ? `Practice cash · as of ${equityAsOf}` : "No snapshot yet"}
           hint="Practice cash left after money currently deployed in open trades - not your exchange wallet balance. Add Unrealized P&L to see your full net worth."
-          chartBleed
-          chart={
-            equityVals.length > 1 ? (
-              <Sparkline
-                data={equityVals}
-                gradient
-                gradientId="book-equity-fill"
-                fullWidth
-                height={54}
-              />
-            ) : undefined
+          data={equityVals}
+          labels={seriesLabels}
+        />
+        <GraphStatCard
+          label="Unrealized P&L"
+          value={equity ? inr(equity.unrealized_pnl) : "-"}
+          sub="Open positions · mark-to-market"
+          hint="Paper gain or loss on positions that are still open, marked to the current price. Becomes realized P&L once the position closes."
+          tone={
+            equity && equity.unrealized_pnl < 0
+              ? "bad"
+              : equity && equity.unrealized_pnl > 0
+                ? "good"
+                : "default"
           }
+          data={unrealizedVals}
+          labels={seriesLabels}
         />
-        <PnlCard
-          unrealized={equity?.unrealized_pnl ?? 0}
-          realized={equity?.realized_today ?? 0}
-          tradesToday={equity?.trades_today ?? 0}
-          tradesCap={tier.tradesPerDay}
-          hasData={!!equity}
-          fmt={inr}
+        <GraphStatCard
+          label={hasLive ? "Net P&L (live)" : "Net P&L (paper)"}
+          value={inr(hasLive ? stats.livePnl : stats.paperPnl)}
+          sub={
+            hasLive
+              ? `${stats.liveTrades} live fills · paper ${inr(stats.paperPnl)}`
+              : `${stats.paperTrades} DRY_RUN fills · no live trades yet`
+          }
+          hint="Running total of realized profit or loss from closed trades, after all fees. The line is the day-by-day cumulative."
+          tone={
+            (hasLive ? stats.livePnl : stats.paperPnl) < 0
+              ? "bad"
+              : (hasLive ? stats.livePnl : stats.paperPnl) > 0
+                ? "good"
+                : "default"
+          }
+          data={netVals}
+          labels={netLabels}
         />
-        {hasLive ? (
-          <StatCard
-            label="Net P&L (live)"
-            value={inr(stats.livePnl)}
-            sub={`${stats.liveTrades} live fills · paper ${inr(stats.paperPnl)}`}
-            hint="Real-money profit or loss across every live trade, net of fees."
-            tone={
-              stats.livePnl < 0 ? "bad" : stats.livePnl > 0 ? "good" : "default"
-            }
-          />
-        ) : (
-          <StatCard
-            label="Paper P&L (all-time)"
-            value={inr(stats.paperPnl)}
-            sub={`${stats.paperTrades} DRY_RUN fills · no live trades yet`}
-            hint="Profit or loss from practice trades — real prices, fake money. A safe preview of how the strategies behave."
-            tone={
-              stats.paperPnl < 0
-                ? "bad"
-                : stats.paperPnl > 0
-                  ? "good"
-                  : "default"
-            }
-          />
-        )}
       </div>
       <p className="font-mono text-[11px] leading-relaxed text-faint">
         P&amp;L is net of exchange fees and GST. TDS (1% on every sell) is a
@@ -402,9 +422,13 @@ export default async function DashboardPage() {
             Engine error: {bot.last_error}
           </p>
         ))}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <EquityCurveCard series={series} showSetup={showSetup} />
+      {/* Drawdown + P&L distribution - pro-view only. */}
+      <div className="hidden grid-cols-1 gap-4 lg:grid-cols-2 [html.pro_&]:grid">
+        <DrawdownCard series={series} />
+        <PnlHistogramCard daily={daily} />
+      </div>
 
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <section className="card">
           <div className="flex items-center gap-1.5 px-4 py-3">
             <h3 className="font-display text-sm font-semibold tracking-tight text-dim">
@@ -416,16 +440,6 @@ export default async function DashboardPage() {
             <WinRateDonut wins={stats.wins} losses={stats.losses} />
           </div>
         </section>
-      </div>
-
-      {/* Drawdown + P&L distribution - pro-view only. */}
-      <div className="hidden grid-cols-1 gap-4 lg:grid-cols-2 [html.pro_&]:grid">
-        <DrawdownCard series={series} />
-        <PnlHistogramCard daily={daily} />
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <DailyPnlCard daily={daily} />
 
         <DataTable
           title="By strategy"
@@ -492,18 +506,7 @@ export default async function DashboardPage() {
 
       <PriceChart markets={userMarkets} fx={fx} />
 
-      <DataTable
-        title="Open positions"
-        head={["Strategy", "Market", "Qty", "Avg price"]}
-        align={["left", "left", "right", "right"]}
-        rows={positions.map((p: any): Cell[] => [
-          strategyLabel(p.strategy),
-          p.market,
-          num(p.qty),
-          num(p.avg_price),
-        ])}
-        empty="No open positions."
-      />
+      <PositionsTable positions={positions as unknown as Position[]} />
 
       <TradesTable trades={tradeRows} />
 

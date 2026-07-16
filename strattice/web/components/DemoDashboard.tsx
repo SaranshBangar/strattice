@@ -10,35 +10,20 @@
 // stays a raw INR number and is converted at the moment of display via
 // fx.inrRate. The live PriceChart is quoted in USD, so it gets fx.usdRate.
 import Link from "next/link";
-import { StatCard } from "@/components/StatCard";
-import { PnlCard } from "@/components/PnlCard";
+import { GraphStatCard } from "@/components/GraphStatCard";
 import { Metric } from "@/components/Metric";
 import { InfoHint } from "@/components/InfoHint";
 import { DataTable, type Cell } from "@/components/DataTable";
 import { TradesTable } from "@/components/TradesTable";
+import { PositionsTable, type Position } from "@/components/PositionsTable";
 import { PriceChart } from "@/components/PriceChart";
-import {
-  EquityCurve,
-  PnlBars,
-  Sparkline,
-  WinRateDonut,
-} from "@/components/charts";
+import { WinRateDonut } from "@/components/charts";
 import { strategyLabel } from "@/lib/strategies";
 import type { demoData } from "@/lib/demo-data";
 import { useAutoFx } from "@/lib/geo-currency";
 
-function shortDay(d: string) {
-  return d?.slice(5) ?? d;
-}
 function shortTs(ts: string) {
   return ts?.slice(0, 16).replace("T", " ") ?? "";
-}
-function sample<T>(arr: T[], k: number): T[] {
-  if (arr.length <= k) return arr;
-  return Array.from(
-    { length: k },
-    (_, j) => arr[Math.round((j * (arr.length - 1)) / (k - 1))],
-  );
 }
 
 // The sample data is computed once on the server (app/demo/page.tsx) and passed
@@ -57,22 +42,17 @@ export function DemoDashboard({ data: d }: { data: ReturnType<typeof demoData> }
   const money = (n: number) => `${fx.symbol}${fmt(n)}`;
   // Bare numbers that are NOT display-currency money (coin quantity, raw price
   // reference) - formatted for the locale but never rate-converted.
-  const num = (n: number): Cell => ({
-    v: n.toLocaleString(fx.locale, {
-      maximumFractionDigits: 2,
-      minimumFractionDigits: 2,
-    }),
-    align: "right",
-  });
   // The paper base, localized: "₹1,000" for an Indian visitor, "$12" abroad.
   const base = money(1000);
 
   const decided = d.stats.wins + d.stats.losses;
   const winRate = decided ? (d.stats.wins / decided) * 100 : 0;
-  const equityXTicks = sample(
-    d.equitySeries.map((s) => shortTs(s.ts)),
-    5,
-  );
+
+  // Sparkline inputs for the three stat cards.
+  const equityLabels = d.equitySeries.map((s) => shortTs(s.ts));
+  let netAcc = 0;
+  const netVals = d.dailyPnl.map((x) => (netAcc += x.pnl));
+  const netLabels = d.dailyPnl.map((x) => x.day.slice(5));
   let peak = -Infinity;
   let maxDD = 0;
   for (const v of d.equityVals) {
@@ -113,8 +93,16 @@ export function DemoDashboard({ data: d }: { data: ReturnType<typeof demoData> }
       </div>
 
       <div>
-        <h1 className="font-display text-2xl font-semibold tracking-tight">
+        <h1
+          className="flex items-center gap-2.5 font-display text-2xl font-semibold tracking-tight text-gain"
+          title="Bot running · DRY_RUN"
+        >
+          <span
+            className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-gain"
+            aria-hidden="true"
+          />
           Dashboard
+          <span className="sr-only"> — bot running, DRY_RUN</span>
         </h1>
         <p className="mt-0.5 font-mono text-[11px] text-faint">
           sample engine · every trade below is simulated
@@ -124,43 +112,37 @@ export function DemoDashboard({ data: d }: { data: ReturnType<typeof demoData> }
         </span>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="Bot"
-          value="Running"
-          sub="DRY_RUN"
-          tone="good"
-          hint="Whether the trading engine is switched on. DRY_RUN means it trades practice money; LIVE means real orders."
-        />
-        <StatCard
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <GraphStatCard
           label="Book equity"
           value={money(d.latestEquity.equity)}
           sub="Practice cash"
-          hint={`Practice cash left after money currently deployed in open trades - not an exchange wallet balance. Add Unrealized P&L to see full net worth.`}
-          chartBleed
-          chart={
-            d.equityVals.length > 1 ? (
-              <Sparkline
-                data={d.equityVals}
-                gradient
-                gradientId="demo-book-equity-fill"
-                fullWidth
-                height={54}
-              />
-            ) : undefined
-          }
-        />
-        <PnlCard
-          unrealized={d.latestEquity.unrealized_pnl}
-          realized={d.latestEquity.realized_today}
-          tradesToday={d.latestEquity.trades_today}
+          hint="Practice cash left after money currently deployed in open trades - not an exchange wallet balance. Add Unrealized P&L to see full net worth."
+          data={d.equityVals}
+          labels={equityLabels}
           fmt={money}
         />
-        <StatCard
-          label="Paper P&L (all-time)"
+        <GraphStatCard
+          label="Unrealized P&L"
+          value={money(d.latestEquity.unrealized_pnl)}
+          sub="Open positions · mark-to-market"
+          hint="Paper gain or loss on positions that are still open, marked to the current price. Becomes realized P&L once the position closes."
+          tone={
+            d.latestEquity.unrealized_pnl < 0
+              ? "bad"
+              : d.latestEquity.unrealized_pnl > 0
+                ? "good"
+                : "default"
+          }
+          data={d.unrealizedSeries}
+          labels={equityLabels}
+          fmt={money}
+        />
+        <GraphStatCard
+          label="Net P&L (paper)"
           value={money(d.stats.paperPnl)}
           sub={`${d.stats.paperTrades} DRY_RUN fills`}
-          hint="Profit or loss from practice trades — real prices, fake money. A safe preview of how the strategies behave."
+          hint="Running total of realized profit or loss from closed trades, after fees. The line is the day-by-day cumulative."
           tone={
             d.stats.paperPnl < 0
               ? "bad"
@@ -168,6 +150,9 @@ export function DemoDashboard({ data: d }: { data: ReturnType<typeof demoData> }
                 ? "good"
                 : "default"
           }
+          data={netVals}
+          labels={netLabels}
+          fmt={money}
         />
       </div>
 
@@ -203,35 +188,8 @@ export function DemoDashboard({ data: d }: { data: ReturnType<typeof demoData> }
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <section className="card lg:col-span-2">
-          <div className="flex items-center justify-between px-4 py-3">
-            <h3 className="font-display text-sm font-semibold tracking-tight text-dim">
-              Book equity curve
-            </h3>
-            <span className="font-mono text-[11px] text-faint">
-              {d.equitySeries.length} snapshots
-            </span>
-          </div>
-          <div className="p-4">
-            <EquityCurve
-              points={d.equityVals}
-              fmt={money}
-              xTicks={equityXTicks}
-              hwm
-              ddShade
-              baseline={{ value: 1000, label: `start ${base}` }}
-              legend
-              drawIn
-            />
-          </div>
-          <p className="px-4 pb-3 text-[11px] leading-relaxed text-faint">
-            The line is the bot&apos;s balance. Gold dashes mark its best-ever
-            level, and the red shading shows how far below that best it dipped
-            (the drawdown).
-          </p>
-        </section>
 
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <section className="card">
           <div className="flex items-center gap-1.5 px-4 py-3">
             <h3 className="font-display text-sm font-semibold tracking-tight text-dim">
@@ -242,33 +200,6 @@ export function DemoDashboard({ data: d }: { data: ReturnType<typeof demoData> }
           <div className="grid place-items-center p-6">
             <WinRateDonut wins={d.stats.wins} losses={d.stats.losses} />
           </div>
-        </section>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <section className="card lg:col-span-2">
-          <div className="flex items-center justify-between px-4 py-3">
-            <h3 className="font-display text-sm font-semibold tracking-tight text-dim">
-              Daily realized P&L
-            </h3>
-            <span className="font-mono text-[11px] text-faint">
-              last {d.dailyPnl.length}d
-            </span>
-          </div>
-          <div className="p-4">
-            <PnlBars
-              data={d.dailyPnl.map((x) => ({
-                label: shortDay(x.day),
-                value: x.pnl,
-              }))}
-              fmt={money}
-              annotateExtremes
-            />
-          </div>
-          <p className="px-4 pb-3 text-[11px] leading-relaxed text-faint">
-            Each bar is one day&apos;s result after all fees — green above the
-            line, red below. The best and worst days are labelled.
-          </p>
         </section>
 
         <DataTable
@@ -299,18 +230,7 @@ export function DemoDashboard({ data: d }: { data: ReturnType<typeof demoData> }
       {/* Live market data - the one real thing on this page */}
       <PriceChart fx={liveFx} />
 
-      <DataTable
-        title="Open positions"
-        head={["Strategy", "Market", "Qty", "Avg price"]}
-        align={["left", "left", "right", "right"]}
-        rows={d.positions.map((p): Cell[] => [
-          strategyLabel(p.strategy),
-          p.market,
-          num(p.qty),
-          num(p.avg_price),
-        ])}
-        empty="No open positions."
-      />
+      <PositionsTable positions={d.positions as unknown as Position[]} />
 
       <TradesTable trades={d.trades} />
 

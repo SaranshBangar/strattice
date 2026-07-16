@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { FaqList } from "@/components/FaqList";
 import { HeroCta } from "@/components/HeroCta";
 import { JsonLd } from "@/components/JsonLd";
 import { LiveChart } from "@/components/LiveChart";
@@ -137,7 +138,10 @@ export default function Home() {
             Algorithmic trading that runs on your <span className="text-accent">own</span> account.
           </h1>
           <p className="mt-5 max-w-lg text-lg text-muted">
-            Pick a rulebook, watch it practice with fake money on real prices, and only go live when it has earned your trust.
+            Pick a rulebook. Watch it practice with{" "}
+            <span className="font-medium text-fg">fake money on real prices</span>
+            . Go live only once it has{" "}
+            <span className="font-medium text-fg">earned your trust</span>.
           </p>
           <HeroCta />
           <p className="mt-4 font-mono text-[11px] uppercase tracking-wider text-faint">no card · withdrawals stay disabled · DRY_RUN by default</p>
@@ -402,20 +406,8 @@ export default function Home() {
           <h2 className="eyebrow">Straight answers</h2>
           <p className="mt-2 font-display text-2xl font-semibold tracking-tight">The questions a skeptical trader should ask.</p>
         </Reveal>
-        <Reveal stagger>
-          <div className="space-y-2">
-            {FAQ.map(([question, answer]) => (
-              <details key={question} className="card group px-5 py-4">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-medium text-fg [&::-webkit-details-marker]:hidden">
-                  {question}
-                  <span aria-hidden="true" className="shrink-0 font-mono text-faint transition-transform group-open:rotate-90">
-                    ▸
-                  </span>
-                </summary>
-                <p className="mt-2.5 max-w-xl text-sm leading-relaxed text-muted">{answer}</p>
-              </details>
-            ))}
-          </div>
+        <Reveal>
+          <FaqList items={FAQ} />
         </Reveal>
       </section>
 
