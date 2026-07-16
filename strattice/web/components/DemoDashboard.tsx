@@ -11,6 +11,7 @@
 // fx.inrRate. The live PriceChart is quoted in USD, so it gets fx.usdRate.
 import Link from "next/link";
 import { StatCard } from "@/components/StatCard";
+import { PnlCard } from "@/components/PnlCard";
 import { Metric } from "@/components/Metric";
 import { InfoHint } from "@/components/InfoHint";
 import { DataTable, type Cell } from "@/components/DataTable";
@@ -142,31 +143,11 @@ export function DemoDashboard({ data: d }: { data: ReturnType<typeof demoData> }
             ) : undefined
           }
         />
-        <StatCard
-          label="Unrealized P&L"
-          value={money(d.latestEquity.unrealized_pnl)}
-          sub="Open positions, mark-to-market"
-          hint="Paper gain or loss on positions that are still open, marked to the current price. Becomes realized P&L once the position closes."
-          tone={
-            d.latestEquity.unrealized_pnl < 0
-              ? "bad"
-              : d.latestEquity.unrealized_pnl > 0
-                ? "good"
-                : "default"
-          }
-        />
-        <StatCard
-          label="Realized today"
-          value={money(d.latestEquity.realized_today)}
-          sub={`${d.latestEquity.trades_today} trades today`}
-          hint="Profit or loss locked in by trades that closed today, after all fees."
-          tone={
-            d.latestEquity.realized_today < 0
-              ? "bad"
-              : d.latestEquity.realized_today > 0
-                ? "good"
-                : "default"
-          }
+        <PnlCard
+          unrealized={d.latestEquity.unrealized_pnl}
+          realized={d.latestEquity.realized_today}
+          tradesToday={d.latestEquity.trades_today}
+          fmt={money}
         />
         <StatCard
           label="Paper P&L (all-time)"

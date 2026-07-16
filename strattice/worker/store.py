@@ -124,6 +124,30 @@ def _positions_sig(positions: list[dict]) -> tuple:
     ))
 
 
+_EQUITY_INSERT = (
+    "insert into equity_snapshots(user_id,equity,free,unrealized_pnl,realized_today,trades_today)"
+    " values (?,?,?,?,?,?)"
+)
+
+
+def _insert_equity_snapshot(db: D1, params: list) -> None:
+    """Write one snapshot, self-healing the unrealized_pnl column on a D1 predating migration
+    0004 that still lacks it. Without this the insert throws every cycle, so no new snapshot
+    lands and the dashboard's book equity appears stuck at its last value. Idempotent: an add
+    that already ran (duplicate column) is ignored, then the insert is retried."""
+    try:
+        db.query(_EQUITY_INSERT, params)
+    except RuntimeError as e:
+        if "no such column: unrealized_pnl" not in str(e):
+            raise
+        try:
+            db.query("alter table equity_snapshots add column unrealized_pnl real not null default 0")
+        except RuntimeError as e2:
+            if "duplicate column" not in str(e2):
+                raise
+        db.query(_EQUITY_INSERT, params)
+
+
 def publish(db: D1, user_id: str, trades: list[dict], positions: list[dict], equity: dict) -> None:
     """Upsert the read model from a user's engine SQLite projection.
     Multi-row INSERTs keep the REST round-trips bounded (D1 is one statement per call)."""
@@ -160,12 +184,10 @@ def publish(db: D1, user_id: str, trades: list[dict], positions: list[dict], equ
             )
         _last_positions_sig[user_id] = sig
 
-    db.query(
-        """insert into equity_snapshots(user_id,equity,free,unrealized_pnl,realized_today,trades_today)
-           values (?,?,?,?,?,?)""",
-        [user_id, equity["equity"], equity["free"], equity["unrealized_pnl"],
-         equity["realized_today"], equity["trades_today"]],
-    )
+    _insert_equity_snapshot(db, [
+        user_id, equity["equity"], equity["free"], equity["unrealized_pnl"],
+        equity["realized_today"], equity["trades_today"],
+    ])
 
 
 def _notify_trades(user_id: str, trades: list[dict]) -> None:

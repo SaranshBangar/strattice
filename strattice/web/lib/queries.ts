@@ -403,17 +403,43 @@ export async function openPositions(userId: string) {
     [userId],
   );
 }
+// unrealized_pnl shipped in migration 0004 (an add-column, applied by hand with wrangler).
+// A D1 created before it can still lack the column - schema.sql is "create table if not
+// exists", which never alters an existing table - and then EVERY read or write naming the
+// column throws. That's not cosmetic: the supervisor's snapshot insert also names it, so a
+// missing column makes each publish fail and no new snapshot is written, which is why book
+// equity looks frozen at its last value. Add the column on first miss and retry (mirrors
+// withPrefsTable). Idempotent: a concurrent add that already ran is swallowed.
+const UNREALIZED_DDL =
+  "alter table equity_snapshots add column unrealized_pnl real not null default 0";
+
+async function withUnrealizedCol<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    if (!String(e).includes("no such column: unrealized_pnl")) throw e;
+    try {
+      await d1Query(UNREALIZED_DDL);
+    } catch (e2) {
+      if (!String(e2).includes("duplicate column")) throw e2;
+    }
+    return fn();
+  }
+}
+
 export async function latestEquity(userId: string) {
-  return d1First<{
-    equity: number;
-    free: number;
-    unrealized_pnl: number;
-    realized_today: number;
-    trades_today: number;
-    ts: string;
-  }>(
-    "select equity, free, unrealized_pnl, realized_today, trades_today, ts from equity_snapshots where user_id = ? order by ts desc limit 1",
-    [userId],
+  return withUnrealizedCol(() =>
+    d1First<{
+      equity: number;
+      free: number;
+      unrealized_pnl: number;
+      realized_today: number;
+      trades_today: number;
+      ts: string;
+    }>(
+      "select equity, free, unrealized_pnl, realized_today, trades_today, ts from equity_snapshots where user_id = ? order by ts desc limit 1",
+      [userId],
+    ),
   );
 }
 
@@ -430,9 +456,11 @@ export async function equitySeries(
   userId: string,
   limit = 240,
 ): Promise<EquityPoint[]> {
-  const rows = await d1Query<EquityPoint>(
-    "select ts, equity, free, unrealized_pnl, realized_today from equity_snapshots where user_id = ? order by ts desc limit ?",
-    [userId, limit],
+  const rows = await withUnrealizedCol(() =>
+    d1Query<EquityPoint>(
+      "select ts, equity, free, unrealized_pnl, realized_today from equity_snapshots where user_id = ? order by ts desc limit ?",
+      [userId, limit],
+    ),
   );
   return rows.reverse();
 }

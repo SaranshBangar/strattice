@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getUser } from "@/lib/session";
 import * as q from "@/lib/queries";
 import { StatCard } from "@/components/StatCard";
+import { PnlCard } from "@/components/PnlCard";
 import { Metric } from "@/components/Metric";
 import { InfoHint } from "@/components/InfoHint";
 import { DataTable, type Cell } from "@/components/DataTable";
@@ -50,7 +51,7 @@ export default async function DashboardPage() {
     q.latestEquity(user.id),
     q.openPositions(user.id),
     q.recentTrades(user.id, 500),
-    q.equitySeries(user.id, 240),
+    q.equitySeries(user.id, 2880),
     q.dailyPnl(user.id, 30),
     q.strategyBreakdown(user.id),
     q.tradeStats(user.id),
@@ -269,31 +270,13 @@ export default async function DashboardPage() {
             ) : undefined
           }
         />
-        <StatCard
-          label="Unrealized P&L"
-          value={equity ? inr(equity.unrealized_pnl) : "-"}
-          sub="Open positions, mark-to-market"
-          hint="Paper gain or loss on positions that are still open, marked to the current price. Becomes realized P&L once the position closes."
-          tone={
-            equity && equity.unrealized_pnl < 0
-              ? "bad"
-              : equity && equity.unrealized_pnl > 0
-                ? "good"
-                : "default"
-          }
-        />
-        <StatCard
-          label="Realized today"
-          value={equity ? inr(equity.realized_today) : "-"}
-          sub={`${equity?.trades_today ?? 0} / ${tier.tradesPerDay} trades`}
-          hint="Profit or loss locked in by trades that closed today, after all fees."
-          tone={
-            equity && equity.realized_today < 0
-              ? "bad"
-              : equity && equity.realized_today > 0
-                ? "good"
-                : "default"
-          }
+        <PnlCard
+          unrealized={equity?.unrealized_pnl ?? 0}
+          realized={equity?.realized_today ?? 0}
+          tradesToday={equity?.trades_today ?? 0}
+          tradesCap={tier.tradesPerDay}
+          hasData={!!equity}
+          fmt={inr}
         />
         {hasLive ? (
           <StatCard
