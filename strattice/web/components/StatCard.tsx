@@ -10,6 +10,9 @@ export type StatCardProps = {
   tone?: StatCardTone;
   /** Optional visual (e.g. a sparkline) rendered under the value. */
   chart?: ReactNode;
+  /** Render the chart full-bleed at the card's bottom edge (edge to edge) instead of
+   *  inset under the value. For sparklines meant to anchor the whole card. */
+  chartBleed?: boolean;
   /** Plain-English "?" explainer beside the label. */
   hint?: string;
 };
@@ -27,6 +30,7 @@ export function StatCard({
   sub,
   tone = "default",
   chart,
+  chartBleed = false,
   hint,
 }: StatCardProps) {
   return (
@@ -44,7 +48,17 @@ export function StatCard({
         {value}
       </div>
       {sub && <div className="mt-1 font-mono text-xs text-muted">{sub}</div>}
-      {chart && <div className="mt-3">{chart}</div>}
+      {chart &&
+        (chartBleed ? (
+          // -mx-4/-mb-4 cancel the card's p-4 so the chart reaches the card edges; the
+          // container is rounded + clipped itself (the card isn't overflow-hidden, so its
+          // "?" tooltips can still escape).
+          <div className="-mx-4 -mb-4 mt-auto overflow-hidden rounded-b-xl pt-3">
+            {chart}
+          </div>
+        ) : (
+          <div className="mt-3">{chart}</div>
+        ))}
     </div>
   );
 }

@@ -137,9 +137,16 @@ export function DemoDashboard({ data: d }: { data: ReturnType<typeof demoData> }
           value={money(d.latestEquity.equity)}
           sub="Practice cash"
           hint={`Practice cash left after money currently deployed in open trades - not an exchange wallet balance. Add Unrealized P&L to see full net worth.`}
+          chartBleed
           chart={
             d.equityVals.length > 1 ? (
-              <Sparkline data={d.equityVals} area />
+              <Sparkline
+                data={d.equityVals}
+                gradient
+                gradientId="demo-book-equity-fill"
+                fullWidth
+                height={54}
+              />
             ) : undefined
           }
         />

@@ -10,6 +10,7 @@ import { DataTable, type Cell } from "@/components/DataTable";
 import { TradesTable, type Trade } from "@/components/TradesTable";
 import { PriceChart } from "@/components/PriceChart";
 import { ProToggle } from "@/components/ProToggle";
+import { RefreshButton } from "@/components/RefreshButton";
 import { WinRateDonut, Sparkline } from "@/components/charts";
 import { EquityCurveCard } from "@/components/EquityCurveCard";
 import { DrawdownCard } from "@/components/DrawdownCard";
@@ -174,7 +175,10 @@ export default async function DashboardPage() {
             </span>
           )}
         </div>
-        <ProToggle />
+        <div className="flex items-center gap-2">
+          <RefreshButton />
+          <ProToggle />
+        </div>
       </div>
 
       {showSetup && (
@@ -264,9 +268,16 @@ export default async function DashboardPage() {
             equity ? `Practice cash · as of ${equityAsOf}` : ""
           }
           hint="Practice cash left after money currently deployed in open trades - not your exchange wallet balance. Add Unrealized P&L to see your full net worth."
+          chartBleed
           chart={
             equityVals.length > 1 ? (
-              <Sparkline data={equityVals} area />
+              <Sparkline
+                data={equityVals}
+                gradient
+                gradientId="book-equity-fill"
+                fullWidth
+                height={54}
+              />
             ) : undefined
           }
         />
