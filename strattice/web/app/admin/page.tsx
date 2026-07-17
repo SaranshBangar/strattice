@@ -6,6 +6,7 @@ import * as q from "@/lib/queries";
 import { TIERS } from "@/lib/entitlements";
 import { StatCard } from "@/components/StatCard";
 import { AdminUserRow } from "@/components/AdminUserRow";
+import { SupervisorControls } from "@/components/SupervisorControls";
 
 export const dynamic = "force-dynamic";
 
@@ -24,9 +25,10 @@ export default async function AdminPage({
   const search = (rawQ ?? "").trim();
   const page = Math.max(1, Number(rawPage) || 1);
 
-  const [stats, list] = await Promise.all([
+  const [stats, list, supervisor] = await Promise.all([
     q.adminStats(),
     q.listUsersAdmin(search, page, 20),
+    q.getSupervisorStatus(),
   ]);
 
   const mrr = Object.entries(stats.byTier).reduce(
@@ -88,6 +90,8 @@ export default async function AdminPage({
           sub={tierLine}
         />
       </div>
+
+      <SupervisorControls status={supervisor} />
 
       <section className="card">
         <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">

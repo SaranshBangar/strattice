@@ -93,6 +93,12 @@ def _stop(proc: subprocess.Popen) -> None:
         proc.kill()
 
 
+def _stop_all() -> None:
+    """Stop and forget every managed engine. Used on pause, restart, and shutdown."""
+    for uid in list(_procs):
+        _stop(_procs.pop(uid)["proc"])
+
+
 _price_client: Client | None = None
 
 
@@ -275,20 +281,45 @@ def _reconcile(conn) -> None:
             print(f"[supervisor] stopped engine for {uid} (deactivated)")
 
 
+_applied_restart_seq = 0  # last restart_seq acted on; survives across cycles, resets on process restart
+
+
+def _tick(conn) -> None:
+    """One control-aware poll: obey the admin console's desired regime, then publish status.
+
+    'paused' stops every engine but keeps the loop alive, so a later 'running' (or restart)
+    written to D1 resumes trading without touching the process. A restart is a bumped
+    restart_seq: recycle all engines (they respawn in the same _reconcile) and record the
+    seq so we don't loop on it."""
+    global _applied_restart_seq
+    control = store.read_control(conn)
+    if control["desired_state"] == "paused":
+        if _procs:
+            _stop_all()
+            print("[supervisor] paused by admin - stopped all engines")
+        store.write_status(conn, "paused", 0, _applied_restart_seq)
+        return
+    if control["restart_seq"] != _applied_restart_seq:
+        _stop_all()
+        _applied_restart_seq = control["restart_seq"]
+        print(f"[supervisor] restart requested (seq={_applied_restart_seq}) - recycling all engines")
+    _reconcile(conn)
+    store.write_status(conn, "running", len(_procs), _applied_restart_seq)
+
+
 def main() -> None:
     conn = store.connect()
     print(f"[supervisor] up. polling every {POLL}s. users dir: {USERS_DIR}")
     try:
         while True:
             try:
-                _reconcile(conn)
+                _tick(conn)
             except Exception as e:  # DB blip etc. — log and keep going
                 print(f"[supervisor] reconcile error: {e}", file=sys.stderr)
             time.sleep(POLL)
     except KeyboardInterrupt:
         print("\n[supervisor] shutting down, stopping engines...")
-        for p in _procs.values():
-            _stop(p["proc"])
+        _stop_all()
 
 
 if __name__ == "__main__":
