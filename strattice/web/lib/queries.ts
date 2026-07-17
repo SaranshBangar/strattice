@@ -45,9 +45,7 @@ export async function createPendingSubscription(
 }
 
 /** Email + name for a user, for notifications. `created_at` is unix seconds. */
-export async function getUserContact(
-  userId: string,
-): Promise<{
+export async function getUserContact(userId: string): Promise<{
   email: string;
   name: string | null;
   created_at: number | null;
@@ -84,11 +82,14 @@ const PREFS_DDL = `create table if not exists notification_prefs (
   telegram_enabled integer not null default 0,
   telegram_chat_id text,
   currency         text not null default 'INR',
+  stat_window      text not null default '1d',
   updated_at       text not null default (datetime('now'))
 )`;
 
 // currency shipped after notification_prefs itself, so deployed tables may lack the column.
 const CURRENCY_DDL = `alter table notification_prefs add column currency text not null default 'INR'`;
+// stat_window shipped after currency, so deployed tables may lack it too (migration 0006).
+const STAT_WINDOW_DDL = `alter table notification_prefs add column stat_window text not null default '1d'`;
 
 async function withPrefsTable<T>(fn: () => Promise<T>): Promise<T> {
   try {
@@ -101,6 +102,10 @@ async function withPrefsTable<T>(fn: () => Promise<T>): Promise<T> {
     }
     if (msg.includes("no such column: currency")) {
       await d1Query(CURRENCY_DDL);
+      return fn();
+    }
+    if (msg.includes("no such column: stat_window")) {
+      await d1Query(STAT_WINDOW_DDL);
       return fn();
     }
     throw e;
@@ -166,6 +171,28 @@ export async function setCurrency(userId: string, currency: string) {
      values (?,?, datetime('now'))
      on conflict(user_id) do update set currency=excluded.currency, updated_at=datetime('now')`,
       [userId, currency],
+    ),
+  );
+}
+
+/** The user's dashboard stat-card trend timeline (1h|6h|1d|1w|1m|all). No row => 1d. */
+export async function getStatWindow(userId: string): Promise<string> {
+  const row = await withPrefsTable(() =>
+    d1First<{ stat_window: string }>(
+      "select stat_window from notification_prefs where user_id = ?",
+      [userId],
+    ),
+  );
+  return row?.stat_window ?? "1d";
+}
+
+export async function setStatWindow(userId: string, statWindow: string) {
+  await withPrefsTable(() =>
+    d1Query(
+      `insert into notification_prefs(user_id, stat_window, updated_at)
+     values (?,?, datetime('now'))
+     on conflict(user_id) do update set stat_window=excluded.stat_window, updated_at=datetime('now')`,
+      [userId, statWindow],
     ),
   );
 }
@@ -451,18 +478,35 @@ export interface EquityPoint {
   unrealized_pnl: number;
   realized_today: number;
 }
-/** Equity snapshots in chronological order for the equity curve. */
+/** Equity snapshots in chronological order for the equity curve, optionally limited to a
+ *  time window and downsampled to ~`target` evenly-spaced points that still span the whole
+ *  window (so a "1 month" view isn't just its most recent slice, and a sparkline never has
+ *  to plot tens of thousands of poll snapshots).
+ *
+ *  `sinceISO` is a UTC "YYYY-MM-DD HH:MM:SS" lower bound matching the stored ts format, or
+ *  null for all time. The stride keeps every ⌈cnt/target⌉-th row; max(1, …) guards the
+ *  modulus so a window with fewer than `target` rows returns them all unthinned. */
 export async function equitySeries(
   userId: string,
-  limit = 240,
+  opts: { sinceISO?: string | null; target?: number } = {},
 ): Promise<EquityPoint[]> {
-  const rows = await withUnrealizedCol(() =>
+  const { sinceISO = null, target = 500 } = opts;
+  return withUnrealizedCol(() =>
     d1Query<EquityPoint>(
-      "select ts, equity, free, unrealized_pnl, realized_today from equity_snapshots where user_id = ? order by ts desc limit ?",
-      [userId, limit],
+      `with w as (
+         select ts, equity, free, unrealized_pnl, realized_today,
+                row_number() over (order by ts) as rn,
+                count(*) over () as cnt
+         from equity_snapshots
+         where user_id = ? and (? is null or ts >= ?)
+       )
+       select ts, equity, free, unrealized_pnl, realized_today
+       from w
+       where cnt <= ? or (rn - 1) % max(1, (cnt + ? - 1) / ?) = 0
+       order by ts`,
+      [userId, sinceISO, sinceISO, target, target, target],
     ),
   );
-  return rows.reverse();
 }
 
 export interface DailyPnl {

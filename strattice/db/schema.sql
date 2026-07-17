@@ -118,13 +118,15 @@ create table if not exists bot_state (
 -- Per-user notification preferences. No row => email on, telegram off (back-compat: existing
 -- users keep getting fill emails). telegram_chat_id is the numeric chat id from @userinfobot;
 -- the app sends via the shared TELEGRAM_BOT_TOKEN bot the user has started a chat with.
--- currency is the user's preferred display currency (ISO code, default INR).
+-- currency is the user's preferred display currency (ISO code, default INR). stat_window is
+-- the dashboard stat-card trend timeline (1h|6h|1d|1w|1m|all, default 1d).
 create table if not exists notification_prefs (
   user_id          text primary key references user(id) on delete cascade,
   email_enabled    integer not null default 1,
   telegram_enabled integer not null default 0,
   telegram_chat_id text,
   currency         text not null default 'INR',
+  stat_window      text not null default '1d',
   updated_at       text not null default (datetime('now'))
 );
 

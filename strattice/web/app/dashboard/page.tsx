@@ -18,6 +18,7 @@ import { strategyLabel } from "@/lib/strategies";
 import { usdRate } from "@/lib/fx";
 import { currencySymbol } from "@/lib/currencies";
 import { fmt, inr, shortTs } from "@/lib/dashboard-format";
+import { statWindow, windowSinceISO } from "@/lib/stat-window";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,11 @@ export default async function DashboardPage() {
   if (!user) redirect("/sign-in");
 
   const fy = q.financialYear();
+  // Stat-card trend timeline (default 1 day). Read first so the windowed equity/daily series
+  // below can be bounded to it; only the trend sparklines (and the pro-view charts sharing
+  // these series) honor the window - the headline numbers stay latest/all-time.
+  const win = statWindow(await q.getStatWindow(user.id));
+  const sinceISO = windowSinceISO(win.hours);
   const [
     tier,
     bot,
@@ -46,8 +52,8 @@ export default async function DashboardPage() {
     q.latestEquity(user.id),
     q.openPositions(user.id),
     q.recentTrades(user.id, 500),
-    q.equitySeries(user.id, 2880),
-    q.dailyPnl(user.id, 30),
+    q.equitySeries(user.id, { sinceISO }),
+    q.dailyPnl(user.id, win.days),
     q.strategyBreakdown(user.id),
     q.tradeStats(user.id),
     q.listStrategies(user.id),
@@ -55,6 +61,10 @@ export default async function DashboardPage() {
     q.taxSummary(user.id, fy.startISO, fy.endISO),
     q.getCurrency(user.id),
   ]);
+  const trendCaption =
+    win.key === "all"
+      ? "All-time trends"
+      : `Trends · last ${win.label.toLowerCase()}`;
   const rate = (await usdRate(currency)) ?? 1;
   const fx = { symbol: currencySymbol(currency), rate };
 
@@ -289,51 +299,68 @@ export default async function DashboardPage() {
         </section>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {/* Cash-basis: ₹1,000 paper base + realized P&L, minus whatever's currently
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-faint">
+            {trendCaption}
+          </span>
+          <Link
+            href="/settings"
+            className="font-mono text-[11px] text-muted underline-offset-2 transition-colors hover:text-fg hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            title="Change the dashboard trend timeline"
+          >
+            change timeline
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {/* Cash-basis: ₹1,000 paper base + realized P&L, minus whatever's currently
             deployed in open positions (at cost) - a book figure, not the exchange balance. */}
-        <GraphStatCard
-          label="Book equity"
-          value={equity ? inr(equity.equity) : "-"}
-          sub={equity ? `Practice cash · as of ${equityAsOf}` : "No snapshot yet"}
-          hint="Practice cash left after money currently deployed in open trades - not your exchange wallet balance. Add Unrealized P&L to see your full net worth."
-          data={equityVals}
-          labels={seriesLabels}
-        />
-        <GraphStatCard
-          label="Unrealized P&L"
-          value={equity ? inr(equity.unrealized_pnl) : "-"}
-          sub="Open positions · mark-to-market"
-          hint="Paper gain or loss on positions that are still open, marked to the current price. Becomes realized P&L once the position closes."
-          tone={
-            equity && equity.unrealized_pnl < 0
-              ? "bad"
-              : equity && equity.unrealized_pnl > 0
-                ? "good"
-                : "default"
-          }
-          data={unrealizedVals}
-          labels={seriesLabels}
-        />
-        <GraphStatCard
-          label={hasLive ? "Net P&L (live)" : "Net P&L (paper)"}
-          value={inr(hasLive ? stats.livePnl : stats.paperPnl)}
-          sub={
-            hasLive
-              ? `${stats.liveTrades} live fills · paper ${inr(stats.paperPnl)}`
-              : `${stats.paperTrades} DRY_RUN fills · no live trades yet`
-          }
-          hint="Running total of realized profit or loss from closed trades, after all fees. The line is the day-by-day cumulative."
-          tone={
-            (hasLive ? stats.livePnl : stats.paperPnl) < 0
-              ? "bad"
-              : (hasLive ? stats.livePnl : stats.paperPnl) > 0
-                ? "good"
-                : "default"
-          }
-          data={netVals}
-          labels={netLabels}
-        />
+          <GraphStatCard
+            label="Book equity"
+            value={equity ? inr(equity.equity) : "-"}
+            sub={
+              equity ? `Practice cash · as of ${equityAsOf}` : "No snapshot yet"
+            }
+            hint="Practice cash left after money currently deployed in open trades - not your exchange wallet balance. Add Unrealized P&L to see your full net worth."
+            data={equityVals}
+            labels={seriesLabels}
+          />
+          <GraphStatCard
+            label="Unrealized P&L"
+            value={equity ? inr(equity.unrealized_pnl) : "-"}
+            sub="Open positions · mark-to-market"
+            hint="Paper gain or loss on positions that are still open, marked to the current price. Becomes realized P&L once the position closes."
+            tone={
+              equity && equity.unrealized_pnl < 0
+                ? "bad"
+                : equity && equity.unrealized_pnl > 0
+                  ? "good"
+                  : "default"
+            }
+            data={unrealizedVals}
+            labels={seriesLabels}
+          />
+          <GraphStatCard
+            label={hasLive ? "Net P&L (live)" : "Net P&L (paper)"}
+            value={inr(hasLive ? stats.livePnl : stats.paperPnl)}
+            sub={
+              hasLive
+                ? `${stats.liveTrades} live fills · paper ${inr(stats.paperPnl)}`
+                : `${stats.paperTrades} DRY_RUN fills · no live trades yet`
+            }
+            hint="Running total of realized profit or loss from closed trades, after all fees. The line is the day-by-day cumulative."
+            tone={
+              (hasLive ? stats.livePnl : stats.paperPnl) < 0
+                ? "bad"
+                : (hasLive ? stats.livePnl : stats.paperPnl) > 0
+                  ? "good"
+                  : "default"
+            }
+            data={netVals}
+            labels={netLabels}
+          />
+        </div>
       </div>
       <p className="font-mono text-[11px] leading-relaxed text-faint">
         P&amp;L is net of exchange fees and GST. TDS (1% on every sell) is a
@@ -474,7 +501,10 @@ export default async function DashboardPage() {
                   </Link>
                 ),
               },
-              { v: b.market.replace(/^I-/, "").replace("_", "/"), tone: "muted" },
+              {
+                v: b.market.replace(/^I-/, "").replace("_", "/"),
+                tone: "muted",
+              },
               {
                 v: (
                   <span className="inline-flex items-center gap-1.5 text-xs">

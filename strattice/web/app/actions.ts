@@ -22,6 +22,7 @@ import { sanitizeCustomDef } from "@/lib/custom-strategy";
 import { sendApiKeyEmail } from "@/lib/email";
 import { sendTelegram, telegramConfigured, table } from "@/lib/telegram";
 import { isCurrencyCode } from "@/lib/currencies";
+import { isStatWindow } from "@/lib/stat-window";
 
 export async function saveCredentialsAction(formData: FormData) {
   const user = await getUser();
@@ -46,7 +47,9 @@ function prepareStrategyInsert(
     .trim()
     .toUpperCase();
   if (!/^[A-Z0-9_-]{3,24}$/.test(market))
-    throw new Error(`Enter a valid market id, e.g. I-BTC_INR (got "${market}")`);
+    throw new Error(
+      `Enter a valid market id, e.g. I-BTC_INR (got "${market}")`,
+    );
 
   let params: string | null = null;
   if (template === "custom") {
@@ -103,10 +106,13 @@ export async function removeStrategyAction(id: string) {
   revalidatePath("/strategies");
 }
 
-export async function setStrategyWeightsAction(weights: Record<string, number>) {
+export async function setStrategyWeightsAction(
+  weights: Record<string, number>,
+) {
   const userId = await requireUserId();
   for (const w of Object.values(weights)) {
-    if (!Number.isFinite(w) || w <= 0) throw new Error("Weights must be positive numbers");
+    if (!Number.isFinite(w) || w <= 0)
+      throw new Error("Weights must be positive numbers");
   }
   await q.setStrategyWeights(userId, weights);
   revalidatePath("/strategies");
@@ -218,6 +224,14 @@ export async function setCurrencyAction(currency: string) {
   if (!isCurrencyCode(currency)) throw new Error("Unknown currency.");
   await q.setCurrency(userId, currency);
   revalidatePath("/settings");
+}
+
+export async function setStatWindowAction(statWindow: string) {
+  const userId = await requireUserId();
+  if (!isStatWindow(statWindow)) throw new Error("Unknown timeline.");
+  await q.setStatWindow(userId, statWindow);
+  revalidatePath("/settings");
+  revalidatePath("/dashboard");
 }
 
 // ---------- billing (Cashfree) ----------
