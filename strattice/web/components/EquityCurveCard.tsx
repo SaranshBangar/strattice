@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { EquityCurve } from "@/components/charts";
-import { inr, shortTs, sample } from "@/lib/dashboard-format";
+import { inr, shortTs, tsMs, xFractions, timeTicks } from "@/lib/dashboard-format";
 
 type Point = { ts: string; unrealized_pnl: number; realized_today: number };
 
@@ -16,14 +16,6 @@ const WINDOWS = [
   { label: "1d", ms: 24 * 60 * 60_000 },
   { label: "All", ms: Number.POSITIVE_INFINITY },
 ] as const;
-
-// Snapshot ts is UTC "YYYY-MM-DD HH:MM:SS" (occasionally already zoned); pin it to UTC
-// before parsing so window math doesn't drift by the viewer's offset.
-function tsMs(ts: string): number {
-  return Date.parse(
-    ts.replace(" ", "T") + (/[Z+]/.test(ts.slice(10)) ? "" : "Z"),
-  );
-}
 
 export function EquityCurveCard({
   series,
@@ -46,7 +38,11 @@ export function EquityCurveCard({
   const unrealVals = windowed.map((s) => s.unrealized_pnl ?? 0);
   const realizedVals = windowed.map((s) => s.realized_today ?? 0);
   const labels = windowed.map((s) => shortTs(s.ts));
-  const xTicks = sample(labels, 5);
+  // Position points and ticks by real elapsed time so the axis gaps stay consistent
+  // regardless of the (irregular) poll interval between snapshots.
+  const times = windowed.map((s) => tsMs(s.ts));
+  const xs = xFractions(times);
+  const xTicks = timeTicks(times, 5);
   const setupAction = showSetup
     ? { href: "/account", label: "Finish setup" }
     : undefined;
@@ -91,6 +87,7 @@ export function EquityCurveCard({
             height={150}
             fmt={inr}
             xTicks={xTicks}
+            xs={xs}
             pointLabels={labels}
             baseline={{ value: 0, label: "break-even ₹0" }}
             emptySub="Marks to market once you hold an open position."
@@ -106,6 +103,7 @@ export function EquityCurveCard({
             height={150}
             fmt={inr}
             xTicks={xTicks}
+            xs={xs}
             pointLabels={labels}
             baseline={{ value: 0, label: "break-even ₹0" }}
             emptySub="Fills in as trades close and lock in profit or loss."

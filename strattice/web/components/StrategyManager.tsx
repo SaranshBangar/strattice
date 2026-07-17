@@ -11,7 +11,7 @@ import {
   removeStrategyAction,
   setStrategyWeightsAction,
 } from "@/app/actions";
-import type { StrategyRow } from "@/lib/queries";
+import type { StrategyRow, StrategyStat } from "@/lib/queries";
 import {
   ACTIVE_TEMPLATES,
   EXPERIMENTAL_TEMPLATES,
@@ -34,6 +34,7 @@ import { StrategyPreview } from "@/components/StrategyPreview";
 import { BestStrategyFinder } from "@/components/BestStrategyFinder";
 import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Spinner";
+import { inr } from "@/lib/dashboard-format";
 
 export const MARKETS = [
   "I-BTC_INR",
@@ -96,7 +97,22 @@ function ConfigRow({ k, v }: { k: string; v: string }) {
   );
 }
 
-export function StrategyManager({ strategies }: { strategies: StrategyRow[] }) {
+// Below this many CLOSED trades a strategy has too little live history to rank on
+// realized P&L, so we fall back to its backtested return instead.
+const MIN_CLOSED = 3;
+
+// Engine strategy names are "<template>_<idx>" (worker/config_gen.py); the trades read
+// model keys P&L by that name, so strip the index to match a stored template row.
+const templateOf = (engineName: string) => engineName.replace(/_\d+$/, "");
+
+export function StrategyManager({
+  strategies,
+  breakdown = [],
+}: {
+  strategies: StrategyRow[];
+  /** Per-strategy, per-market realized P&L (executed orders) for profit ranking. */
+  breakdown?: StrategyStat[];
+}) {
   const [pending, start] = useTransition();
   const [tpl, setTpl] = useState<PickableTemplate>(ACTIVE_TEMPLATES[0]);
   const [selectedMarkets, setSelectedMarkets] = useState<string[]>([
@@ -105,7 +121,78 @@ export function StrategyManager({ strategies }: { strategies: StrategyRow[] }) {
   const [customMarket, setCustomMarket] = useState("");
   const [edits, setEdits] = useState<Record<string, number>>({});
   const [err, setErr] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const toast = useToast();
+
+  // Realized P&L per stored strategy, aggregated from the trades read model by matching
+  // template + market. Wins+losses give the CLOSED-trade count that decides whether there
+  // is enough live history to trust the P&L.
+  const liveStat = useMemo(() => {
+    const byRow = new Map<string, { pnl: number; closed: number }>();
+    for (const s of strategies) {
+      let pnl = 0;
+      let closed = 0;
+      for (const b of breakdown) {
+        if (b.market === s.market && templateOf(b.strategy) === s.template) {
+          pnl += b.pnl;
+          closed += b.wins + b.losses;
+        }
+      }
+      byRow.set(s.id, { pnl, closed });
+    }
+    return byRow;
+  }, [strategies, breakdown]);
+
+  // Rank the selected strategies by profit: those with real trading history sort first by
+  // realized P&L; those still thin on data fall back to their backtested net return so a
+  // freshly added strategy still lands somewhere sensible instead of a flat ₹0.
+  const ranked = useMemo(() => {
+    return strategies
+      .map((s) => {
+        const live = liveStat.get(s.id) ?? { pnl: 0, closed: 0 };
+        const hasData = live.closed >= MIN_CLOSED;
+        const backtest = STRATEGY_META[s.template as Template]?.backtestNetPct;
+        return { s, pnl: live.pnl, closed: live.closed, hasData, backtest };
+      })
+      .sort((a, b) => {
+        if (a.hasData !== b.hasData) return a.hasData ? -1 : 1;
+        if (a.hasData && b.hasData) return b.pnl - a.pnl;
+        return (b.backtest ?? -Infinity) - (a.backtest ?? -Infinity);
+      });
+  }, [strategies, liveStat]);
+
+  const allSelected =
+    strategies.length > 0 && selected.size === strategies.length;
+
+  function toggleSelected(id: string) {
+    setSelected((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    setSelected((cur) =>
+      cur.size === strategies.length
+        ? new Set()
+        : new Set(strategies.map((s) => s.id)),
+    );
+  }
+
+  function removeSelected() {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    const noun = ids.length === 1 ? "strategy" : "strategies";
+    if (!confirm(`Remove ${ids.length} ${noun}? This can't be undone.`)) return;
+    run(async () => {
+      // Sequential: each removeStrategyAction revalidates the page, so serial keeps the
+      // server actions from racing each other's cache invalidation.
+      for (const id of ids) await removeStrategyAction(id);
+      setSelected(new Set());
+    }, `Removed ${ids.length} ${noun}`);
+  }
 
   const meta = STRATEGY_META[tpl];
   const cfg = TEMPLATE_CONFIG[tpl];
@@ -490,10 +577,15 @@ export function StrategyManager({ strategies }: { strategies: StrategyRow[] }) {
         </div>
       </section>
 
-      {/* 3 · your strategies */}
+      {/* 3 · your strategies — ranked by profit (backtest as a fallback for thin data) */}
       <section className="card">
-        <div className="flex items-center justify-between px-4 py-3">
-          <h2 className="eyebrow">03 · Your strategies</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <h2 className="eyebrow">03 · Your strategies</h2>
+            <span className="font-mono text-[10px] normal-case text-faint">
+              ranked by profit
+            </span>
+          </div>
           <span className="font-mono text-[11px] text-faint">
             {strategies.filter((s) => s.enabled).length} active · no cap
           </span>
@@ -503,97 +595,188 @@ export function StrategyManager({ strategies }: { strategies: StrategyRow[] }) {
             No strategies yet. Pick a template above, preview it, and add it.
           </div>
         ) : (
-          <ul>
-            {strategies.map((s) => {
-              const enabled = !!s.enabled;
-              const def =
-                s.template === "custom" ? parseCustomDef(s.params) : null;
-              return (
-                <li
-                  key={s.id}
-                  className="flex items-center justify-between gap-4 px-4 py-3"
-                >
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-medium text-fg">
-                        {def ? def.name : strategyLabel(s.template)}
-                      </span>
-                      <span className="rounded-sm bg-inset px-1.5 py-0.5 font-mono text-[11px] font-medium text-dim">
-                        {s.market}
-                      </span>
-                      <span className="rounded-sm bg-inset px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-faint">
-                        {STRATEGY_META[s.template as Template]?.kind ??
-                          "custom"}
-                      </span>
-                      {s.params && s.template !== "custom" && (
+          <>
+            {/* bulk-select toolbar: select all + remove the checked strategies at once */}
+            <div className="flex flex-wrap items-center gap-3 border-t border-line bg-white/[0.015] px-4 py-2">
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-muted">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleSelectAll}
+                  aria-label="Select all strategies"
+                  className="h-3.5 w-3.5 cursor-pointer accent-accent"
+                />
+                Select all
+              </label>
+              {selected.size > 0 && (
+                <>
+                  <span className="font-mono text-[11px] text-faint">
+                    {selected.size} selected
+                  </span>
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={removeSelected}
+                    className="inline-flex items-center gap-1.5 rounded-md bg-loss/10 px-2.5 py-1 text-xs font-medium text-loss transition-colors hover:bg-loss/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-loss disabled:opacity-50"
+                  >
+                    {pending && <Spinner className="h-3.5 w-3.5" />}
+                    Remove selected
+                  </button>
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => setSelected(new Set())}
+                    className="text-[11px] text-muted underline-offset-2 hover:text-fg hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+                  >
+                    Clear
+                  </button>
+                </>
+              )}
+            </div>
+            <ul>
+              {ranked.map(({ s, pnl, hasData, backtest }, i) => {
+                const enabled = !!s.enabled;
+                const def =
+                  s.template === "custom" ? parseCustomDef(s.params) : null;
+                const checked = selected.has(s.id);
+                return (
+                  <li
+                    key={s.id}
+                    className={[
+                      "flex items-center gap-3 px-4 py-3 transition-colors",
+                      checked ? "bg-accent/[0.06]" : "",
+                    ].join(" ")}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleSelected(s.id)}
+                      aria-label={`Select ${def ? def.name : strategyLabel(s.template)} on ${s.market}`}
+                      className="h-3.5 w-3.5 shrink-0 cursor-pointer accent-accent"
+                    />
+                    <span className="w-6 shrink-0 text-center font-mono text-xs tabular-nums text-faint">
+                      {i + 1}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium text-fg">
+                          {def ? def.name : strategyLabel(s.template)}
+                        </span>
+                        <span className="rounded-sm bg-inset px-1.5 py-0.5 font-mono text-[11px] font-medium text-dim">
+                          {s.market}
+                        </span>
+                        <span className="rounded-sm bg-inset px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-faint">
+                          {STRATEGY_META[s.template as Template]?.kind ??
+                            "custom"}
+                        </span>
+                        {/* Profit badge: realized ₹ P&L once there is enough live
+                            history, otherwise the backtested net return as a stand-in. */}
+                        {hasData ? (
+                          <span
+                            className={[
+                              "rounded-sm px-1.5 py-0.5 font-mono text-[11px] font-medium tabular-nums",
+                              pnl > 0
+                                ? "bg-gain/15 text-gain"
+                                : pnl < 0
+                                  ? "bg-loss/15 text-loss"
+                                  : "bg-inset text-dim",
+                            ].join(" ")}
+                            title="Realized P&L from your executed trades"
+                          >
+                            {pnl >= 0 ? "+" : ""}
+                            {inr(pnl)}
+                          </span>
+                        ) : backtest !== undefined ? (
+                          <span
+                            className={[
+                              "rounded-sm px-1.5 py-0.5 font-mono text-[11px] font-medium tabular-nums",
+                              backtest >= 0
+                                ? "bg-gain/10 text-gain/90"
+                                : "bg-loss/10 text-loss/90",
+                            ].join(" ")}
+                            title="Backtested net return — shown until this strategy has enough live trades to rank on real P&L"
+                          >
+                            {backtest >= 0 ? "+" : ""}
+                            {backtest.toFixed(1)}% backtest
+                          </span>
+                        ) : (
+                          <span
+                            className="rounded-sm bg-inset px-1.5 py-0.5 font-mono text-[11px] text-faint"
+                            title="No trading history or backtest yet"
+                          >
+                            no data yet
+                          </span>
+                        )}
+                        {s.params && s.template !== "custom" && (
+                          <span
+                            className="rounded-sm bg-accent/15 px-1.5 py-0.5 text-[11px] font-medium text-accent"
+                            title={s.params}
+                          >
+                            custom params
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted">
                         <span
-                          className="rounded-sm bg-accent/15 px-1.5 py-0.5 text-[11px] font-medium text-accent"
-                          title={s.params}
-                        >
-                          custom params
-                        </span>
-                      )}
+                          className={[
+                            "h-1.5 w-1.5 rounded-[1px]",
+                            enabled ? "bg-gain" : "bg-faint",
+                          ].join(" ")}
+                        />
+                        {enabled ? "Enabled" : "Disabled"}
+                        {def && (
+                          <span className="ml-1 truncate text-faint">
+                            · {def.rules.map(describeRule).join(" AND ")} ·
+                            exits: {describeExits(def.exits)}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted">
-                      <span
-                        className={[
-                          "h-1.5 w-1.5 rounded-[1px]",
-                          enabled ? "bg-gain" : "bg-faint",
-                        ].join(" ")}
-                      />
-                      {enabled ? "Enabled" : "Disabled"}
-                      {def && (
-                        <span className="ml-1 truncate text-faint">
-                          · {def.rules.map(describeRule).join(" AND ")} · exits:{" "}
-                          {describeExits(def.exits)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
 
-                  <div className="flex shrink-0 items-center gap-2">
-                    <button
-                      type="button"
-                      disabled={pending}
-                      onClick={() =>
-                        run(
-                          () => toggleStrategyAction(s.id, !s.enabled),
-                          enabled ? "Strategy disabled" : "Strategy enabled",
-                        )
-                      }
-                      className={[
-                        "rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50",
-                        enabled
-                          ? "bg-white/5 text-dim hover:bg-white/10"
-                          : "bg-gain/10 text-gain hover:bg-gain/20",
-                      ].join(" ")}
-                    >
-                      {enabled ? "Disable" : "Enable"}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={pending}
-                      onClick={() => {
-                        if (
-                          !confirm(
-                            `Remove ${def ? def.name : strategyLabel(s.template)} on ${s.market}? This can't be undone.`,
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() =>
+                          run(
+                            () => toggleStrategyAction(s.id, !s.enabled),
+                            enabled ? "Strategy disabled" : "Strategy enabled",
                           )
-                        )
-                          return;
-                        run(
-                          () => removeStrategyAction(s.id),
-                          "Strategy removed",
-                        );
-                      }}
-                      className="rounded-md px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:text-loss focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-loss disabled:opacity-50"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+                        }
+                        className={[
+                          "rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50",
+                          enabled
+                            ? "bg-white/5 text-dim hover:bg-white/10"
+                            : "bg-gain/10 text-gain hover:bg-gain/20",
+                        ].join(" ")}
+                      >
+                        {enabled ? "Disable" : "Enable"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() => {
+                          if (
+                            !confirm(
+                              `Remove ${def ? def.name : strategyLabel(s.template)} on ${s.market}? This can't be undone.`,
+                            )
+                          )
+                            return;
+                          run(
+                            () => removeStrategyAction(s.id),
+                            "Strategy removed",
+                          );
+                        }}
+                        className="rounded-md px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:text-loss focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-loss disabled:opacity-50"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
         )}
         <StrategySplit strategies={strategies} />
       </section>

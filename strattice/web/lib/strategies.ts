@@ -14,11 +14,17 @@ export interface StrategyMeta {
   explain: string[]; // long-form: how it works, why it works, when it struggles
   /** Rendered as a prominent risk callout wherever the template is shown. */
   warning?: string;
+  /** Headline net return (%) from the real-data backtest study (research/FINDINGS.md),
+   *  net of all fees and TDS on the template's default market. Used to rank a strategy
+   *  when it has too little live trading history to rank on realized P&L. Undefined for
+   *  templates with no browser-comparable backtest (custom rules, server-only ML). */
+  backtestNetPct?: number;
 }
 
 export const STRATEGY_META: Record<Template, StrategyMeta> = {
   tsmom: {
     label: "Time-Series Momentum",
+    backtestNetPct: 207.6,
     kind: "TREND",
     blurb:
       "Buys strength near recent highs - the most robust documented crypto edge.",
@@ -36,6 +42,7 @@ export const STRATEGY_META: Record<Template, StrategyMeta> = {
   },
   momentum: {
     label: "Momentum Breakout",
+    backtestNetPct: 108.7,
     kind: "MOMENTUM",
     blurb: "Buys fresh breakouts of the 20-day high on real volume.",
     entry:
@@ -51,6 +58,7 @@ export const STRATEGY_META: Record<Template, StrategyMeta> = {
   },
   squeeze_breakout: {
     label: "Squeeze Breakout",
+    backtestNetPct: 138.9,
     kind: "BREAKOUT",
     blurb:
       "Waits for a volatility squeeze, then trades the breakout with volume.",
@@ -68,6 +76,7 @@ export const STRATEGY_META: Record<Template, StrategyMeta> = {
   },
   ma_crossover: {
     label: "MA Crossover",
+    backtestNetPct: 187.7,
     kind: "TREND",
     blurb:
       "Buys when the 8-day average crosses above the 25-day; the trail takes care of the exit.",
@@ -85,6 +94,7 @@ export const STRATEGY_META: Record<Template, StrategyMeta> = {
   },
   vol_expansion: {
     label: "Volatility Expansion",
+    backtestNetPct: 143.6,
     kind: "VOLATILITY",
     blurb:
       "Enters when volatility pops out of a quiet range at a new local high.",
@@ -101,6 +111,7 @@ export const STRATEGY_META: Record<Template, StrategyMeta> = {
   },
   supertrend: {
     label: "Supertrend",
+    backtestNetPct: 94.6,
     kind: "TREND",
     blurb:
       "Rides the classic ATR-band trend indicator; buys fresh flips from down to up.",
@@ -117,6 +128,7 @@ export const STRATEGY_META: Record<Template, StrategyMeta> = {
   },
   rsi: {
     label: "RSI Reversion",
+    backtestNetPct: -3.5,
     kind: "MEAN-REV",
     blurb: "Retired: buys deeply oversold dips - loses net of India friction.",
     entry:
@@ -132,6 +144,7 @@ export const STRATEGY_META: Record<Template, StrategyMeta> = {
   },
   fast_rsi: {
     label: "Fast RSI",
+    backtestNetPct: -6.8,
     kind: "MEAN-REV",
     blurb: "Retired: a quicker RSI dip-buyer - loses net of India friction.",
     entry:
@@ -147,6 +160,7 @@ export const STRATEGY_META: Record<Template, StrategyMeta> = {
   },
   bb_reversion: {
     label: "Bollinger Reversion",
+    backtestNetPct: -54.2,
     kind: "MEAN-REV",
     blurb: "Retired: fades 2σ dislocations - loses net of India friction.",
     entry:

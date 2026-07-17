@@ -80,9 +80,9 @@ class Executor:
                 "response": {"reason": decision.reason},
             })
             log.warning("RISK BLOCK %s %s %s: %s", strategy, market, side, decision.reason)
-            notify.send(notify.table("TRADE BLOCKED", [
-                ("Strategy", strategy), ("Market", market),
-                ("Side", side.upper()), ("Reason", decision.reason),
+            notify.send(notify.bullets("Trade blocked", [
+                ("Side", side.upper()), ("Market", market),
+                ("Strategy", strategy), ("Reason", decision.reason),
             ]))
             return {"status": "rejected", "reason": decision.reason, "client_order_id": coid}
 
@@ -118,9 +118,9 @@ class Executor:
                     "status": "error", "dry_run": False, "response": {"error": str(e)},
                 })
                 log.error("ORDER FAILED %s %s %s: %s", strategy, market, side, e)
-                notify.send(notify.table("ORDER FAILED", [
-                    ("Strategy", strategy), ("Market", market),
-                    ("Side", side.upper()), ("Error", str(e)),
+                notify.send(notify.bullets("Order failed", [
+                    ("Side", side.upper()), ("Market", market),
+                    ("Strategy", strategy), ("Error", str(e)),
                 ]))
                 return {"status": "error", "reason": str(e), "client_order_id": coid}
 
@@ -166,9 +166,7 @@ class Executor:
                  f" PARTIAL(req {qty})" if partial else "")
         pnl_pct = (realized / fill_notional * 100) if fill_notional else 0.0
         ts_str = datetime.datetime.utcfromtimestamp(candle_ts / 1000).strftime("%Y-%m-%d %H:%M:%S UTC")
-        notify.send(notify.table(f"{tag} TRADE FILLED", [
-            ("Side", side.upper()),
-            ("Market", market),
+        notify.send(notify.bullets(f"{side.upper()} filled · {market}{'' if config.LIVE else ' (dry run)'}", [
             ("Quantity", f"{fill_qty}" + (f" (partial of {qty})" if partial else "")),
             ("Price", f"{fill_price}"),
             ("Notional", f"{fill_notional:.2f}"),

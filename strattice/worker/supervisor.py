@@ -67,13 +67,21 @@ def _kill_rel(uid: str) -> str:
     return f"data/users/{uid}/KILL"  # ROOT-relative; risk.py joins onto config.ROOT
 
 
-def _spawn(u: dict, cfg_path: Path, db: Path, log: Path) -> subprocess.Popen:
+def _spawn(u: dict, cfg_path: Path, db: Path, log: Path,
+           suppress_start_alert: bool = False) -> subprocess.Popen:
     env = os.environ.copy()
     env["CONFIG_PATH"] = str(cfg_path)
     env["BOT_DB_PATH"] = str(db)
     env["BOT_LOG_PATH"] = str(log)
     env["COINDCX_API_KEY"] = u["api_key"]
     env["COINDCX_SECRET_KEY"] = u["secret"]
+    # A config-only recycle (strategy add/remove/edit) must not fire a fresh "bot started"
+    # Telegram alert - the engine reads this flag and stays quiet on start. Genuine first
+    # starts and go-live transitions leave it unset so those still alert.
+    if suppress_start_alert:
+        env["BOT_SUPPRESS_START_ALERT"] = "1"
+    else:
+        env.pop("BOT_SUPPRESS_START_ALERT", None)
     if u["live"]:
         env["DRY_RUN"] = "false"
         env["LIVE_TRADING_CONFIRM"] = "I_UNDERSTAND_LIVE_TRADING"
@@ -253,10 +261,19 @@ def _reconcile(conn) -> None:
         cur = _procs.get(uid)
         alive = bool(cur) and cur["proc"].poll() is None
         if not alive or cur["hash"] != h:
+            # Quiet the start alert only when a still-running engine is recycled for a pure
+            # config/strategy change (same live flag). A first start, a crash restart, or a
+            # go-live/go-paper transition all still alert.
+            config_only = bool(cur) and alive and cur.get("live") == u["live"]
             if cur:
                 _stop(cur["proc"])
-            _procs[uid] = {"proc": _spawn(u, cfg_path, db, log), "hash": h}
-            print(f"[supervisor] (re)started engine for {uid} (tier={u['tier']} live={u['live']})")
+            _procs[uid] = {
+                "proc": _spawn(u, cfg_path, db, log, suppress_start_alert=config_only),
+                "hash": h,
+                "live": u["live"],
+            }
+            print(f"[supervisor] (re)started engine for {uid} (tier={u['tier']} "
+                  f"live={u['live']} quiet_start={config_only})")
 
         to_publish.append((uid, db, u, cfg["quote_currency"]))
 

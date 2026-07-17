@@ -12,9 +12,10 @@ export default async function StrategiesPage() {
   const user = await getUser();
   if (!user) redirect("/sign-in");
 
-  const [tier, strategies] = await Promise.all([
+  const [tier, strategies, breakdown] = await Promise.all([
     q.effectiveTier(user.id),
     q.listStrategies(user.id),
+    q.strategyBreakdown(user.id),
   ]);
 
   return (
@@ -47,7 +48,7 @@ export default async function StrategiesPage() {
           <StrategyQuiz />
         </section>
       )}
-      <StrategyManager strategies={strategies} />
+      <StrategyManager strategies={strategies} breakdown={breakdown} />
 
       {/* Recurring buy (DCA): simulator only until the engine can run it live. */}
       <section className="card p-5">
