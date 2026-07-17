@@ -633,6 +633,92 @@ export async function adminDisableBot(userId: string) {
   );
 }
 
+// ---------- supervisor control (owner-only) ----------
+// The supervisor is a single long-running Python process whose only channel to this app is
+// the shared D1 database. The admin console writes the desired regime here; the supervisor
+// reads it each poll and writes back its observed status (see worker/supervisor.py).
+export interface SupervisorStatus {
+  desired_state: string; // running | paused (what the console asked for)
+  restart_seq: number;
+  state: string | null; // running | paused (what the supervisor reported)
+  engines: number | null; // engines it's currently running
+  last_heartbeat: number | null; // unix seconds
+  last_error: string | null;
+}
+
+// supervisor_control shipped after the original schema (migration 0005) and schema.sql is
+// applied by hand, so a deployed D1 may lack the table. Create it on first miss and retry -
+// byte-identical to schema.sql / worker/store.py, idempotent (mirrors withPrefsTable).
+const SUPERVISOR_DDL = `create table if not exists supervisor_control (
+  id                  text primary key default 'singleton',
+  desired_state       text not null default 'running',
+  restart_seq         integer not null default 0,
+  state               text,
+  engines             integer,
+  applied_restart_seq integer not null default 0,
+  last_heartbeat      integer,
+  last_error          text,
+  updated_at          text not null default (datetime('now'))
+)`;
+
+async function withSupervisorTable<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    if (!String(e).includes("no such table: supervisor_control")) throw e;
+    await d1Query(SUPERVISOR_DDL);
+    return fn();
+  }
+}
+
+/** Current supervisor control + observed status. Defaults (running, never-seen) when no
+ *  row exists yet - the supervisor writes the first status on its next poll. */
+export async function getSupervisorStatus(): Promise<SupervisorStatus> {
+  const row = await withSupervisorTable(() =>
+    d1First<SupervisorStatus>(
+      `select desired_state, restart_seq, state, engines, last_heartbeat, last_error
+       from supervisor_control where id = 'singleton'`,
+    ),
+  );
+  return (
+    row ?? {
+      desired_state: "running",
+      restart_seq: 0,
+      state: null,
+      engines: null,
+      last_heartbeat: null,
+      last_error: null,
+    }
+  );
+}
+
+/** Set the supervisor's desired regime. 'paused' stops all user engines (the supervisor
+ *  keeps polling so it can be resumed); 'running' resumes normal reconciliation. Takes
+ *  effect on the supervisor's next poll. */
+export async function setSupervisorDesiredState(state: "running" | "paused") {
+  await withSupervisorTable(() =>
+    d1Query(
+      `insert into supervisor_control(id, desired_state) values ('singleton', ?)
+       on conflict(id) do update set desired_state=excluded.desired_state,
+         updated_at=datetime('now')`,
+      [state],
+    ),
+  );
+}
+
+/** Ask the supervisor to recycle every engine on its next poll (bumps restart_seq and
+ *  ensures it isn't left paused). */
+export async function requestSupervisorRestart() {
+  await withSupervisorTable(() =>
+    d1Query(
+      `insert into supervisor_control(id, desired_state, restart_seq)
+         values ('singleton', 'running', 1)
+       on conflict(id) do update set restart_seq = supervisor_control.restart_seq + 1,
+         desired_state='running', updated_at=datetime('now')`,
+    ),
+  );
+}
+
 /** All-time aggregates over executed orders. Wins/losses count sell legs only (see
  *  strategyBreakdown); live and paper P&L are kept apart so real money is never
  *  averaged with DRY_RUN simulations in a headline number. */

@@ -96,6 +96,60 @@ def active_users(db: D1) -> list[dict]:
     return out
 
 
+_CONTROL_DDL = """create table if not exists supervisor_control (
+  id                  text primary key default 'singleton',
+  desired_state       text not null default 'running',
+  restart_seq         integer not null default 0,
+  state               text,
+  engines             integer,
+  applied_restart_seq integer not null default 0,
+  last_heartbeat      integer,
+  last_error          text,
+  updated_at          text not null default (datetime('now'))
+)"""
+
+
+def _with_control_table(db: D1, fn):
+    """Run fn, creating supervisor_control on first miss and retrying. schema.sql is applied
+    by hand, so a deployed D1 may predate this table; the DDL is idempotent + byte-identical
+    to schema.sql (mirrors web/lib/queries.ts withSupervisorTable)."""
+    try:
+        return fn()
+    except RuntimeError as e:
+        if "no such table: supervisor_control" not in str(e):
+            raise
+        db.query(_CONTROL_DDL)
+        return fn()
+
+
+def read_control(db: D1) -> dict:
+    """Desired supervisor regime written by the admin console: {desired_state, restart_seq}.
+    Defaults to running/0 when no row exists yet (fresh install / table just created)."""
+    rows = _with_control_table(db, lambda: db.query(
+        "select desired_state, restart_seq from supervisor_control where id = 'singleton'"))
+    if not rows:
+        return {"desired_state": "running", "restart_seq": 0}
+    r = rows[0]
+    return {"desired_state": r.get("desired_state") or "running",
+            "restart_seq": int(r.get("restart_seq") or 0)}
+
+
+def write_status(db: D1, state: str, engines: int, applied_restart_seq: int,
+                 error: str | None = None) -> None:
+    """Observed supervisor status for the admin page's Supervisor card. Touches only the
+    status columns on conflict, so the app's desired_state/restart_seq are left intact (and
+    a fresh insert leaves them at their running/0 defaults)."""
+    _with_control_table(db, lambda: db.query(
+        """insert into supervisor_control
+             (id, state, engines, applied_restart_seq, last_heartbeat, last_error, updated_at)
+           values ('singleton', ?, ?, ?, ?, ?, datetime('now'))
+           on conflict(id) do update set state=excluded.state, engines=excluded.engines,
+             applied_restart_seq=excluded.applied_restart_seq,
+             last_heartbeat=excluded.last_heartbeat, last_error=excluded.last_error,
+             updated_at=datetime('now')""",
+        [state, engines, applied_restart_seq, int(time.time()), error]))
+
+
 def heartbeat(db: D1, user_id: str, error: str | None = None) -> None:
     db.query(
         """insert into bot_state(user_id, active, last_heartbeat, last_error)

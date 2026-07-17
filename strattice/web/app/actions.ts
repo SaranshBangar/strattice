@@ -271,3 +271,26 @@ export async function adminDisableBotAction(userId: string) {
   await q.adminDisableBot(userId);
   revalidatePath("/admin");
 }
+
+// ---------- supervisor control (owner-only) ----------
+// Start/stop/restart the shared supervisor process from the admin console. Because the app
+// only reaches the supervisor through D1, "stop" means pause (stop every engine but keep the
+// loop polling so "start" can resume it) rather than kill the OS process. All three take
+// effect on the supervisor's next poll.
+export async function adminStartSupervisorAction() {
+  await requireAdmin();
+  await q.setSupervisorDesiredState("running");
+  revalidatePath("/admin");
+}
+
+export async function adminStopSupervisorAction() {
+  await requireAdmin();
+  await q.setSupervisorDesiredState("paused");
+  revalidatePath("/admin");
+}
+
+export async function adminRestartSupervisorAction() {
+  await requireAdmin();
+  await q.requestSupervisorRestart();
+  revalidatePath("/admin");
+}

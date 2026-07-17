@@ -169,6 +169,25 @@ create table if not exists equity_snapshots (
 );
 create index if not exists equity_user_ts on equity_snapshots(user_id, ts desc);
 
+-- Supervisor process control + status. Singleton row (id='singleton'). The ONLY channel
+-- between the Next.js admin console and the Python supervisor: the console writes the
+-- desired regime (desired_state run/pause) and bumps restart_seq to request a restart; the
+-- supervisor reads it each poll and writes back its observed status (state, running engine
+-- count, heartbeat, and the last restart_seq it acted on) so the admin page can show whether
+-- it's up. "Paused" stops every user engine but keeps the supervisor polling, so it can be
+-- resumed from the same console (the process itself can't be relaunched over D1).
+create table if not exists supervisor_control (
+  id                  text primary key default 'singleton',
+  desired_state       text not null default 'running',  -- running | paused
+  restart_seq         integer not null default 0,        -- app bumps to request a restart
+  state               text,                              -- observed: running | paused
+  engines             integer,                           -- observed: running engine count
+  applied_restart_seq integer not null default 0,        -- last restart_seq the supervisor acted on
+  last_heartbeat      integer,                           -- unix seconds (supervisor)
+  last_error          text,
+  updated_at          text not null default (datetime('now'))
+);
+
 -- Cashfree webhook idempotency (Phase 3).
 create table if not exists billing_events (
   id                text primary key,

@@ -53,6 +53,21 @@ with 100/day. Flip `bot_state.active`/`user_strategies.enabled`/`subscriptions.t
 → the supervisor restarts that user's engine within one poll; trades land in `trades` with the
 right `user_id`. Positions persist across restarts (keyed in each user's SQLite).
 
+## Admin control (start / stop / restart)
+
+The supervisor is one long-running process; its only channel to the Next.js app is D1. The
+`supervisor_control` singleton row carries the desired regime the owner sets from **Admin**:
+
+- **Start** → `desired_state='running'`: normal reconciliation.
+- **Stop** → `desired_state='paused'`: stops every engine but keeps polling, so it can be
+  resumed from the same console (the process can't be relaunched over D1, so "stop" is a pause,
+  not a kill).
+- **Restart** → bumps `restart_seq`: recycles every engine on the next poll.
+
+Each poll the supervisor reads that row and writes back its observed `state`, running
+`engines` count, and `last_heartbeat`, which the Admin page shows as the supervisor's status
+(a heartbeat older than ~3 polls reads as offline). All controls take effect on the next poll.
+
 ## Known limits (Phase 1)
 
 - Engine restarts on any config/live change (simple + correct; positions persist). Live strategy
