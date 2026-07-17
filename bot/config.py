@@ -33,6 +33,17 @@ LIVE = (not DRY_RUN) and _LIVE_CONFIRM
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
+# The SaaS supervisor respawns a user's engine subprocess whenever their config changes
+# (e.g. a strategy is added/removed/edited). That recycle would otherwise fire a fresh
+# "bot started" alert on every strategy tweak, so the supervisor sets this flag on a
+# config-only restart to keep the start alert quiet. A genuine first start / go-live is
+# left un-set so those DO still alert.
+SUPPRESS_START_ALERT = os.getenv("BOT_SUPPRESS_START_ALERT", "").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+
 # Trade emails via the web app (optional). Single-user bot has no platform account, so it
 # emails NOTIFY_EMAIL directly through the app's /api/internal/notify. All three required.
 STRATTICE_URL = os.getenv("STRATTICE_URL", "").rstrip("/")

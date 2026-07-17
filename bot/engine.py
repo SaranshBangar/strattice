@@ -169,10 +169,10 @@ class Engine:
                     if hit:
                         log.info("%s %s %s @ %s (avg %s) -> force SELL",
                                  hit, strat.name, strat.market, price, avg)
-                        notify.send(notify.table("PROTECTIVE EXIT", [
-                            ("Trigger", hit), ("Market", strat.market),
-                            ("Strategy", strat.name), ("Price", f"{price}"),
-                            ("Avg Cost", f"{avg}"),
+                        notify.send(notify.bullets("Protective exit", [
+                            ("Market", strat.market), ("Strategy", strat.name),
+                            ("Trigger", hit), ("Price", f"{price}"),
+                            ("Avg cost", f"{avg}"),
                         ]))
                         self.executor.place(strategy=strat.name, market=strat.market,
                                             side="sell", qty=pos_qty, price=price, candle_ts=ts)
@@ -195,7 +195,7 @@ class Engine:
                                         side="sell", qty=pos_qty, price=price, candle_ts=ts)
             except Exception as e:  # noqa: BLE001 - one strategy failing must not kill the loop
                 log.exception("strategy %s failed", strat.name)
-                notify.send(notify.table("STRATEGY ERROR", [
+                notify.send(notify.bullets("Strategy error", [
                     ("Strategy", strat.name), ("Error", str(e)),
                 ]))
 
@@ -205,10 +205,14 @@ class Engine:
         log.info("Engine start | mode=%s | strategies=%s | interval=%s poll=%ss",
                  config.mode_str(), [s.name for s in self.strategies], self.interval, self.poll)
         self._sanity_check()
-        notify.send(notify.table("BOT STARTED", [
-            ("Mode", config.mode_str()),
-            ("Strategies", ", ".join(s.name for s in self.strategies)),
-        ]))
+        # A config-only recycle (the supervisor restarting the engine after a strategy
+        # change) sets SUPPRESS_START_ALERT so users don't get a spurious "bot started"
+        # ping on every strategy edit. A real first start / go-live leaves it unset.
+        if not config.SUPPRESS_START_ALERT:
+            notify.send(notify.bullets("Bot started", [
+                ("Mode", config.mode_str()),
+                ("Strategies", ", ".join(s.name for s in self.strategies)),
+            ]))
         while True:
             if self.risk.kill_switch_active():
                 self.executor.kill()

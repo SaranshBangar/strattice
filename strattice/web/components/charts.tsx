@@ -34,6 +34,7 @@ export function EquityCurve({
   emptySub,
   emptyAction,
   pointLabels,
+  xs,
 }: {
   points: number[];
   height?: number;
@@ -47,6 +48,7 @@ export function EquityCurve({
   emptySub?: string;
   emptyAction?: { href: string; label: string };
   pointLabels?: string[]; // one label per point, for hover tooltips (unlike the sampled xTicks)
+  xs?: number[]; // per-point 0..1 x positions (time-proportional); omit for even index spacing
 }) {
   if (points.length < 2)
     return (
@@ -73,7 +75,10 @@ export function EquityCurve({
   const lo = min - pad;
   const hi = max + pad;
   const span = hi - lo;
-  const x = (i: number) => (i / (points.length - 1)) * W;
+  // x positions come from real timestamps when supplied (consistent time gaps), else
+  // fall back to even index spacing.
+  const x = (i: number) =>
+    (xs ? xs[i] : i / (points.length - 1)) * W;
   const y = (v: number) => ((hi - v) / span) * H;
   const path = points
     .map(
@@ -463,12 +468,14 @@ export function DrawdownCurve({
   xTicks = [],
   guide = false,
   pointLabels,
+  xs,
 }: {
   points: number[];
   height?: number;
   xTicks?: string[];
   guide?: boolean; // dashed reference at the deepest drawdown, labelled
   pointLabels?: string[]; // one label per point, for hover tooltips
+  xs?: number[]; // per-point 0..1 x positions (time-proportional); omit for even index spacing
 }) {
   if (points.length < 2)
     return <ChartEmpty height={height} label="Not enough history yet." />;
@@ -478,7 +485,7 @@ export function DrawdownCurve({
   const maxDD = Math.max(...points, 0.1); // never a zero-height domain
   const hi = maxDD * 1.08; // headroom below the deepest trough
   const y = (v: number) => (v / hi) * H;
-  const x = (i: number) => (i / (points.length - 1)) * W;
+  const x = (i: number) => (xs ? xs[i] : i / (points.length - 1)) * W;
   const path = points
     .map(
       (v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`,

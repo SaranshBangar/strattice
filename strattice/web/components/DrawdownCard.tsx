@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { DrawdownCurve } from "@/components/charts";
-import { shortTs, sample } from "@/lib/dashboard-format";
+import { shortTs, tsMs, xFractions, timeTicks } from "@/lib/dashboard-format";
 import { RangeButtons } from "@/components/RangeButtons";
 
 export function DrawdownCard({
@@ -28,7 +28,10 @@ export function DrawdownCard({
     });
     return { ddSeries: dd, maxDD, labels: windowed.map((s) => shortTs(s.ts)) };
   }, [windowed]);
-  const xTicks = sample(labels, 5);
+  // Time-proportional axis: consistent gaps even when poll snapshots are irregular.
+  const times = windowed.map((s) => tsMs(s.ts));
+  const xs = xFractions(times);
+  const xTicks = timeTicks(times, 5);
 
   return (
     <section className="card">
@@ -47,6 +50,7 @@ export function DrawdownCard({
         <DrawdownCurve
           points={ddSeries}
           xTicks={xTicks}
+          xs={xs}
           pointLabels={labels}
           guide
         />

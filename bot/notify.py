@@ -51,11 +51,21 @@ def _enqueue(fn, *args) -> None:
         log.error("notify queue full (%d); dropping alert", _QUEUE_MAXSIZE)
 
 
-def table(title: str, rows: list[tuple[str, str]]) -> str:
-    """Render an aligned key/value block wrapped in ``` so Telegram shows it monospace."""
-    w = max(len(k) for k, _ in rows)
-    body = "\n".join(f"{k.ljust(w)} : {v}" for k, v in rows)
-    return f"```\n{title}\n{body}\n```"
+def _md_escape(s: str) -> str:
+    """Escape the characters Telegram's legacy Markdown treats as formatting, so a value
+    like an engine name (tsmom_0) or a market (I-BTC_INR) renders literally instead of
+    accidentally starting italics/code."""
+    out = str(s)
+    for ch in ("\\", "_", "*", "`", "["):
+        out = out.replace(ch, "\\" + ch)
+    return out
+
+
+def bullets(title: str, rows: list[tuple[str, str]]) -> str:
+    """A simple, bullet-pointed alert: a bold title over one '• key: value' line per row.
+    Replaces the old monospaced table() - easier to scan on a phone."""
+    body = "\n".join(f"• {_md_escape(k)}: {_md_escape(v)}" for k, v in rows)
+    return f"*{_md_escape(title)}*\n{body}"
 
 
 def _email_trade_sync(side: str, market: str, qty: float, price: float, notional: float,

@@ -17,7 +17,7 @@ import { PnlHistogramCard } from "@/components/PnlHistogramCard";
 import { strategyLabel } from "@/lib/strategies";
 import { usdRate } from "@/lib/fx";
 import { currencySymbol } from "@/lib/currencies";
-import { fmt, inr, shortTs } from "@/lib/dashboard-format";
+import { fmt, inr, shortTs, tsMs, xFractions } from "@/lib/dashboard-format";
 import { statWindow, windowSinceISO } from "@/lib/stat-window";
 
 export const dynamic = "force-dynamic";
@@ -98,14 +98,18 @@ export default async function DashboardPage() {
         ? "Bot stalled — no recent heartbeat"
         : "Bot off";
 
-  // Sparkline inputs for the three stat cards.
+  // Sparkline inputs for the three stat cards. Points are positioned by real elapsed time
+  // (xFractions) so the horizontal gaps stay consistent even though poll snapshots and
+  // trading days arrive at irregular intervals.
   const seriesLabels = series.map((s) => shortTs(s.ts));
+  const seriesXs = xFractions(series.map((s) => tsMs(s.ts)));
   const unrealizedVals = series.map((s) => s.unrealized_pnl);
   // Net P&L trend = running total of daily realized P&L (the old daily bars folded into
   // this card's sparkline instead of a chart of their own).
   let netAcc = 0;
   const netVals = daily.map((d) => (netAcc += d.pnl));
   const netLabels = daily.map((d) => d.day.slice(5));
+  const netXs = xFractions(daily.map((d) => tsMs(`${d.day} 00:00:00`)));
 
   // --- Pro-view technical metrics (computed from data already loaded above) ---
   // Max drawdown: largest peak-to-trough drop across the equity curve.
@@ -325,6 +329,7 @@ export default async function DashboardPage() {
             hint="Practice cash left after money currently deployed in open trades - not your exchange wallet balance. Add Unrealized P&L to see your full net worth."
             data={equityVals}
             labels={seriesLabels}
+            xs={seriesXs}
           />
           <GraphStatCard
             label="Unrealized P&L"
@@ -340,6 +345,7 @@ export default async function DashboardPage() {
             }
             data={unrealizedVals}
             labels={seriesLabels}
+            xs={seriesXs}
           />
           <GraphStatCard
             label={hasLive ? "Net P&L (live)" : "Net P&L (paper)"}
@@ -359,6 +365,7 @@ export default async function DashboardPage() {
             }
             data={netVals}
             labels={netLabels}
+            xs={netXs}
           />
         </div>
       </div>

@@ -29,6 +29,7 @@ export function GraphStatCard({
   tone = "default",
   data,
   labels,
+  xs,
   height = 56,
   fmt = inr,
 }: {
@@ -41,6 +42,8 @@ export function GraphStatCard({
   data: number[];
   /** One label per point (e.g. timestamp) shown in the hover tooltip. */
   labels?: string[];
+  /** Per-point 0..1 x positions (time-proportional). Omit for even index spacing. */
+  xs?: number[];
   height?: number;
   /** Formats a point's value in the tooltip. Defaults to INR; the demo passes its
    *  currency-localized formatter (safe here - both caller and card are client-side). */
@@ -58,17 +61,22 @@ export function GraphStatCard({
   let dotTop = 0;
   const W = 120;
   const H = height;
+  // x positions come from real timestamps when supplied (consistent time gaps), else even
+  // index spacing. `xf` is the 0..1 fraction of a point; the line, highlight and hover all
+  // read through it so the whole card shares one honest time axis.
+  const xf = (i: number) => (xs ? xs[i] : i / (data.length - 1));
   if (enough) {
     const min = Math.min(...data);
     const max = Math.max(...data);
     const span = max - min || 1;
-    const x = (i: number) => (i / (data.length - 1)) * W;
     const y = (v: number) => H - 2 - ((v - min) / span) * (H - 4);
     line = data
-      .map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`)
+      .map(
+        (v, i) => `${i === 0 ? "M" : "L"}${(xf(i) * W).toFixed(1)} ${y(v).toFixed(1)}`,
+      )
       .join(" ");
     if (hi != null) {
-      leftPct = (hi / (data.length - 1)) * 100;
+      leftPct = xf(hi) * 100;
       dotTop = y(data[hi]);
     }
   }
@@ -79,7 +87,18 @@ export function GraphStatCard({
     if (!el) return;
     const r = el.getBoundingClientRect();
     const f = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
-    setHi(Math.round(f * (data.length - 1)));
+    // Snap to the nearest point by x fraction so an irregular time axis still picks the
+    // point actually under the cursor (not the one at that array-index fraction).
+    let best = 0;
+    let bestD = Infinity;
+    for (let i = 0; i < data.length; i++) {
+      const d = Math.abs(xf(i) - f);
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    }
+    setHi(best);
   }
 
   // Keep the tooltip pill from spilling past the card edges.

@@ -51,11 +51,19 @@ export async function sendTelegram(
   }
 }
 
-/** Aligned key/value block wrapped in ``` so Telegram renders it monospace. */
-export function table(title: string, rows: [string, string][]): string {
-  const w = Math.max(...rows.map(([k]) => k.length));
-  const body = rows.map(([k, v]) => `${k.padEnd(w)} : ${v}`).join("\n");
-  return "```\n" + `${title}\n${body}` + "\n```";
+// Escape the characters Telegram's legacy Markdown treats as formatting, so a value like a
+// market id (I-BTC_INR) or strategy name (tsmom_0) renders literally, not as italics/code.
+function mdEscape(s: string): string {
+  return String(s).replace(/([\\_*`[])/g, "\\$1");
+}
+
+/** A simple, bullet-pointed alert: a bold title over one "• key: value" line per row.
+ *  Replaces the old monospaced table() - easier to scan on a phone. */
+export function bullets(title: string, rows: [string, string][]): string {
+  const body = rows
+    .map(([k, v]) => `• ${mdEscape(k)}: ${mdEscape(v)}`)
+    .join("\n");
+  return `*${mdEscape(title)}*\n${body}`;
 }
 
 const money = (n: number) =>
@@ -77,12 +85,10 @@ export function sendTradeTelegram(
   const buy = t.side.toLowerCase() === "buy";
   const title = `${buy ? "BUY" : "SELL"} ${t.market}${t.dryRun ? " (dry run)" : ""}`;
   const rows: [string, string][] = [
-    ["Side", t.side.toUpperCase()],
-    ["Market", t.market],
     ["Quantity", String(t.qty)],
     ["Price", money(t.price)],
     ["Notional", money(t.notional)],
   ];
   if (t.strategy) rows.push(["Strategy", t.strategy]);
-  return sendTelegram(chatId, table(title, rows));
+  return sendTelegram(chatId, bullets(title, rows));
 }

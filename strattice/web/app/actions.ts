@@ -20,7 +20,7 @@ import { sanitizeParams } from "@/lib/strategy-sim";
 import { GO_LIVE_PHRASE } from "@/lib/risk";
 import { sanitizeCustomDef } from "@/lib/custom-strategy";
 import { sendApiKeyEmail } from "@/lib/email";
-import { sendTelegram, telegramConfigured, table } from "@/lib/telegram";
+import { sendTelegram, telegramConfigured, bullets } from "@/lib/telegram";
 import { isCurrencyCode } from "@/lib/currencies";
 import { isStatWindow } from "@/lib/stat-window";
 
@@ -196,7 +196,7 @@ export async function saveTelegramNotificationsAction(
   });
   const res = await sendTelegram(
     id,
-    table("Strattice connected", [
+    bullets("Strattice connected", [
       ["Alerts", "on"],
       ["You'll get", "buy / sell fills"],
     ]),
