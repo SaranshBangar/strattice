@@ -74,7 +74,7 @@ risk:
 #   stop_loss_pct / take_profit_pct / max_hold_bars (time-stop) / chandelier_k (ATR trailing).
 # regime_period gates every long entry to an uptrend (price above its N-bar SMA, shared).
 #
-# THE LINEUP (all 1d bars). Five diversified trend engines, one per market, so all five can
+# THE LINEUP (all 1d bars). Six diversified trend engines, one per market, so all six can
 # hold concurrently (no-dup-asset rule). Markets were assigned where each strategy was profitable
 # on BOTH the INR pair AND its USDT twin (venue robustness, not pair lottery — see FINDINGS).
 # Take-profits are OFF everywhere: the fat right tail of trend winners is the whole edge; the
@@ -87,6 +87,13 @@ risk:
 #   ma_cross @ XRP +187.7% (PF 2.25, 6 trades) | USDT twin +109.8%
 #   volexp @ BNB +143.6% (PF 2.75, 6 trades)   | USDT twin +171.9%
 #   squeeze @ DOGE +138.9% (PF 2.85, 9 trades) | USDT twin  +36.5%  (v4, July 2026)
+#   accel @ ADA  +60.1% (PF 1.33, 10 trades)   | USDT twin   +1.7%  (v5, July 2026)
+# NOTE on accel @ ADA (v5): promoted as the 6th sleeve for SIGNAL-FAMILY diversification, not
+# because it is the top scorer on ADA. In an on-ADA bake-off ma_cross (+99.5%/twin +23.3%, WF
+# 3/4) and tsmom (+80.4%/twin +50.4%) score higher — but both would CLONE an engine already in
+# the lineup (ma_cross@XRP, tsmom@ETH). Acceleration is the strongest NON-duplicate signal family
+# for ADA. Caveat: its rolling 200-bar OOS is only 1/4 folds (full-history + plateau are strong;
+# see FINDINGS v5). Adding a 6th sleeve dilutes each sleeve from ~0.194 to ~0.162 of equity.
 strategies:
   - name: "tsmom_eth" # time-series momentum: buy strength near its highs
     module: "tsmom"
@@ -186,6 +193,26 @@ strategies:
       max_chase: 0.05
       min_atr_frac: 0.01
       regime_period: 50
+      expected_move_pct: 0.08
+
+  - name: "accel_ada" # acceleration momentum: buy an ACCELERATING leg into fresh highs (v5)
+    module: "acceleration"
+    enabled: true
+    weight: 1.0
+    market: "I-ADA_INR"
+    stop_loss_pct: 0.07 # same trend-engine exits as the other five sleeves
+    take_profit_pct: 0.0 # never cap the parabola — the right tail is the edge
+    chandelier_k: 3.5
+    atr_period: 14
+    max_hold_bars: 0
+    params:
+      fast: 10 # recent 10d leg vs the prior 10d leg (validated plateau default, not ADA-fit)
+      min_return: 0.08 # recent leg must be >= +8% (real thrust, not drift)
+      accel_mult: 1.5 # recent leg >= 1.5x the prior leg (momentum accelerating)
+      breakout_lookback: 20 # close must be the 20d high (accelerating INTO strength)
+      vol_period: 20
+      vol_mult: 1.0 # last closed day's volume >= its 20d average
+      regime_period: 50 # 50d SMA uptrend gate
       expected_move_pct: 0.08
 
   # --- MIGRATION (v2 -> v3): keep the previously-enabled strategies as DISABLED stubs so an

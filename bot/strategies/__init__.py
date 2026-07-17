@@ -1,5 +1,7 @@
 """Strategy registry. Maps config `module` name -> Strategy subclass."""
+from .acceleration import AccelerationMomentum
 from .bb_reversion import BBReversion
+from .capitulation import CapitulationReversal
 from .custom import CustomRules
 from .fast_rsi import FastRSIReversion
 from .hf_forecast import HFForecast
@@ -13,6 +15,8 @@ from .tsmom import TSMomentum
 from .vol_expansion import VolExpansion
 
 REGISTRY = {
+    "acceleration": AccelerationMomentum,
+    "capitulation": CapitulationReversal,
     "ma_crossover": MACrossover,
     "rsi": RSIMeanReversion,
     "momentum": Momentum,

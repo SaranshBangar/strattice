@@ -1,5 +1,66 @@
 # Strategy review: backtest findings (July 2026)
 
+> **v5 addendum (mid-July 2026, `crypto-profit-strategies`)** — two aggressive
+> spot engines added and studied against the same data
+> (`research/run_backtests.py --only accel_1d,cap_1d_tp,cap_1d_ch,...`). The brief
+> was "unhinged" high-return tactics; the hard constraints of this bot bound what
+> that can mean. It is **spot-only, long-only, full-allocation, no leverage/margin/
+> futures** — enforced by `bot/backtest.py:_selftest_static_invariants`, which fails
+> the build on any leverage/margin/futures/fund-movement call — and market
+> manipulation (wash trading, spoofing, pump coordination, trading on MNPI) is
+> illegal and was not implemented. So "aggressive" here means the two most
+> aggressive *legal* spot edges that fit the pure-strategy interface:
+>
+> - **acceleration momentum VALIDATED** (new module `acceleration`): buy an
+>   *accelerating* momentum leg (recent return outruns the prior leg by `accel_mult`)
+>   into fresh highs on expanding volume — a harder-firing cousin of tsmom/Donchian.
+>   Wide parameter plateau: **27/27** combos (fast 8/10/14 × min_return 6/8/10% ×
+>   accel_mult 1.3/1.5/2.0) positive on the INR-pair median, every combo +5/5 across
+>   the venue-robust pairs (median +77% to +161%). Full-history net is venue-robust
+>   (INR **and** USDT twin both positive) on BNB, BTC, XRP, DOGE, ADA. **PROMOTED as
+>   the 6th live sleeve @ I-ADA_INR** (+60.1% / twin +1.7%, PF 1.33). ADA is the only
+>   venue-robust asset the existing five engines don't already hold. The on-ADA
+>   head-to-head bake-off is the honest justification and its caveat both:
+>
+>   | ADA contender | INR net | USDT twin | robust | WF (200-bar OOS) |
+>   | ------------- | ------: | --------: | :----: | :--------------: |
+>   | ma_cross      | +99.5%  | +23.3%    | yes    | **3/4**          |
+>   | tsmom         | +80.4%  | +50.4%    | yes    | 1/4              |
+>   | vol_exp       | +67.5%  | +5.1%     | yes    | 1/4              |
+>   | **accel**     | +60.1%  | +1.7%     | yes    | 1/4              |
+>   | breakout      | +48.7%  | -23.2%    | no     | 1/4              |
+>   | supertrend    | +27.6%  | -34.1%    | no     | 2/4              |
+>   | squeeze       | +27.1%  | -18.5%    | no     | 1/4              |
+>
+>   ma_cross and tsmom *outscore* accel on ADA — but both would CLONE an engine already
+>   in the lineup (ma_cross @ XRP, tsmom @ ETH). **Acceleration is the strongest
+>   NON-duplicate signal family for ADA**, which is why it takes the slot in a lineup
+>   whose entire design is one diversified engine per market. Caveats carried forward,
+>   not hidden: accel's rolling 200-bar OOS is only **1/4** folds on ADA (its
+>   full-history net and the 27/27 parameter plateau are the strength; the short ~2.8y
+>   daily history means few folds), and adding a 6th sleeve dilutes each sleeve from
+>   ~0.194 to ~0.162 of equity. It is a momentum/breakout-family engine, so it also
+>   overlaps the BTC/DOGE breakout sleeves in *signal* even though ADA is a fresh asset.
+> - **capitulation reversal REJECTED** (new module `capitulation`): buy a confirmed
+>   green bounce off a violent oversold crash (deliberately *not* regime-gated — the
+>   whole point is to fire below the trend MA), with an anti-death-spiral `max_drop`
+>   guard. It is a lottery: rare (1-6 trades per 1000 bars), big-tailed both ways, and
+>   venue-robust on only **1/7** assets (SOL) under either a take-profit or a
+>   chandelier exit. This re-confirms Result 1/2 below — mean reversion does not
+>   survive India friction at any altitude, and buying capitulation lows is just its
+>   most violent form. Kept in the registry so the rejection reproduces; disabled.
+> - **intraday variants of both confirm the friction wall**: `accel` and `cap` at 1h/4h
+>   pay 45-220% of capital in fees+TDS and lose on nearly every market — the same wall
+>   that retired the entire 15m/1h lineup in Result 1. Documented, not enabled.
+>
+> Net: the lineup goes from five sleeves to **six** — acceleration @ I-ADA_INR joins the
+> five daily trend engines, taking the one venue-robust asset they didn't already hold.
+> The falling-knife play (capitulation) stays out: it loses exactly where the friction
+> study predicts. (Acceleration's on-ADA walk-forward is thin at 1/4 folds — this is a
+> diversification-into-a-new-signal-family bet backed by a wide parameter plateau, not a
+> claim that it is the single best strategy for ADA; ma_cross/tsmom score higher there
+> but would duplicate existing engines.)
+
 > **v4 addendum (late July 2026)** — a second study pass over the same data
 > (`research/run_backtests.py --only supertrend_1d,ensemble_1d,squeeze_1d`):
 >

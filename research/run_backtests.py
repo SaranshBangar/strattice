@@ -180,6 +180,37 @@ def candidates() -> list[dict]:
          "max_chase": 0.05, "min_atr_frac": 0.01, "regime_period": 50,
          "expected_move_pct": 0.08},
         sl=0.07, ch=3.5, atrp=14)
+
+    # --- v5 candidates: aggressive-but-legal spot engines (crypto-profit-strategies) ---
+    # (1) Capitulation reversal: buy a confirmed bounce off a violent oversold crash.
+    #     Mean-reversion, so it carries a take-profit + time-stop (unlike the trend sleeves),
+    #     and a WIDE hard stop because it deliberately buys below the trend MA.
+    add("cap_1d_tp", "capitulation", "1d",
+        {"crash_lookback": 10, "crash_drop": 0.15, "max_drop": 0.50, "rsi_period": 14,
+         "oversold": 25, "vol_period": 20, "vol_mult": 1.2, "expected_move_pct": 0.06},
+        sl=0.10, tp=0.15, hold=20, atrp=14)
+    add("cap_1d_ch", "capitulation", "1d",  # chandelier variant: ride if the bounce becomes a trend
+        {"crash_lookback": 10, "crash_drop": 0.15, "max_drop": 0.50, "rsi_period": 14,
+         "oversold": 25, "vol_period": 20, "vol_mult": 1.2, "expected_move_pct": 0.06},
+        sl=0.10, ch=3.0, atrp=14)
+    add("cap_1h", "capitulation", "1h",  # intraday cascades (friction sanity check)
+        {"crash_lookback": 24, "crash_drop": 0.10, "max_drop": 0.40, "rsi_period": 14,
+         "oversold": 20, "vol_period": 24, "vol_mult": 1.3, "expected_move_pct": 0.05},
+        sl=0.06, tp=0.06, hold=48, atrp=14)
+
+    # (2) Acceleration momentum: buy an accelerating leg into fresh highs on volume.
+    add("accel_1d", "acceleration", "1d",
+        {"fast": 10, "min_return": 0.08, "accel_mult": 1.5, "breakout_lookback": 20,
+         "vol_period": 20, "vol_mult": 1.0, "regime_period": 50, "expected_move_pct": 0.08},
+        sl=0.07, ch=3.5, atrp=14)
+    add("accel_4h", "acceleration", "4h",
+        {"fast": 12, "min_return": 0.06, "accel_mult": 1.5, "breakout_lookback": 24,
+         "vol_period": 24, "vol_mult": 1.1, "regime_period": 42, "expected_move_pct": 0.06},
+        sl=0.05, ch=3.0, atrp=14)
+    add("accel_1h", "acceleration", "1h",
+        {"fast": 24, "min_return": 0.04, "accel_mult": 1.5, "breakout_lookback": 48,
+         "vol_period": 48, "vol_mult": 1.2, "regime_period": 120, "expected_move_pct": 0.05},
+        sl=0.04, ch=3.0, atrp=14)
     return c
 
 
