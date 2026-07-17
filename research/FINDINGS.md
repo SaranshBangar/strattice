@@ -17,14 +17,30 @@
 >   Wide parameter plateau: **27/27** combos (fast 8/10/14 × min_return 6/8/10% ×
 >   accel_mult 1.3/1.5/2.0) positive on the INR-pair median, every combo +5/5 across
 >   the venue-robust pairs (median +77% to +161%). Full-history net is venue-robust
->   (INR **and** USDT twin both positive) on BNB, BTC, XRP, DOGE, ADA. **Not promoted
->   to a live sleeve**, for the same reason supertrend wasn't: its venue-robust assets
->   are already occupied by incumbents that beat it head-to-head and carry deeper
->   walk-forward records (BTC breakout 16/21 vs accel 3/4; DOGE squeeze 18/21 vs accel
->   3/4), and the one *free* venue-robust asset (ADA) fails walk-forward (1/4 rolling
->   200-bar OOS folds). Offered as a platform template (default e.g. `acceleration`
->   @ I-XRP_INR: +191% / twin +90%). Enable it only by swapping out a weaker sleeve on
->   deliberate evidence, never by doubling an occupied asset (no-dup rule).
+>   (INR **and** USDT twin both positive) on BNB, BTC, XRP, DOGE, ADA. **PROMOTED as
+>   the 6th live sleeve @ I-ADA_INR** (+60.1% / twin +1.7%, PF 1.33). ADA is the only
+>   venue-robust asset the existing five engines don't already hold. The on-ADA
+>   head-to-head bake-off is the honest justification and its caveat both:
+>
+>   | ADA contender | INR net | USDT twin | robust | WF (200-bar OOS) |
+>   | ------------- | ------: | --------: | :----: | :--------------: |
+>   | ma_cross      | +99.5%  | +23.3%    | yes    | **3/4**          |
+>   | tsmom         | +80.4%  | +50.4%    | yes    | 1/4              |
+>   | vol_exp       | +67.5%  | +5.1%     | yes    | 1/4              |
+>   | **accel**     | +60.1%  | +1.7%     | yes    | 1/4              |
+>   | breakout      | +48.7%  | -23.2%    | no     | 1/4              |
+>   | supertrend    | +27.6%  | -34.1%    | no     | 2/4              |
+>   | squeeze       | +27.1%  | -18.5%    | no     | 1/4              |
+>
+>   ma_cross and tsmom *outscore* accel on ADA — but both would CLONE an engine already
+>   in the lineup (ma_cross @ XRP, tsmom @ ETH). **Acceleration is the strongest
+>   NON-duplicate signal family for ADA**, which is why it takes the slot in a lineup
+>   whose entire design is one diversified engine per market. Caveats carried forward,
+>   not hidden: accel's rolling 200-bar OOS is only **1/4** folds on ADA (its
+>   full-history net and the 27/27 parameter plateau are the strength; the short ~2.8y
+>   daily history means few folds), and adding a 6th sleeve dilutes each sleeve from
+>   ~0.194 to ~0.162 of equity. It is a momentum/breakout-family engine, so it also
+>   overlaps the BTC/DOGE breakout sleeves in *signal* even though ADA is a fresh asset.
 > - **capitulation reversal REJECTED** (new module `capitulation`): buy a confirmed
 >   green bounce off a violent oversold crash (deliberately *not* regime-gated — the
 >   whole point is to fire below the trend MA), with an anti-death-spiral `max_drop`
@@ -37,10 +53,13 @@
 >   pay 45-220% of capital in fees+TDS and lose on nearly every market — the same wall
 >   that retired the entire 15m/1h lineup in Result 1. Documented, not enabled.
 >
-> Net: the lineup is **unchanged**. The disciplined "unhinged" result is that the one
-> new edge strong enough to matter (acceleration) has no robust home the five existing
-> engines aren't already covering better, and the falling-knife play (capitulation)
-> loses exactly where the friction study predicts.
+> Net: the lineup goes from five sleeves to **six** — acceleration @ I-ADA_INR joins the
+> five daily trend engines, taking the one venue-robust asset they didn't already hold.
+> The falling-knife play (capitulation) stays out: it loses exactly where the friction
+> study predicts. (Acceleration's on-ADA walk-forward is thin at 1/4 folds — this is a
+> diversification-into-a-new-signal-family bet backed by a wide parameter plateau, not a
+> claim that it is the single best strategy for ADA; ma_cross/tsmom score higher there
+> but would duplicate existing engines.)
 
 > **v4 addendum (late July 2026)** — a second study pass over the same data
 > (`research/run_backtests.py --only supertrend_1d,ensemble_1d,squeeze_1d`):
