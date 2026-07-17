@@ -4,6 +4,7 @@ import * as q from "@/lib/queries";
 import { telegramConfigured } from "@/lib/telegram";
 import { NotificationSettings } from "@/components/NotificationSettings";
 import { CurrencySettings } from "@/components/CurrencySettings";
+import { StatWindowSettings } from "@/components/StatWindowSettings";
 import { AccountActions } from "@/components/AccountActions";
 
 export const dynamic = "force-dynamic";
@@ -12,9 +13,10 @@ export default async function SettingsPage() {
   const user = await getUser();
   if (!user) redirect("/sign-in");
 
-  const [prefs, currency] = await Promise.all([
+  const [prefs, currency, statWindow] = await Promise.all([
     q.getNotificationPrefs(user.id),
     q.getCurrency(user.id),
+    q.getStatWindow(user.id),
   ]);
 
   return (
@@ -38,6 +40,8 @@ export default async function SettingsPage() {
         />
 
         <CurrencySettings initial={currency} />
+
+        <StatWindowSettings initial={statWindow} />
 
         <AccountActions />
       </div>
