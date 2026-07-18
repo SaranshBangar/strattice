@@ -28,12 +28,66 @@ def _conn() -> sqlite3.Connection:
     global _conn_obj
     if _conn_obj is None:
         config.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-        _conn_obj = sqlite3.connect(config.DB_PATH, check_same_thread=False)
+        # timeout: if another process (supervisor projection, sqlite3 CLI, backup) holds
+        # the write lock, wait up to 30s instead of instantly raising 'database is locked'.
+        _conn_obj = sqlite3.connect(config.DB_PATH, check_same_thread=False, timeout=30)
         _conn_obj.row_factory = sqlite3.Row
         # WAL lets a concurrent read-only connection (e.g. the SaaS supervisor's per-user
         # projection reader) proceed without blocking on this process's writes.
         _conn_obj.execute("PRAGMA journal_mode=WAL")
+        _conn_obj.execute("PRAGMA busy_timeout=30000")
     return _conn_obj
+
+
+def integrity_check() -> str | None:
+    """Run SQLite's quick_check. None if healthy, else the first problem line. A corrupt
+    audit DB means positions/risk accounting can't be trusted - the engine must refuse
+    to trade on it (restore data/backups/, or investigate) rather than guess."""
+    try:
+        with _lock, _conn() as c:
+            row = c.execute("PRAGMA quick_check").fetchone()
+        verdict = str(row[0]) if row else "no result"
+        return None if verdict == "ok" else verdict
+    except sqlite3.DatabaseError as e:
+        return str(e)
+
+
+BACKUP_KEEP = 7  # daily rotation depth
+
+
+def backup_db(keep: int = BACKUP_KEEP) -> "str | None":
+    """Consistent daily snapshot of bot.db into data/backups/bot-YYYYMMDD.db via the
+    SQLite online-backup API (safe while the engine is writing). At most one per UTC
+    day (idempotent within a day); prunes to the newest `keep`. Returns the path
+    written, or None if today's backup already exists / on any failure (backup is
+    best-effort and must never break trading)."""
+    try:
+        bdir = config.DB_PATH.parent / "backups"
+        bdir.mkdir(parents=True, exist_ok=True)
+        day = datetime.now(timezone.utc).strftime("%Y%m%d")
+        dest = bdir / f"bot-{day}.db"
+        if dest.exists():
+            return None
+        with _lock:
+            out = sqlite3.connect(dest)
+            try:
+                _conn().backup(out)
+            finally:
+                out.close()
+        try:  # least-privilege: backups hold the same trade history as the live DB
+            import os
+            if os.name == "posix":
+                os.chmod(dest, 0o600)
+        except OSError:
+            pass
+        backups = sorted(bdir.glob("bot-*.db"))
+        for old in backups[:-keep]:
+            old.unlink(missing_ok=True)
+        return str(dest)
+    except Exception:  # noqa: BLE001
+        import logging
+        logging.getLogger("audit").exception("bot.db backup failed")
+        return None
 
 
 def init() -> None:
@@ -130,6 +184,16 @@ def order_exists(client_order_id: str) -> bool:
         return row is not None
 
 
+def order_status_of(client_order_id: str) -> str | None:
+    """The recorded status for a coid, or None if never logged. Lets the executor treat
+    an 'error' row (outcome unknown) differently from a real placed/dry_run duplicate."""
+    with _lock, _conn() as c:
+        row = c.execute(
+            "SELECT status FROM orders WHERE client_order_id=?", (client_order_id,)
+        ).fetchone()
+        return row["status"] if row else None
+
+
 def log_order(o: dict) -> bool:
     """Insert an order row. Returns False if the client_order_id already exists (idempotent skip)."""
     with _lock, _conn() as c:
@@ -150,6 +214,37 @@ def log_order(o: dict) -> bool:
             return True
         except sqlite3.IntegrityError:
             return False
+
+
+def orders_with_status(status: str, days: int = 3) -> list[sqlite3.Row]:
+    """Orders in a given status within the last `days` (UTC). Feeds the boot
+    reconciliation pass (status='error' = outcome unknown, worth asking the exchange)."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    with _lock, _conn() as c:
+        return c.execute(
+            "SELECT * FROM orders WHERE status=? AND ts >= ? ORDER BY id",
+            (status, cutoff),
+        ).fetchall()
+
+
+def heal_order(client_order_id: str, *, status: str, qty: float | None = None,
+               price: float | None = None, notional: float | None = None,
+               realized_pnl: float | None = None, tds: float | None = None,
+               response: dict | None = None) -> None:
+    """Correct an order row after reconciliation resolved its true outcome on the
+    exchange. Only the provided fields change; the row keeps its identity (coid)."""
+    sets, vals = ["status=?"], [status]
+    for col, v in (("qty", qty), ("price", price), ("notional", notional),
+                   ("realized_pnl", realized_pnl), ("tds", tds)):
+        if v is not None:
+            sets.append(f"{col}=?")
+            vals.append(v)
+    if response is not None:
+        sets.append("response=?")
+        vals.append(json.dumps(response))
+    vals.append(client_order_id)
+    with _lock, _conn() as c:
+        c.execute(f"UPDATE orders SET {', '.join(sets)} WHERE client_order_id=?", vals)
 
 
 def get_position(strategy: str, market: str) -> tuple[float, float]:
@@ -199,7 +294,8 @@ def today_stats() -> dict:
     with _lock, _conn() as c:
         row = c.execute(
             """SELECT COUNT(*) AS n, COALESCE(SUM(realized_pnl),0) AS pnl,
-                      COALESCE(SUM(tds),0) AS tds
+                      COALESCE(SUM(tds),0) AS tds,
+                      COALESCE(SUM(side='buy'),0) AS buys
                FROM orders WHERE status IN ('placed','dry_run') AND day=?""",
             (day,),
         ).fetchone()
@@ -207,7 +303,77 @@ def today_stats() -> dict:
             "SELECT COALESCE(SUM(ABS(qty)*avg_price),0) AS exp FROM positions"
         ).fetchone()["exp"]
     return {"trades_today": row["n"], "realized_today": row["pnl"],
-            "tds_today": row["tds"], "capital_at_risk": exposure}
+            "tds_today": row["tds"], "capital_at_risk": exposure,
+            "buys_today": row["buys"]}
+
+
+def consecutive_losses(days: int = 90) -> int:
+    """Number of consecutive most-recent round-trip CLOSES (sell fills) with negative
+    realized P&L, scanning newest-first within `days` and stopping at the first win.
+    Buys are excluded (their realized_pnl is just the entry fee). Feeds the optional
+    max_consecutive_losses_halt breaker."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    with _lock, _conn() as c:
+        rows = c.execute(
+            """SELECT realized_pnl FROM orders
+               WHERE status IN ('placed','dry_run') AND side='sell' AND ts >= ?
+               ORDER BY id DESC LIMIT 100""",
+            (cutoff,),
+        ).fetchall()
+    n = 0
+    for r in rows:
+        if r["realized_pnl"] < 0:
+            n += 1
+        else:
+            break
+    return n
+
+
+def strategy_realized(strategy: str) -> float:
+    """All-time realized P&L for ONE strategy (its sleeve equity delta)."""
+    with _lock, _conn() as c:
+        return c.execute(
+            "SELECT COALESCE(SUM(realized_pnl),0) AS pnl FROM orders "
+            "WHERE status IN ('placed','dry_run') AND strategy=?",
+            (strategy,),
+        ).fetchone()["pnl"]
+
+
+def bump_sleeve_peak(strategy: str, value: float) -> float:
+    """Monotonic per-sleeve high-water-mark of cumulative realized P&L (meta table,
+    key sleeve_peak:<strategy>). Returns the resulting peak. Restart-durable, so a
+    sleeve's drawdown is measured from its best-ever realized equity."""
+    key = f"sleeve_peak:{strategy}"
+    with _lock, _conn() as c:
+        row = c.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
+        peak = float(row["value"]) if row else 0.0
+        if value > peak:
+            peak = value
+            c.execute(
+                "INSERT INTO meta(key,value) VALUES(?,?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                (key, peak),
+            )
+    return peak
+
+
+def get_cooldown_until(strategy: str, market: str) -> int:
+    """Candle-ts (ms) until which new entries for this sleeve are blocked (re-entry
+    cooldown after a stop-out). 0 = no cooldown recorded."""
+    key = f"cooldown_until:{strategy}:{market}"
+    with _lock, _conn() as c:
+        row = c.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
+    return int(row["value"]) if row else 0
+
+
+def set_cooldown_until(strategy: str, market: str, until_ts: int) -> None:
+    key = f"cooldown_until:{strategy}:{market}"
+    with _lock, _conn() as c:
+        c.execute(
+            "INSERT INTO meta(key,value) VALUES(?,?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (key, float(until_ts)),
+        )
 
 
 def total_realized() -> float:

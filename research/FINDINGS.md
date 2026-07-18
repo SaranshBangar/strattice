@@ -1,5 +1,86 @@
 # Strategy review: backtest findings (July 2026)
 
+> **v7 addendum (mid-July 2026, `strattice-hardening-upgrade`)** — a PORTFOLIO-level
+> study (`research/portfolio_study.py`: all seven v6 sleeves replayed JOINTLY over the
+> aligned INR daily history with shared cash, sleeve sizing, and the full cost model;
+> re-run on the USDT twins for venue robustness; 200-bar walk-forward folds with the
+> portfolio restarted flat per fold). Baseline (equal weights): **+216.7%** net,
+> max DD 22.5%, PF 3.50, WF folds [+46.1, +87.2, +21.9, −6.2] (3/4). USDT twin
+> baseline: +89.8%, DD 34.0%, folds [+25.8, +63.2, −2.9, −17.8].
+>
+> **PROMOTED (default-on): BTC 100-day trend overlay** (`portfolio.btc_regime_filter`,
+> `entry_mult: 0.0` — block NEW entries while BTC closes under its 100d SMA; exits
+> never touched; fails open if the BTC feed is unusable):
+>
+> | Venue | Net | Max DD | PF | WF worst fold | WF compounded |
+> | ----- | ---: | ---: | ---: | ---: | ---: |
+> | INR baseline  | +216.7% | 22.5% | 3.50 | −6.2%  | +212.7% |
+> | INR + overlay | **+239.7%** | 22.2% | **4.57** | **−1.7%** | **+234.3%** |
+> | USDT baseline | +89.8%  | 34.0% | 2.13 | −17.8% | — |
+> | USDT + overlay| **+102.9%** | **29.4%** | **2.54** | **−11.8%** | +75.8% |
+>
+> Better on every metric on BOTH venues, and monotone (half-size `entry_mult: 0.5`
+> also beats baseline on both venues; full-block dominates). The mechanism is the
+> lineup's own correlation: mean pairwise daily-return correlation across the seven
+> INR pairs is **0.58** (0.39 XRP/BNB … 0.71 ETH/BTC) — the sleeves are largely one
+> crypto-beta trade, and BTC below its 100d line marks the regime where fresh longs
+> in that bucket underperform. The 100d line is the tested edge (v6 already rejected
+> the 150d variant for regime timing).
+>
+> **Exposed but DEFAULT-OFF (evidence says neutral or a trade-off, not an upgrade):**
+>
+> - `risk.max_new_entries_per_day` (per-day new-entry cap, correlation staggering):
+>   cap=1 → +214.8% / DD 22.3% / WF worst −4.9% — within noise of baseline, slightly
+>   better tail. cap=2 ≈ baseline exactly. Off; use it if same-day beta lumps bother you.
+> - same-day 1/√k entry scaling was studied (+236.3% but DD 24.0% — takes MORE risk via
+>   later compounding) and NOT implemented in the engine: rejected, reproducible in the
+>   study harness.
+> - `vol_target_ann` (per-sleeve vol-targeted sizing): 0.40 → +166.0% / **DD 19.0%** /
+>   fees 17.2% (vs 24.7%), WF 3/4. A genuine risk dial — trades ~50pts of net for a
+>   3.5pt shallower DD; 0.60 ≈ neutral (+211%, DD 21.7). Off by default.
+> - `reentry_cooldown_bars` (cooldown after a stop-out): 2 and 5 bars are both ≈
+>   baseline (±1pt) — at daily cadence the lineup rarely re-enters immediately after a
+>   stop anyway. Harmless hygiene knob, off.
+> - `exit_ladder_frac` (regime engines: sell a fraction at a 3.5×ATR trail, ride the
+>   rest to the engine's own exit): frac=0.5 → +218.1% / **DD 20.4%** (INR), +95.1% /
+>   DD 32.8% (USDT twin) — DD down on both venues, net neutral, WF unchanged. A valid
+>   opt-in for regime_doge / ichimoku_ada; off because it doesn't beat baseline
+>   walk-forward (the bar for changing defaults).
+> - `risk.max_consecutive_losses_halt`: **N=3 is destructive** (+46.4%: after three
+>   straight losses it blocks entries, and with no entries there is no win to reset the
+>   streak — a deadlock by construction); N=5 ≈ baseline minus a fold. Shipped as an
+>   off-by-default manual-review TRIPWIRE (bugs, venue breakage), never a performance
+>   feature. Protective exits always pass it.
+> - `risk.asset_buckets` + `risk.exposure_caps` (correlation-bucket exposure cap): off
+>   unless configured; the 0.58 mean pairwise correlation above is the evidence that
+>   all seven sleeves belong to one "crypto" bucket if you choose to bound it.
+> - `entry_slippage_cap_pct` (skip an entry whose live price ran past the signal
+>   close): live-only guard, backtest-neutral by construction — a capped entry simply
+>   re-signals on later polls/bars while its condition holds; the backtest already
+>   assumes fills at close+5bps, so this bounds precisely the drift the model never
+>   priced. Suggested 0.03 if used.
+>
+> **REJECTED: intraday crash brake as a default** (`engine.crash_brake`, gated OFF).
+> Checking the 7%/10% hard stop against intraday lows (gap-aware: fills at the open
+> when a bar opens through the stop) costs **−107pts net** (+109.5% vs +216.7%) and
+> DEEPENS max DD to 27.6% (33 intraday stop-outs, win rate 45→32%): daily-bar trend
+> positions routinely trade through the stop intraday and recover by the close, which
+> is exactly why v3 chose close-based stops. The flag exists (with the cooldown combo
+> +115.9% — still far under baseline) for operators who want a bounded worst intraday
+> excursion and accept the measured cost; it intentionally diverges from the
+> close-based backtest, as the v3 caveat below always warned.
+>
+> **Weight presets** (documented in config.yaml; equal weights stay the default since
+> preset tilts are fitted on the same history they're scored on): conservative
+> +229.9% / DD 22.8% / WF worst −4.1%; aggressive +269.5% / DD 23.5% / WF worst −2.4%;
+> balanced +216.7% / DD 22.5% / WF worst −6.2%.
+>
+> Every knob above is enforced end-to-end: engine + risk gate + backtest parity
+> (`bot/backtest.py` grew matching `reentry_cooldown_bars` / `exit_ladder_frac`
+> options), bounds and defaults in `strattice/worker/config_gen.py`, and unit tests in
+> `bot/test_portfolio_features.py`. Reproduce any table row with
+> `python -m research.portfolio_study --study <entries|vol|btc|cooldown|brake|consec|weights|ladder> [--venue usdt]`.
+
 > **v6 addendum (mid-July 2026, `strategy-optimization-research`)** — a six-family
 > research sweep (`research/run_backtests.py --only regime_1d,...,breakout55_1d`) of
 > externally documented daily trend edges, each implemented as a candle-pure module and

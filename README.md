@@ -75,8 +75,13 @@ python -m bot.backtest --module tsmom --market I-ETH_INR \
        --stop-loss 0.07 --chandelier-k 3.5 --atr-period 14
 python -m bot.backtest --module tsmom --interval 1d \
        --data research/data/I-ETH_INR_1d.csv.gz ...   # same, offline (CI-fetched snapshot)
-python -m bot.backtest --selftest      # verifies the cost math
+python -m bot.backtest --selftest      # verifies the cost math + static invariants
+python -m bot.test_decision_window     # bounded-window parity over real data
+python -m bot.test_reliability         # rate limit / breaker / retry / clock / scrubbing
+python -m bot.test_fallbacks           # failure-scenario behaviors (see below)
+python -m bot.test_portfolio_features  # v7 overlays/knobs (BTC filter, caps, ladder)
 python -m research.run_backtests       # full research grid over research/data/
+python -m research.portfolio_study     # joint 7-sleeve portfolio study (v7 evidence)
 ```
 
 Reports (all after fee + TDS): net P&L, return %, trades, win rate, **profit factor,
@@ -117,6 +122,52 @@ set tiny `risk:` limits and `capital:` → go live → scale up only after revie
 sanity check that warns if a strategy's capital can't clear the exchange min-order or
 breaches a risk ceiling.
 
+**v7 additions** (evidence for every default in
+[research/FINDINGS.md](research/FINDINGS.md) v7; reproduce with
+`python -m research.portfolio_study`):
+
+- **BTC 100d trend overlay — ON by default** (`portfolio.btc_regime_filter`): new
+  entries are blocked while BTC closes under its 100-day SMA. Improved net, profit
+  factor and the worst walk-forward fold on both the INR venue and the USDT twins.
+  Exits are never touched; the filter fails open if the BTC feed is down.
+- Off-by-default knobs, each backtested: `risk.max_new_entries_per_day` (stagger
+  correlated same-day deployments), `risk.max_consecutive_losses_halt` (manual-review
+  tripwire — see FINDINGS for why it is *not* a performance feature),
+  `risk.sleeve_drawdown_derisk_frac` (per-sleeve derisk; the global ladder already
+  exists), `risk.asset_buckets`/`exposure_caps` (correlation-bucket exposure cap),
+  per-sleeve `vol_target_ann` (vol-targeted sizing: shallower drawdowns for less
+  net), `reentry_cooldown_bars`, `entry_slippage_cap_pct`, and `exit_ladder_frac`
+  (regime engines: bank part at an ATR trail). The intraday `engine.crash_brake`
+  exists but stays off — the study measured it at −107pts net (see FINDINGS v7).
+
+### Failure handling (all tested in `bot/test_fallbacks.py` + `bot/test_reliability.py`)
+
+- **Bad candle data**: every feed is integrity-checked before `decide()` — stale,
+  gapped, malformed or misaligned bars mean the market **HOLDs** (nothing trades on
+  garbage) with a rate-limited alert; duplicate/out-of-order bars are normalized.
+- **Lost order confirmation**: an order POST that dies mid-flight is recorded as
+  `error` without touching positions; on the next start a LIVE reconciliation pass asks
+  the exchange by `client_order_id` and heals `bot.db` (filled → book the fill;
+  never-seen → mark rejected; still open → alert for manual attention).
+- **Partial fills**: LIVE fills book the exchange-reported quantity/average price, so
+  a partial fill can never desync the book.
+- **Balance desync**: LIVE engines compare wallet holdings against the position book
+  hourly and alert on any deficit beyond tolerance (detection, never auto-"fixing").
+- **Network/exchange trouble**: every call has a timeout; idempotent GETs retry with
+  exponential backoff + jitter (429 `Retry-After` honored); repeated 5xx/timeouts open
+  a circuit breaker that pauses calls, alerts once, and probes with backoff. A
+  client-side token bucket caps request rate. Signed requests refuse to fire if the
+  local clock drifts >30s from exchange time (warns at 2s — fix NTP).
+- **SQLite**: `bot.db` gets a `quick_check` at boot (corrupt ⇒ halt + alert, never
+  trade on a broken book), a daily online-backup snapshot into `data/backups/`
+  (7 kept), and a 30s busy timeout for locked-DB contention.
+- **Telegram down**: alerts spool to disk and flush when Telegram recovers; trading
+  never blocks on notifications.
+- **Crash loops**: 5 starts inside 30 min throttles restarts with doubling sleeps and
+  one alert (works with or without systemd rate limiting; see the unit below).
+- **Kill switch beats everything**: it is checked before every order (entries *and*
+  exits), and the halt path completes even if the exchange API is unreachable.
+
 ### Kill switch
 
 Create a file named `KILL` in the project root (name from `config.yaml`):
@@ -133,6 +184,11 @@ touch KILL      # cancels open orders, halts trading; delete it to resume
 [Unit]
 Description=CoinDCX trading bot
 After=network-online.target
+# crash-loop brake: max 5 starts per 10 min, then systemd stops retrying until
+# `systemctl reset-failed coindcx-bot`. The engine ALSO throttles itself
+# (data/engine_starts), so even without these lines a crash loop backs off.
+StartLimitIntervalSec=600
+StartLimitBurst=5
 
 [Service]
 WorkingDirectory=/opt/coindcx

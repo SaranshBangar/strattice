@@ -56,12 +56,45 @@ class Executor:
         self.client = client
         self.risk = risk
 
+    @staticmethod
+    def _record(o: dict, reuse_row: bool) -> None:
+        """Persist an order outcome. A retry that reuses a reconciled coid UPDATES the
+        existing row (the UNIQUE key would reject a second insert); everything else
+        inserts normally."""
+        if reuse_row:
+            audit.heal_order(o["client_order_id"], status=o["status"], qty=o["qty"],
+                             price=o["price"], notional=o["notional"],
+                             realized_pnl=o.get("realized_pnl", 0.0),
+                             tds=o.get("tds", 0.0), response=o.get("response", {}))
+        else:
+            audit.log_order(o)
+
     def place(self, *, strategy: str, market: str, side: str, qty: float,
               price: float, candle_ts: int) -> dict:
         coid = _coid(strategy, market, candle_ts, side)
-        if audit.order_exists(coid):
-            log.info("idempotent skip %s %s %s (coid=%s)", strategy, market, side, coid)
-            return {"status": "skipped", "client_order_id": coid}
+        reuse_row = False
+        prior = audit.order_status_of(coid)
+        if prior is not None:
+            # An 'error' row means the last attempt's outcome is UNKNOWN - it occupies
+            # the idempotency key and would block e.g. a protective exit from ever being
+            # retried on this bar. Resolve it against the exchange first: only a
+            # definitive "no such fill" clears the key for a retry; a fill heals the
+            # book instead, and an unknown answer keeps the conservative skip (a blind
+            # resend could double-fire).
+            if prior == "error" and config.LIVE:
+                from . import reconcile  # local import avoids a module cycle
+                outcome = reconcile.resolve_stuck_order(self.client, coid)
+                if outcome == "retry":
+                    reuse_row = True
+                    log.warning("retrying %s %s %s after reconciling failed attempt "
+                                "(coid=%s)", strategy, market, side, coid)
+                else:
+                    log.info("skip %s %s %s: prior attempt %s (coid=%s)",
+                             strategy, market, side, outcome, coid)
+                    return {"status": "skipped", "reason": outcome, "client_order_id": coid}
+            else:
+                log.info("idempotent skip %s %s %s (coid=%s)", strategy, market, side, coid)
+                return {"status": "skipped", "client_order_id": coid}
 
         qty = self.client.round_qty(market, qty)
         notional = qty * price
@@ -112,11 +145,11 @@ class Executor:
                 status = "placed"
                 self.client.invalidate_balance_cache()  # wallet just changed - next read must be fresh
             except CoinDCXError as e:
-                audit.log_order({
+                self._record({
                     "client_order_id": coid, "strategy": strategy, "market": market,
                     "side": side, "qty": qty, "price": price, "notional": notional,
                     "status": "error", "dry_run": False, "response": {"error": str(e)},
-                })
+                }, reuse_row)
                 log.error("ORDER FAILED %s %s %s: %s", strategy, market, side, e)
                 notify.send(notify.bullets("Order failed", [
                     ("Side", side.upper()), ("Market", market),
@@ -130,7 +163,28 @@ class Executor:
         # slippage_bps and max_fill_notional are 0. risk.check() already cleared the FULL
         # notional, so a partial fill only ever takes LESS exposure than was approved.
         if config.LIVE:
+            # Prefer the exchange's own numbers when the create response carries them
+            # (partial fills, real average price); fall back to the requested qty and
+            # signal price when it doesn't. A partial live fill therefore books ONLY the
+            # filled amount - position state and the exchange stay in agreement.
             fill_price, fill_qty = price, qty
+            o = (response.get("orders") or [response])[0] or {}
+            for k in ("filled_quantity", "executed_quantity", "total_quantity"):
+                try:
+                    v = float(o.get(k) or 0.0)
+                except (TypeError, ValueError):
+                    continue
+                if 0 < v <= qty:
+                    fill_qty = v
+                    break
+            for k in ("avg_price", "average_price", "price_per_unit"):
+                try:
+                    v = float(o.get(k) or 0.0)
+                except (TypeError, ValueError):
+                    continue
+                if v > 0:
+                    fill_price = v
+                    break
         else:
             fill_price = costs.fill_price(side, price)
             fill_qty = self.client.round_qty(market, costs.fillable_qty(qty, price))
@@ -143,13 +197,13 @@ class Executor:
         # simulate/record fill and update position
         new_qty, new_avg, realized = _apply_fill(old_qty, old_avg, side, fill_qty, fill_price)
         tds_paid = costs.tds(side, fill_notional)  # cash drag, tracked separately from P&L
-        audit.log_order({
+        self._record({
             "client_order_id": coid, "strategy": strategy, "market": market,
             "side": side, "qty": fill_qty, "price": fill_price, "notional": fill_notional,
             "status": status, "dry_run": not config.LIVE,
             "exchange_order_id": exchange_order_id, "realized_pnl": realized,
             "tds": tds_paid, "response": response,
-        })
+        }, reuse_row)
         # Carry chandelier/time-stop state: fresh on a new entry, preserved while adding, cleared on close.
         if old_qty == 0 and new_qty > 0:
             peak, entry_ts_val = price, candle_ts
@@ -180,7 +234,9 @@ class Executor:
         return {"status": status, "client_order_id": coid, "realized_pnl": realized}
 
     def kill(self) -> None:
-        """Kill switch action: cancel open orders (live) and halt. Idempotent to call."""
+        """Kill switch action: cancel open orders (live) and halt. Idempotent to call.
+        The kill path must ALWAYS win: any failure here (circuit breaker open, network
+        down, clock-drift halt) is logged but never prevents the halt itself."""
         log.critical("KILL SWITCH engaged")
         notify.send("KILL SWITCH engaged - cancelling open orders, halting.")
         if config.LIVE:
@@ -188,3 +244,5 @@ class Executor:
                 self.client.cancel_all()  # no market => cancel every open order
             except CoinDCXError as e:
                 log.error("cancel_all failed: %s", e)
+            except Exception as e:  # noqa: BLE001 - halting must not depend on the API
+                log.error("cancel_all failed (%s); halting anyway", e)

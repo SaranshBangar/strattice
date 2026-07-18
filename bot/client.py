@@ -2,6 +2,18 @@
 
 Signing: signature = HMAC_SHA256(secret, exact_json_body); body MUST include 'timestamp' (ms).
 The exact byte string that is signed is the exact byte string that is POSTed.
+
+Every external call is wrapped in the reliability layer (bot/reliability.py):
+  - request timeouts on every call (nothing can hang the poll loop)
+  - a token-bucket rate limiter so the bot can never hammer the exchange
+  - bounded retries with exponential backoff + jitter for IDEMPOTENT (GET) calls only,
+    honoring 429 Retry-After; signed POSTs are NEVER auto-retried so an order can't
+    double-fire (the executor's client_order_id idempotency is the second lock)
+  - a circuit breaker per host: repeated 5xx/timeouts fail fast + alert once, then
+    probe with exponential backoff instead of hammering a struggling API
+  - a clock-drift guard fed by exchange response Date headers: warns on small skew,
+    refuses to sign requests past a hard limit (HMAC timestamps die by clock skew)
+  - secrets registered with the scrubber so keys can never leak into exceptions/logs.
 """
 import hashlib
 import hmac
@@ -10,32 +22,33 @@ import logging
 import time
 
 import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
 from . import config
+from .reliability import (
+    CircuitBreaker,
+    ClockGuard,
+    TokenBucket,
+    TransientHTTPError,
+    retry_after_seconds,
+    retry_idempotent,
+    scrub,
+)
 
 log = logging.getLogger(__name__)
 
 API = "https://api.coindcx.com"
 PUBLIC = "https://public.coindcx.com"
 
+REQUEST_TIMEOUT = 20          # seconds, every HTTP call
+_MARKETS_TTL = 3600.0         # re-fetch markets_details hourly so precision/min-notional
+                              # changes on pairs are picked up without a restart
+
 
 class CoinDCXError(Exception):
-    pass
+    """Exchange/API error. Message is always scrubbed of registered secrets."""
 
-
-def _retrying_session() -> requests.Session:
-    """Session that retries transient upstream failures with backoff. Retry's default
-    allowed_methods excludes POST, so signed order calls are never double-fired."""
-    s = requests.Session()
-    retry = Retry(
-        total=4, backoff_factor=0.5,  # 0.5,1,2,4s between tries
-        status_forcelist=(429, 502, 503, 504), raise_on_status=False,
-    )
-    adapter = HTTPAdapter(max_retries=retry)
-    s.mount("https://", adapter)
-    return s
+    def __init__(self, msg: str):
+        super().__init__(scrub(msg))
 
 
 _BALANCE_CACHE_TTL = 3.0  # seconds - collapses the handful of free_balance() calls a single
@@ -67,13 +80,69 @@ def _interval_ms(interval: str) -> int:
     return n * _INTERVAL_UNIT_MS[unit]
 
 
+def _breaker_alert_open(name: str, cooldown: float) -> None:
+    # Local import: notify pulls config only, but keeping it lazy avoids any cycle if
+    # notify ever needs client features.
+    from . import notify
+    notify.send(notify.bullets("API circuit breaker OPEN", [
+        ("Host", name),
+        ("Action", "pausing calls, will probe with backoff"),
+        ("Cooldown", f"{cooldown:.0f}s"),
+    ]))
+
+
+def _breaker_alert_close(name: str) -> None:
+    from . import notify
+    notify.send(notify.bullets("API circuit breaker closed", [
+        ("Host", name), ("Action", "calls resumed"),
+    ]))
+
+
 class Client:
     def __init__(self, key: str = config.API_KEY, secret: str = config.SECRET_KEY):
         self.key = key
         self.secret = secret.encode()
+        from . import reliability
+        reliability.register_secrets(key, secret)  # never in logs/exceptions/alerts
         self._markets: dict | None = None
-        self._http = _retrying_session()
+        self._markets_at = 0.0
+        self._http = requests.Session()
         self._balance_cache: dict[str, tuple[float, float]] = {}  # currency -> (value, fetched_at)
+        # Shared budget for ALL calls this client makes (public + signed): 4 req/s
+        # sustained, burst 8 - far under any plausible exchange limit, and enough for a
+        # 7-sleeve poll cycle with room to spare.
+        self._bucket = TokenBucket(capacity=8, refill_rate=4)
+        self._pub_breaker = CircuitBreaker(
+            name="coindcx-public", threshold=5, cooldown=30, max_cooldown=900,
+            on_open=_breaker_alert_open, on_close=_breaker_alert_close)
+        self._api_breaker = CircuitBreaker(
+            name="coindcx-api", threshold=5, cooldown=30, max_cooldown=900,
+            on_open=_breaker_alert_open, on_close=_breaker_alert_close)
+        self._clock_guard = ClockGuard(warn_s=2.0, halt_s=30.0)
+
+    # ---------- transport ----------
+    def _get(self, url: str, *, params: dict | None = None,
+             breaker: CircuitBreaker | None = None) -> requests.Response:
+        """One idempotent GET: rate-limited, retried with backoff+jitter (429/5xx/timeouts),
+        circuit-broken, and feeding the clock-drift guard from the response Date header."""
+        breaker = breaker or self._pub_breaker
+
+        def attempt() -> requests.Response:
+            if not self._bucket.acquire():
+                raise TransientHTTPError("rate limiter saturated (client-side)")
+            try:
+                r = self._http.get(url, params=params, timeout=REQUEST_TIMEOUT)
+            except (requests.Timeout, requests.ConnectionError) as e:
+                raise TransientHTTPError(scrub(f"network error: {e}")) from e
+            self._clock_guard.observe_date_header(r.headers)
+            if r.status_code == 429:
+                raise TransientHTTPError(
+                    "429 rate limited", wait=retry_after_seconds(r.headers, default=2.0))
+            if r.status_code >= 500:
+                raise TransientHTTPError(f"{r.status_code} from {url}")
+            return r
+
+        return retry_idempotent(attempt, attempts=4, base_delay=0.5, breaker=breaker)
 
     # ---------- public ----------
     def _candles_page(self, pair: str, interval: str, limit: int,
@@ -85,7 +154,7 @@ class Client:
         if end_time is not None:
             params["endTime"] = end_time
             params["startTime"] = end_time - limit * _interval_ms(interval)
-        r = self._http.get(f"{PUBLIC}/market_data/candles", params=params, timeout=20)
+        r = self._get(f"{PUBLIC}/market_data/candles", params=params)
         r.raise_for_status()
         # CoinDCX public API intermittently returns 200 with an empty/non-JSON body;
         # treat as a transient blip and skip this poll cycle rather than crashing.
@@ -145,10 +214,21 @@ class Client:
         return bars[-limit:] if limit else bars
 
     def markets(self) -> dict:
-        if self._markets is None:
-            r = self._http.get(f"{API}/exchange/v1/markets_details", timeout=20)
+        """markets_details keyed by pair. Cached with a TTL (not forever) so precision or
+        min-notional changes on a pair are picked up within the hour instead of never.
+        A refresh failure keeps serving the last good copy rather than erroring the caller."""
+        now = time.monotonic()
+        if self._markets is not None and now - self._markets_at < _MARKETS_TTL:
+            return self._markets
+        try:
+            r = self._get(f"{API}/exchange/v1/markets_details")
             r.raise_for_status()
             self._markets = {m["pair"]: m for m in r.json()}
+            self._markets_at = now
+        except Exception:
+            if self._markets is None:
+                raise
+            log.warning("markets_details refresh failed; keeping cached copy")
         return self._markets
 
     def round_qty(self, pair: str, qty: float) -> float:
@@ -172,8 +252,16 @@ class Client:
 
     # ---------- private (signed) ----------
     def _signed(self, path: str, payload: dict) -> dict:
+        """One signed POST. NEVER retried here: a network error after the exchange
+        received the order would double-fire it. Recovery from a lost confirmation is the
+        executor/reconcile job (client_order_id lookup), not a blind resend."""
         if not self.key or not self.secret:
             raise CoinDCXError("API credentials not configured")
+        self._clock_guard.check_signed_ok()  # refuse to sign on a badly skewed clock
+        self._api_breaker.before_call()
+        if not self._bucket.acquire():
+            self._api_breaker.record_failure()
+            raise CoinDCXError("rate limiter saturated (client-side); not sending signed call")
         payload = {**payload, "timestamp": int(time.time() * 1000)}
         body = json.dumps(payload, separators=(",", ":"))
         sig = hmac.new(self.secret, body.encode(), hashlib.sha256).hexdigest()
@@ -182,8 +270,21 @@ class Client:
             "X-AUTH-APIKEY": self.key,
             "X-AUTH-SIGNATURE": sig,
         }
-        r = self._http.post(f"{API}{path}", data=body, headers=headers, timeout=20)
+        try:
+            r = self._http.post(f"{API}{path}", data=body, headers=headers,
+                                timeout=REQUEST_TIMEOUT)
+        except (requests.Timeout, requests.ConnectionError) as e:
+            self._api_breaker.record_failure()
+            # scrub() guards against a body/signature echo ever reaching logs or alerts
+            raise CoinDCXError(f"network error on {path}: {e}") from e
+        self._clock_guard.observe_date_header(r.headers)
+        if r.status_code == 429 or r.status_code >= 500:
+            self._api_breaker.record_failure()
+            raise CoinDCXError(f"{r.status_code} {path}: {r.text}")
+        self._api_breaker.record_success()
         if r.status_code >= 400:
+            # 4xx = the request itself is wrong (auth, params, balance) - the API is healthy,
+            # so it does not count against the breaker.
             raise CoinDCXError(f"{r.status_code} {path}: {r.text}")
         return r.json()
 
@@ -206,6 +307,20 @@ class Client:
         if client_order_id:
             payload["client_order_id"] = client_order_id
         return self._signed("/exchange/v1/orders/create", payload)
+
+    def order_status(self, *, client_order_id: str) -> dict | None:
+        """Look up an order by our own client_order_id. None if the exchange has no such
+        order (i.e. a lost-confirmation POST never actually landed). Used by the boot
+        reconciliation pass to heal bot.db after a crash mid-order."""
+        try:
+            return self._signed("/exchange/v1/orders/status",
+                                {"client_order_id": client_order_id})
+        except CoinDCXError as e:
+            msg = str(e)
+            # A 404/not-found means the order never reached the books - a definitive answer.
+            if msg.startswith("404") or "not found" in msg.lower():
+                return None
+            raise
 
     def cancel_all(self, market: str | None = None) -> dict:
         return self._signed(

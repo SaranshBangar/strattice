@@ -159,13 +159,71 @@ def _clamp(v, lo: float, hi: float, dflt: float) -> float:
         v = float(v)
     except (TypeError, ValueError):
         return dflt
+    if v != v:  # NaN never survives into a config
+        return dflt
     return min(hi, max(lo, v))
+
+
+# --- web -> worker boundary validation -------------------------------------------------
+# Everything in a desired-strategy row (market, weight, name, params) is UNTRUSTED user
+# data from the web DB. The web UI enforces the real per-param bounds; this layer is
+# defense in depth so a tampered row can never emit a config that crash-loops an engine
+# or smuggles junk types into strategy math.
+_MARKET_RE = __import__("re").compile(r"^[BI]-[A-Z0-9]{1,15}_[A-Z0-9]{1,15}$")
+_NAME_RE = __import__("re").compile(r"^[A-Za-z0-9_-]{1,48}$")
+_STR_VALUE_RE = __import__("re").compile(r"^[A-Za-z0-9/_.:-]{1,100}$")
+_MAX_CUSTOM_PARAMS_BYTES = 100_000  # a custom rule JSON larger than this is dropped
+
+
+def _clean_params(tpl: str, user_params: dict | None) -> dict:
+    """Merge user param overrides over the template defaults, treating the overrides as
+    hostile: unknown keys are dropped (whitelist = the template's own default keys),
+    values are coerced to the default's type and clamped to sane numeric ranges, and
+    strings are length/charset-bounded. `custom` rule JSON passes through size-capped -
+    bot/strategies/custom.py is its (defensive) interpreter."""
+    defaults = TEMPLATE_DEFAULTS[tpl]["params"]
+    if tpl == "custom":
+        p = user_params if isinstance(user_params, dict) else {}
+        import json as _json
+        try:
+            if len(_json.dumps(p)) > _MAX_CUSTOM_PARAMS_BYTES:
+                return dict(defaults)
+        except (TypeError, ValueError):
+            return dict(defaults)
+        return {**defaults, **p}
+    out = dict(defaults)
+    if not isinstance(user_params, dict):
+        return out
+    for k, dv in defaults.items():
+        if k not in user_params:
+            continue
+        v = user_params[k]
+        if isinstance(dv, bool) or (isinstance(dv, int) and dv in (0, 1) and
+                                    k == "require_positive"):
+            out[k] = 1 if v in (True, 1, "1", "true", "True") else 0 if v in (
+                False, 0, "0", "false", "False") else dv
+        elif isinstance(dv, int):
+            out[k] = int(_clamp(v, 0, 10_000, dv))
+        elif isinstance(dv, float):
+            out[k] = float(_clamp(v, -100.0, 100.0, dv))
+        elif isinstance(dv, str):
+            out[k] = v if isinstance(v, str) and _STR_VALUE_RE.match(v) else dv
+        # any other default type (lists etc.): keep the default, drop the override
+    return out
 
 _BASE = {
     # DAILY bars (was 15m): the only altitude that survived the friction study
     # (research/FINDINGS.md). 5-min poll acts within minutes of each daily close;
     # 400 daily bars ≈ 13 months > regime(100) + slow MA + ATR warmups.
-    "engine": {"poll_seconds": 300, "candle_interval": "1d", "candle_limit": 400},
+    # crash_brake stays FALSE: the v7 study measured intraday hard-stops at -107pts
+    # net / +5pts max-DD (whipsaw), and it diverges from the close-based backtest.
+    "engine": {"poll_seconds": 300, "candle_interval": "1d", "candle_limit": 400,
+               "crash_brake": False},
+    # BTC 100d trend overlay, PROMOTED default-ON in v7: blocks NEW entries while BTC
+    # is under its 100d SMA. Better net/PF/worst-fold on BOTH venues (FINDINGS v7).
+    # Fails open on a bad BTC feed; never touches exits.
+    "portfolio": {"btc_regime_filter": {"enabled": True, "market": "I-BTC_INR",
+                                        "period": 100, "entry_mult": 0.0}},
     "starting_equity": 1000.0,   # DRY_RUN sim wallet; LIVE reads the real exchange balance
     "allocation_frac": 0.97,
     "quote_currency": "INR",
@@ -174,8 +232,11 @@ _BASE = {
     # daily_loss_frac 0.10: halt the day at -10% of equity. A 50% brake is not a
     # guardrail — nobody's "bad day" budget is half the account. Surfaced verbatim in
     # web/lib/risk.ts (keep in sync). max_trades_per_day is overwritten per tier.
+    # v7 risk knobs ship at their validated defaults (all off - FINDINGS v7).
     "risk": {"max_position_frac": 1.0, "max_total_capital_at_risk_frac": 1.0,
-             "daily_loss_frac": 0.10, "max_trades_per_day": 5},
+             "daily_loss_frac": 0.10, "max_trades_per_day": 5,
+             "max_new_entries_per_day": 0, "max_consecutive_losses_halt": 0,
+             "sleeve_drawdown_derisk_frac": 0.0, "sleeve_drawdown_derisk_mult": 0.5},
 }
 
 
@@ -184,13 +245,19 @@ def _strategy_spec(idx: int, s: dict) -> dict:
     overridable only because entitlements already nulled params for non-custom tiers)."""
     tpl = s["template"]
     d = TEMPLATE_DEFAULTS[tpl]
-    params = {**d["params"], **(s.get("params") or {})}
+    params = _clean_params(tpl, s.get("params"))
+    name = s.get("name")
+    if not (isinstance(name, str) and _NAME_RE.match(name)):
+        name = f"{tpl}_{idx}"
+    market = s.get("market")
+    if not (isinstance(market, str) and _MARKET_RE.match(market)):
+        market = d["market"]  # malformed/non-spot market id -> template's proven default
     spec = {
-        "name": s.get("name") or f"{tpl}_{idx}",
+        "name": name,
         "module": tpl,
         "enabled": bool(s.get("enabled", True)),
-        "weight": float(s.get("weight", 1.0)),
-        "market": s.get("market") or d["market"],
+        "weight": _clamp(s.get("weight", 1.0), 0.0, 10.0, 1.0),
+        "market": market,
         "stop_loss_pct": d["stop_loss_pct"], "take_profit_pct": d["take_profit_pct"],
         "chandelier_k": d["chandelier_k"], "atr_period": d["atr_period"],
         "max_hold_bars": d["max_hold_bars"], "params": params,
@@ -249,6 +316,9 @@ if __name__ == "__main__":
     assert free["risk"]["max_trades_per_day"] == 100
     assert free["risk"]["daily_loss_frac"] == 0.10, "daily loss brake must stay at 10%"
     assert free["engine"]["candle_interval"] == "1d", "the engine trades DAILY bars"
+    assert free["engine"]["crash_brake"] is False, "intraday brake stays off (v7 evidence)"
+    assert free["portfolio"]["btc_regime_filter"]["enabled"] is True, "v7 BTC overlay ships on"
+    assert free["risk"]["max_consecutive_losses_halt"] == 0, "tripwire ships off"
     assert sum(s["enabled"] for s in free["strategies"]) == 4, "free -> all active while pricing is off"
     assert free["strategies"][3]["module"] == "rsi", "legacy retired rows must still resolve"
 
@@ -261,4 +331,29 @@ if __name__ == "__main__":
     for tpl, d in TEMPLATE_DEFAULTS.items():
         spec = _strategy_spec(0, {"template": tpl})
         assert spec["module"] == tpl and spec["params"] is not None
-    print("config_gen self-check OK")
+
+    # web->worker boundary: hostile rows must come out clamped/defaulted, never verbatim.
+    hostile = _strategy_spec(0, {
+        "template": "tsmom",
+        "market": "I-BTC_INR; DROP TABLE users",   # malformed -> template default market
+        "name": "../../etc/passwd",                # unsafe name -> generated name
+        "weight": "1e308",                         # absurd -> clamped
+        "params": {"lookback": 10**9, "min_return": float("nan"), "evil_key": "x",
+                   "regime_period": -5, "expected_move_pct": "0.08"},
+    })
+    assert hostile["market"] == "I-ETH_INR", hostile["market"]
+    assert hostile["name"] == "tsmom_0", hostile["name"]
+    assert hostile["weight"] == 10.0, hostile["weight"]
+    p = hostile["params"]
+    assert "evil_key" not in p, "unknown params must be dropped"
+    assert p["lookback"] == 10_000 and p["regime_period"] == 0, p
+    assert p["min_return"] == 0.10, "NaN must fall back to the default"
+    assert p["expected_move_pct"] == 0.08, "numeric strings coerce"
+    # oversized custom rule JSON is replaced by defaults, small ones pass through
+    big = _strategy_spec(0, {"template": "custom", "params": {"rules": ["x" * 200_000]}})
+    assert big["params"] == TEMPLATE_DEFAULTS["custom"]["params"], "oversized custom JSON dropped"
+    ok_rules = {"rules": [{"kind": "confirm"}], "exits": {"stop_loss_pct": 0.5}}
+    small = _strategy_spec(0, {"template": "custom", "params": ok_rules})
+    assert small["params"]["rules"] == ok_rules["rules"]
+    assert small["stop_loss_pct"] == 0.2, "custom exits stay clamped to the sanitizer bounds"
+    print("config_gen self-check OK (incl. web->worker boundary hardening)")

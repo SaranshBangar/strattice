@@ -49,6 +49,71 @@ CRED_ERROR_MSG = (
 
 _procs: dict[str, dict] = {}  # uid -> {"proc": Popen, "hash": str}
 
+# Crash-loop protection: an engine that keeps dying (bad market data, corrupt user DB,
+# a poisoned config) must not be respawned every 30s forever - that hammers the exchange
+# and buries real errors. Track recent unexpected exits per user; past the threshold,
+# hold the respawn for a growing backoff and surface the state via heartbeat.
+_CRASH_WINDOW = 600.0   # seconds: exits counted within this sliding window
+_CRASH_LIMIT = 5        # unexpected exits in the window before backing off
+_CRASH_BACKOFF0 = 120.0  # first hold; doubles per additional trip, capped below
+_CRASH_BACKOFF_MAX = 1800.0
+_crash: dict[str, dict] = {}  # uid -> {"exits": [monotonic..], "until": float, "backoff": float}
+
+
+def _crash_note_exit(uid: str) -> None:
+    now = time.monotonic()
+    st = _crash.setdefault(uid, {"exits": [], "until": 0.0, "backoff": _CRASH_BACKOFF0})
+    st["exits"] = [t for t in st["exits"] if now - t < _CRASH_WINDOW] + [now]
+    if len(st["exits"]) >= _CRASH_LIMIT:
+        st["until"] = now + st["backoff"]
+        print(f"[supervisor] engine for {uid} crash-looping "
+              f"({len(st['exits'])} exits in {_CRASH_WINDOW:.0f}s) - holding respawn "
+              f"{st['backoff']:.0f}s", file=sys.stderr)
+        st["backoff"] = min(st["backoff"] * 2, _CRASH_BACKOFF_MAX)
+        st["exits"] = []
+
+
+def _crash_holding(uid: str) -> float:
+    """Seconds remaining on a crash-loop hold for this user (0 = clear to spawn)."""
+    st = _crash.get(uid)
+    if not st:
+        return 0.0
+    return max(0.0, st["until"] - time.monotonic())
+
+
+def _crash_reset(uid: str) -> None:
+    """A config change or deactivation clears the crash history (new state, new chances)."""
+    _crash.pop(uid, None)
+
+
+def _harden_perms(user_dir: Path) -> None:
+    """Least-privilege on per-user state: the dir is 0700 and every file in it (config,
+    SQLite DB + WAL/SHM, log, KILL, alert spool) is 0600 - other local users can read
+    none of it. POSIX only; a no-op elsewhere and never fatal."""
+    if os.name != "posix":
+        return
+    try:
+        os.chmod(user_dir, 0o700)
+        for f in user_dir.iterdir():
+            if f.is_file():
+                os.chmod(f, 0o600)
+    except OSError as e:
+        print(f"[supervisor] perms hardening failed for {user_dir}: {e}", file=sys.stderr)
+
+
+def _check_env_perms() -> None:
+    """Warn once at startup if a .env holding master keys/API creds is readable by group
+    or other - the single most common way secrets leak on a shared VPS."""
+    if os.name != "posix":
+        return
+    for p in (REPO / ".env", REPO / "strattice" / ".env"):
+        try:
+            if p.exists() and (p.stat().st_mode & 0o077):
+                print(f"[supervisor] WARNING: {p} is group/other-readable - run: "
+                      f"chmod 600 {p}", file=sys.stderr)
+        except OSError:
+            pass
+
 # requests.Session (used by store.D1) isn't documented as safe for concurrent use from
 # multiple threads (its cookie jar isn't), so the publish/heartbeat thread pool below gets
 # its own D1 client per worker thread instead of sharing the main reconcile loop's `conn`.
@@ -233,10 +298,18 @@ def _publish_one(uid: str, db: Path, u: dict, quote: str) -> tuple[str, Exceptio
         db_client = _thread_db()
         trades, positions, equity, cred_error = _project(db, u, quote)
         store.publish(db_client, uid, trades, positions, equity)
-        rc = _procs[uid]["proc"].poll()
+        entry = _procs[uid]
+        rc = entry["proc"].poll()
         # An exited engine is the more urgent problem; a credential error only shows once
         # the engine is confirmed still running.
-        err = f"engine exited rc={rc}" if rc is not None else cred_error
+        if rc is not None and entry.get("held"):
+            hold = _crash_holding(uid)
+            err = (f"engine crash-looping (rc={rc}); respawn held for ~{hold:.0f}s "
+                   "- check the bot log")
+        elif rc is not None:
+            err = f"engine exited rc={rc}"
+        else:
+            err = cred_error
         store.heartbeat(db_client, uid, err)
         return uid, None
     except Exception as e:  # projection/publish must not kill the loop or the pool
@@ -260,21 +333,37 @@ def _reconcile(conn) -> None:
 
         cur = _procs.get(uid)
         alive = bool(cur) and cur["proc"].poll() is None
-        if not alive or cur["hash"] != h:
-            # Quiet the start alert only when a still-running engine is recycled for a pure
-            # config/strategy change (same live flag). A first start, a crash restart, or a
-            # go-live/go-paper transition all still alert.
-            config_only = bool(cur) and alive and cur.get("live") == u["live"]
-            if cur:
-                _stop(cur["proc"])
-            _procs[uid] = {
-                "proc": _spawn(u, cfg_path, db, log, suppress_start_alert=config_only),
-                "hash": h,
-                "live": u["live"],
-            }
-            print(f"[supervisor] (re)started engine for {uid} (tier={u['tier']} "
-                  f"live={u['live']} quiet_start={config_only})")
+        changed = bool(cur) and cur["hash"] != h
+        if changed:
+            _crash_reset(uid)  # new config = new state; crash history no longer applies
+        if not alive or changed:
+            respawn = True
+            if cur and not alive and not changed:
+                # Unexpected exit with an unchanged config -> crash-loop accounting.
+                if _crash_holding(uid) > 0:
+                    respawn = False  # still in backoff: leave the dead entry, don't count again
+                else:
+                    _crash_note_exit(uid)
+                    respawn = _crash_holding(uid) == 0
+            if respawn:
+                # Quiet the start alert only when a still-running engine is recycled for a pure
+                # config/strategy change (same live flag). A first start, a crash restart, or a
+                # go-live/go-paper transition all still alert.
+                config_only = bool(cur) and alive and cur.get("live") == u["live"]
+                if cur:
+                    _stop(cur["proc"])
+                _procs[uid] = {
+                    "proc": _spawn(u, cfg_path, db, log, suppress_start_alert=config_only),
+                    "hash": h,
+                    "live": u["live"],
+                    "held": False,
+                }
+                print(f"[supervisor] (re)started engine for {uid} (tier={u['tier']} "
+                      f"live={u['live']} quiet_start={config_only})")
+            else:
+                cur["held"] = True
 
+        _harden_perms(d)  # per-user dir 0700, config/db/log/spool files 0600
         to_publish.append((uid, db, u, cfg["quote_currency"]))
 
     # Project + publish + heartbeat are the I/O-bound part of the cycle (one SQLite read plus
@@ -295,6 +384,7 @@ def _reconcile(conn) -> None:
     for uid in list(_procs):
         if uid not in desired:
             _stop(_procs.pop(uid)["proc"])
+            _crash_reset(uid)
             print(f"[supervisor] stopped engine for {uid} (deactivated)")
 
 
@@ -325,6 +415,7 @@ def _tick(conn) -> None:
 
 
 def main() -> None:
+    _check_env_perms()
     conn = store.connect()
     print(f"[supervisor] up. polling every {POLL}s. users dir: {USERS_DIR}")
     try:

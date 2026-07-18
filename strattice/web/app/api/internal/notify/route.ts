@@ -5,6 +5,7 @@
 // Fans a fill out to the channels the user has enabled: email (default on) and/or
 // Telegram (opt-in with a saved chat id). The single-user bot path (email sent directly,
 // no userId) has no stored prefs, so it always emails, as before.
+import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import * as q from "@/lib/queries";
 import { sendTradeEmail } from "@/lib/email";
@@ -13,9 +14,20 @@ import { sendTradeTelegram } from "@/lib/telegram";
 export const runtime = "nodejs"; // node:tls SMTP
 export const dynamic = "force-dynamic";
 
+// Constant-time shared-secret check: a plain !== leaks how many leading bytes
+// matched through response timing, which is exactly what lets a secret be
+// guessed byte by byte.
+function keyMatches(supplied: string | null, expected: string): boolean {
+  if (!supplied) return false;
+  const a = Buffer.from(supplied);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
 export async function POST(req: Request) {
   const key = process.env.INTERNAL_API_KEY;
-  if (!key || req.headers.get("x-internal-key") !== key) {
+  if (!key || !keyMatches(req.headers.get("x-internal-key"), key)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
