@@ -211,6 +211,52 @@ def candidates() -> list[dict]:
         {"fast": 24, "min_return": 0.04, "accel_mult": 1.5, "breakout_lookback": 48,
          "vol_period": 48, "vol_mult": 1.2, "regime_period": 120, "expected_move_pct": 0.05},
         sl=0.04, ch=3.0, atrp=14)
+
+    # --- v6 candidates: researched signal families (strategy-optimization-research) ---
+    # (1) Faber-style trend-regime holder: long above the long SMA, flat below. Its own
+    #     SELL is the exit; no chandelier (a trail would cut the multi-month holds the
+    #     edge depends on). 10% disaster stop only.
+    add("regime_1d", "trend_regime", "1d",
+        {"period": 150, "band": 0.02, "slope_bars": 5, "expected_move_pct": 0.10},
+        sl=0.10)
+    add("regime_1d_fast", "trend_regime", "1d",
+        {"period": 100, "band": 0.02, "slope_bars": 5, "expected_move_pct": 0.10},
+        sl=0.10)
+    # (2) KAMA adaptive trend: own SELL at the adaptive line; tested bare and trailed.
+    add("kama_1d", "kama_trend", "1d",
+        {"er_period": 10, "fast": 2, "slow": 30, "entry_band": 0.01, "exit_band": 0.01,
+         "slope_bars": 3, "min_er": 0.30, "regime_period": 50, "expected_move_pct": 0.08},
+        sl=0.07)
+    add("kama_1d_ch", "kama_trend", "1d",
+        {"er_period": 10, "fast": 2, "slow": 30, "entry_band": 0.01, "exit_band": 0.01,
+         "slope_bars": 3, "min_er": 0.30, "regime_period": 50, "expected_move_pct": 0.08},
+        sl=0.07, ch=3.5, atrp=14)
+    # (3) Ichimoku kumo breakout: own SELL below the kijun line.
+    add("ichimoku_1d", "ichimoku", "1d",
+        {"tenkan": 9, "kijun": 26, "senkou_b": 52, "confirm_bars": 3,
+         "expected_move_pct": 0.08},
+        sl=0.07)
+    # (4) ADX/DMI-confirmed trend entry: engine exits like the other trend sleeves.
+    add("adx_1d", "adx_trend", "1d",
+        {"period": 14, "min_adx": 20, "confirm_bars": 3, "regime_period": 50,
+         "expected_move_pct": 0.08},
+        sl=0.07, ch=3.5, atrp=14)
+    # (5) Risk-adjusted (vol-scaled) momentum: the published TSMOM refinement.
+    add("sharpemom_1d", "sharpe_mom", "1d",
+        {"lookback": 30, "min_score": 1.5, "min_return": 0.06, "near_high_frac": 0.03,
+         "regime_period": 50, "expected_move_pct": 0.08},
+        sl=0.07, ch=3.5, atrp=14)
+    # (6) MACD fresh-cross continuation.
+    add("macd_1d", "macd_trend", "1d",
+        {"fast": 12, "slow": 26, "signal": 9, "confirm_bars": 3, "require_positive": True,
+         "regime_period": 50, "expected_move_pct": 0.08},
+        sl=0.07, ch=3.5, atrp=14)
+    # (7) Slow Donchian (turtle S2 55-day) — param re-expression of the momentum module.
+    add("breakout55_1d", "momentum", "1d",
+        {"lookback": 55, "atr_period": 14, "vol_period": 20, "min_atr_frac": 0.01,
+         "vol_mult": 1.0, "buffer": 0.002, "max_chase": 0.05, "regime_period": 100,
+         "expected_move_pct": 0.08},
+        sl=0.07, ch=3.5, atrp=14)
     return c
 
 

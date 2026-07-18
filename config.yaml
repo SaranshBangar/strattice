@@ -74,26 +74,38 @@ risk:
 #   stop_loss_pct / take_profit_pct / max_hold_bars (time-stop) / chandelier_k (ATR trailing).
 # regime_period gates every long entry to an uptrend (price above its N-bar SMA, shared).
 #
-# THE LINEUP (all 1d bars). Six diversified trend engines, one per market, so all six can
-# hold concurrently (no-dup-asset rule). Markets were assigned where each strategy was profitable
-# on BOTH the INR pair AND its USDT twin (venue robustness, not pair lottery — see FINDINGS).
-# Take-profits are OFF everywhere: the fat right tail of trend winners is the whole edge; the
-# chandelier (peak - 3.5*ATR14) does the exiting. The 7% hard stop is the disaster brake — note
-# it is evaluated on DAILY CLOSES (matching the backtest): a violent single-day move can close
-# beyond the line, and the backtested max-drawdowns below already include those events.
-# Backtest (₹1000/sleeve, 2023-09 .. 2026-07, net of ALL friction):
-#   tsmom @ ETH  +207.6% (PF 2.58, 7 trades)   | USDT twin  +18.3%
-#   breakout @ BTC +108.7% (PF 2.75, 8 trades) | USDT twin   +9.2%
-#   ma_cross @ XRP +187.7% (PF 2.25, 6 trades) | USDT twin +109.8%
-#   volexp @ BNB +143.6% (PF 2.75, 6 trades)   | USDT twin +171.9%
-#   squeeze @ DOGE +138.9% (PF 2.85, 9 trades) | USDT twin  +36.5%  (v4, July 2026)
-#   accel @ ADA  +60.1% (PF 1.33, 10 trades)   | USDT twin   +1.7%  (v5, July 2026)
-# NOTE on accel @ ADA (v5): promoted as the 6th sleeve for SIGNAL-FAMILY diversification, not
-# because it is the top scorer on ADA. In an on-ADA bake-off ma_cross (+99.5%/twin +23.3%, WF
-# 3/4) and tsmom (+80.4%/twin +50.4%) score higher — but both would CLONE an engine already in
-# the lineup (ma_cross@XRP, tsmom@ETH). Acceleration is the strongest NON-duplicate signal family
-# for ADA. Caveat: its rolling 200-bar OOS is only 1/4 folds (full-history + plateau are strong;
-# see FINDINGS v5). Adding a 6th sleeve dilutes each sleeve from ~0.194 to ~0.162 of equity.
+# THE LINEUP (v6, all 1d bars). Seven engines, one per market — all seven INR pairs held —
+# so all can hold concurrently (no-dup-asset rule). Markets were assigned where each strategy
+# was profitable on BOTH the INR pair AND its USDT twin (venue robustness, not pair lottery —
+# see FINDINGS v6), with the incumbents defending their asset in a same-protocol bake-off.
+# Take-profits are OFF everywhere: the fat right tail of trend winners is the whole edge.
+# Exits per family: burst-entry engines (tsmom/breakouts/macd) trail a chandelier
+# (peak - 3.5*ATR14) + 7% hard stop; regime-holding engines (trend_regime/ichimoku) exit on
+# their OWN signal (close under the regime line / kijun) + a wider disaster stop, because a
+# trail would cut the multi-month holds their edge depends on. Stops are evaluated on DAILY
+# CLOSES (matching the backtest): a violent single-day move can close beyond the line, and
+# the backtested max-drawdowns already include those events.
+# Backtest (₹1000/sleeve, 2023-09 .. 2026-07, net of ALL friction; WF = 200-bar OOS folds):
+#   tsmom @ ETH    +207.6% (PF 2.58) | twin  +18.3% | WF 3/4 INR, 3/4 USDT   (v3, kept)
+#   breakout @ BTC +108.7% (PF 2.75) | twin   +9.2% | WF 3/4 INR, 3/4 USDT   (v3, kept)
+#   turtle55 @ XRP +274.4% (PF 14.4) | twin +101.9% | WF 2/4 INR, 2/4 USDT   (v6, replaces ma_cross)
+#   macd @ BNB     +264.9% (PF 6.85) | twin +188.8% | WF 4/4 INR, 4/4 USDT   (v6, replaces volexp)
+#   regime @ DOGE  +209.8% (PF 3.76) | twin +167.5% | WF 3/4 INR, 1/4 USDT   (v6, replaces squeeze)
+#   ichimoku @ ADA  +83.3% (PF 1.87) | twin  +42.6% | WF 2/4 INR, 1/4 USDT   (v6, replaces accel)
+#   macd @ SOL      +47.8% (PF 1.59) | twin  +14.8% | WF 3/4 INR, 3/4 USDT   (v6, new 7th sleeve)
+# v6 notes (evidence + caveats in research/FINDINGS.md v6):
+#   * macd@BNB posted the best walk-forward record ever recorded in this repo (8/8 folds
+#     across both venues, OOS +224%/+129%) and beats the volexp incumbent on every metric.
+#   * regime@DOGE dominates squeeze on full history on BOTH venues and its p>=100-day
+#     plateau is 6/6 positive on the USDT twin; caveat: only 1/4 USDT folds (OOS still +24.8%).
+#   * ichimoku@ADA beats the retired accel sleeve on every metric (accel twin was +1.7%,
+#     USDT OOS -10.5%); its own plateau is 6/6 positive on both venues.
+#   * turtle55@XRP (Donchian 55, turtle S2) doubles ma_cross's INR net with a better fold
+#     record (2/4 vs 1/4); trade count is low — judge it over months.
+#   * macd appears twice (BNB + SOL) — SOL was the one asset with NO venue-robust engine in
+#     five studies; macd is the first (3/4 + 3/4 folds), so the clone is accepted there.
+#   * 7 sleeves dilute each to ~0.139 of equity — keep total capital >= ~₹1000 so every
+#     sleeve clears the ₹100 exchange min-notional.
 strategies:
   - name: "tsmom_eth" # time-series momentum: buy strength near its highs
     module: "tsmom"
@@ -133,9 +145,105 @@ strategies:
       regime_period: 50
       expected_move_pct: 0.08
 
-  - name: "ma_xrp" # fast/slow daily MA cross with gap + slope confirmation
-    module: "ma_crossover"
+  - name: "turtle55_xrp" # slow Donchian (turtle S2): break of the prior 55-DAY high (v6)
+    module: "momentum"
     enabled: true
+    weight: 1.0
+    market: "I-XRP_INR"
+    stop_loss_pct: 0.07
+    take_profit_pct: 0.0
+    chandelier_k: 3.5
+    atr_period: 14
+    max_hold_bars: 0
+    params:
+      lookback: 55 # the classic turtle System-2 window; fires ~2/yr, catches only major legs
+      atr_period: 14
+      vol_period: 20
+      min_atr_frac: 0.01
+      vol_mult: 1.0
+      buffer: 0.002
+      max_chase: 0.05
+      regime_period: 100 # slower regime gate to match the slower signal
+      expected_move_pct: 0.08
+
+  - name: "macd_bnb" # MACD fresh-cross trend continuation (v6): 8/8 WF folds across venues
+    module: "macd_trend"
+    enabled: true
+    weight: 1.0
+    market: "I-BNB_INR"
+    stop_loss_pct: 0.07
+    take_profit_pct: 0.0
+    chandelier_k: 3.5
+    atr_period: 14
+    max_hold_bars: 0
+    params:
+      fast: 12 # classic 12/26/9 — the whole 12-combo plateau is positive on both venues
+      slow: 26
+      signal: 9
+      confirm_bars: 3 # cross must be fresh (within 3 days)
+      require_positive: true # MACD line above zero: continuation only, no counter-trend bounces
+      regime_period: 50
+      expected_move_pct: 0.08
+
+  - name: "regime_doge" # Faber-style 100d trend-regime holder (v6): long above, flat below
+    module: "trend_regime"
+    enabled: true
+    weight: 1.0
+    market: "I-DOGE_INR"
+    stop_loss_pct: 0.10 # wider disaster stop: this engine holds through daily noise
+    take_profit_pct: 0.0
+    chandelier_k: 0.0 # NO trail — the strategy's own SELL (close < line - band) is the exit;
+    #   a chandelier would cut the multi-month holds the edge depends on
+    atr_period: 14
+    max_hold_bars: 0
+    params:
+      period: 100 # 100-day SMA regime line (plateau: every p>=100 combo positive, both venues)
+      band: 0.02 # 2% hysteresis each side — chop around the line costs one round trip, not ten
+      slope_bars: 5 # the line itself must be rising
+      expected_move_pct: 0.10
+
+  - name: "ichimoku_ada" # Ichimoku kumo breakout (v6): cloud break in, kijun break out
+    module: "ichimoku"
+    enabled: true
+    weight: 1.0
+    market: "I-ADA_INR"
+    stop_loss_pct: 0.07
+    take_profit_pct: 0.0
+    chandelier_k: 0.0 # NO trail — the strategy's own SELL (close < kijun) is the exit
+    atr_period: 14
+    max_hold_bars: 0
+    params:
+      tenkan: 9 # standard 9/26/52 (plateau positive on both venues across all tested sets)
+      kijun: 26
+      senkou_b: 52
+      confirm_bars: 3 # only FRESH cloud breaks — no chasing a market long above the cloud
+      expected_move_pct: 0.08
+
+  - name: "macd_sol" # MACD continuation on SOL (v6): the first venue-robust engine for SOL
+    module: "macd_trend"
+    enabled: true
+    weight: 1.0
+    market: "I-SOL_INR"
+    stop_loss_pct: 0.07
+    take_profit_pct: 0.0
+    chandelier_k: 3.5
+    atr_period: 14
+    max_hold_bars: 0
+    params:
+      fast: 12
+      slow: 26
+      signal: 9
+      confirm_bars: 3
+      require_positive: true
+      regime_period: 50
+      expected_move_pct: 0.08
+
+  # --- MIGRATION (v5 -> v6): replaced sleeves kept as DISABLED stubs so an engine that
+  #     still holds one of their positions keeps managing its EXITS until flat (see the
+  #     v2->v3 note below). Delete each block once `python -m bot.status` shows it flat.
+  - name: "ma_xrp" # v3-v5 sleeve, replaced by turtle55_xrp (FINDINGS v6 bake-off)
+    module: "ma_crossover"
+    enabled: false
     weight: 1.0
     market: "I-XRP_INR"
     stop_loss_pct: 0.07
@@ -152,9 +260,9 @@ strategies:
       regime_period: 100 # 100d SMA regime gate (slower, matches the slower signal)
       expected_move_pct: 0.08
 
-  - name: "volexp_bnb" # ATR-expansion breakout: vol pop + new local-high close
+  - name: "volexp_bnb" # v3-v5 sleeve, replaced by macd_bnb (FINDINGS v6 bake-off)
     module: "vol_expansion"
-    enabled: true
+    enabled: false
     weight: 1.0
     market: "I-BNB_INR"
     stop_loss_pct: 0.07
@@ -170,9 +278,9 @@ strategies:
       regime_period: 50
       expected_move_pct: 0.06
 
-  - name: "squeeze_doge" # TTM squeeze: low-vol coil, then a confirmed Donchian break (v4)
+  - name: "squeeze_doge" # v4-v5 sleeve, replaced by regime_doge (FINDINGS v6 bake-off)
     module: "squeeze_breakout"
-    enabled: true
+    enabled: false
     weight: 1.0
     market: "I-DOGE_INR"
     stop_loss_pct: 0.07
@@ -195,9 +303,10 @@ strategies:
       regime_period: 50
       expected_move_pct: 0.08
 
-  - name: "accel_ada" # acceleration momentum: buy an ACCELERATING leg into fresh highs (v5)
+  - name: "accel_ada" # v5 sleeve, replaced by ichimoku_ada (accel twin was +1.7%, WF 1/4;
+    #   ichimoku beats it on every metric — FINDINGS v6)
     module: "acceleration"
-    enabled: true
+    enabled: false
     weight: 1.0
     market: "I-ADA_INR"
     stop_loss_pct: 0.07 # same trend-engine exits as the other five sleeves

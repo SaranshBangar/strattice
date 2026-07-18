@@ -9,11 +9,13 @@ No LLM in the execution path — every trade decision is plain algorithm code.
 - Polls candles on a schedule, runs each enabled strategy, routes signals through one
   risk-managed executor.
 - Strategies (each its own module, own config, own position): daily Time-Series
-  Momentum, Donchian Breakout, MA Crossover, Volatility Expansion and Squeeze
-  Breakout — the survivors of a full real-data backtest study
-  ([research/FINDINGS.md](research/FINDINGS.md)); a validated Supertrend module and
-  an experimental Chronos-2 AI forecaster are available but not in the default lineup.
-  Mean-reversion and all intraday variants are retired: they lose net of India friction.
+  Momentum, fast + slow (turtle) Donchian Breakouts, MACD Continuation, a Faber-style
+  Trend-Regime holder and an Ichimoku Kumo Breakout — the survivors of six rounds of
+  full real-data backtest studies ([research/FINDINGS.md](research/FINDINGS.md));
+  validated Supertrend, MA Crossover, Volatility Expansion, Squeeze Breakout and
+  risk-adjusted momentum modules plus an experimental Chronos-2 AI forecaster are
+  available but not in the default lineup. Mean-reversion and all intraday variants
+  are retired: they lose net of India friction.
 - Every signal + order persisted to SQLite (`data/bot.db`). Idempotent orders.
 - Backtester with realistic India costs (0.1% fee + 1% TDS).
 - Telegram alerts on trades, blocks, kill switch, and errors.
@@ -30,15 +32,17 @@ Tune everything in `config.yaml` (strategies, params, capital, **risk limits**).
 Secrets live only in `.env` (gitignored) — never in config or code.
 **Filling in `.env`:** step-by-step (CoinDCX keys, live switches, Telegram) → [ENV.md](ENV.md).
 
-### The daily-trend profile (v4)
+### The daily-trend profile (v6)
 
-`config.yaml` ships with **daily candles and 5 trend strategies** (tsmom @ ETH,
-Donchian breakout @ BTC, MA cross @ XRP, volatility-expansion @ BNB, squeeze
-breakout @ DOGE), each in its
-own equity sleeve with a 7% hard stop and an ATR chandelier trail. Expect a handful of trades per year per
-strategy — that is the point: at ~1.5-1.7% round-trip friction, holding winners for
-weeks is the only backtested way to stay net-positive. Evidence, methodology and
-the retirement list: [research/FINDINGS.md](research/FINDINGS.md).
+`config.yaml` ships with **daily candles and 7 trend strategies — one per INR pair**
+(tsmom @ ETH, Donchian 20 @ BTC, turtle-55 @ XRP, MACD @ BNB + SOL, 100-day
+trend-regime @ DOGE, Ichimoku @ ADA), each in its own equity sleeve. Burst-entry
+engines carry a 7% hard stop + ATR chandelier trail; the regime-holding engines
+(trend_regime, ichimoku) exit on their own signal with a wider disaster stop.
+Expect a handful of trades per year per strategy — that is the point: at ~1.5-1.7%
+round-trip friction, holding winners for weeks is the only backtested way to stay
+net-positive. Evidence, methodology and the retirement list:
+[research/FINDINGS.md](research/FINDINGS.md).
 
 ## Run (DRY_RUN — safe, places nothing)
 
@@ -276,8 +280,9 @@ bot/
   engine.py     poll loop
   status.py     /status summary
   backtest.py   historical replay with fee + TDS
-  strategies/   base + tsmom, momentum, ma_crossover, vol_expansion, squeeze_breakout,
-                supertrend, hf_forecast (Chronos-2), custom, retired mean-reversion
+  strategies/   base + tsmom, momentum, macd_trend, trend_regime, ichimoku, ma_crossover,
+                vol_expansion, squeeze_breakout, supertrend, sharpe_mom, kama_trend,
+                adx_trend, hf_forecast (Chronos-2), custom, retired mean-reversion
 config.yaml  .env.example  requirements.txt
 ```
 

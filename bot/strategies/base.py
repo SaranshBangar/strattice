@@ -69,6 +69,17 @@ class Strategy:
         raise NotImplementedError
 
 
+def ema_series(values: list[float], n: int) -> list[float | None]:
+    """Exponential moving average per bar (seeded with the first value, standard 2/(n+1))."""
+    if not values:
+        return []
+    k = 2.0 / (n + 1)
+    out: list[float | None] = [values[0]]
+    for v in values[1:]:
+        out.append(v * k + out[-1] * (1 - k))
+    return out
+
+
 def stdev(values: list[float], n: int) -> float | None:
     """Population standard deviation of the last n values."""
     if len(values) < n:
