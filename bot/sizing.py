@@ -124,6 +124,27 @@ def derisk_mult(client: Client | None = None) -> float:
     return 1.0
 
 
+def sleeve_derisk_mult(strategy_name: str, sleeve_frac: float,
+                       client: Client | None = None) -> float:
+    """Per-SLEEVE drawdown auto-derisk (risk.sleeve_drawdown_derisk_frac, 0 = off, the
+    default). Realized-basis like the global ladder: when a sleeve's cumulative realized
+    P&L sits more than frac * its current sleeve notional below its own all-time peak,
+    its NEW entries are scaled by sleeve_drawdown_derisk_mult. Protective exits are
+    never touched. Complements the GLOBAL drawdown ladder (drawdown_derisk_frac), which
+    reacts only to whole-account drawdown."""
+    r = _cfg().get("risk", {})
+    warn = float(r.get("sleeve_drawdown_derisk_frac", 0.0) or 0.0)
+    if warn <= 0 or sleeve_frac <= 0:
+        return 1.0
+    mult = float(r.get("sleeve_drawdown_derisk_mult", 0.5))
+    cum = audit.strategy_realized(strategy_name)
+    peak = audit.bump_sleeve_peak(strategy_name, cum)
+    sleeve_notional = sleeve_frac * equity(client)
+    if sleeve_notional > 0 and (peak - cum) >= warn * sleeve_notional:
+        return max(0.0, min(1.0, mult))
+    return 1.0
+
+
 def _floor_qty(client: Client, market: str, qty: float) -> float:
     """Round DOWN to the pair's step/precision so notional never exceeds balance."""
     m = client.markets().get(market)
@@ -133,11 +154,14 @@ def _floor_qty(client: Client, market: str, qty: float) -> float:
 
 
 def target_qty(market: str, price: float, client: Client | None = None,
-               sleeve_frac: float | None = None) -> float:
+               sleeve_frac: float | None = None, size_mult: float = 1.0) -> float:
     """Quantity to BUY: `sleeve_frac` of equity (this strategy's capital sleeve), capped by
     fee-adjusted free balance, floored to precision, and zeroed if below the pair's min-notional.
 
     sleeve_frac=None falls back to the global allocation_frac (single-strategy / backtest path).
+    size_mult scales the target notional DOWN (clamped to [0,1]) - the engine passes the
+    product of its portfolio overlays (BTC regime filter, vol targeting, sleeve derisk);
+    1.0 = plain full-sleeve sizing.
     NO-LEVERAGE: free_balance() already nets out the cost basis of OTHER open positions, so a run
     of concurrent fills can never sum past free balance; with normalized sleeves they also sum to
     <= allocation_frac*equity. risk.check() is the final backstop."""
@@ -149,7 +173,8 @@ def target_qty(market: str, price: float, client: Client | None = None,
     headroom = free_balance(c) / (1 + p["fee_rate"] * (1 + p["gst_on_fee"]))
     # Auto-derisk: shrink (or zero) the sleeve while in a drawdown band. mult == 1.0
     # when the feature is disabled, so this is a no-op by default.
-    target_notional = min(frac * equity(c) * derisk_mult(c), headroom)
+    size_mult = max(0.0, min(1.0, size_mult))
+    target_notional = min(frac * equity(c) * derisk_mult(c) * size_mult, headroom)
     if target_notional <= 0:
         return 0.0
     qty = _floor_qty(c, market, target_notional / price)

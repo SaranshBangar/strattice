@@ -49,7 +49,8 @@ def run(strategy, candles: list[dict], capital: float,
         stop_loss_pct: float = 0.0, take_profit_pct: float = 0.0,
         slippage: float | None = None, interval: str = "1h",
         chandelier_k: float = 0.0, atr_period: int = 14, max_hold_bars: int = 0,
-        trade_from: int = 0) -> dict:
+        trade_from: int = 0, reentry_cooldown_bars: int = 0,
+        exit_ladder_frac: float = 0.0, exit_ladder_k: float = 3.5) -> dict:
     """All friction (fee+GST per side, TDS per sell, slippage on fills) comes from costs.py
     so the backtest, DRY_RUN, and live accounting can never diverge. slippage=None uses the
     configured slippage_bps; pass an explicit fraction to override.
@@ -59,10 +60,18 @@ def run(strategy, candles: list[dict], capital: float,
     before it - so walk_forward can warm up on train bars yet measure ONLY the test window.
 
     Exits (same precedence as the live engine): stop-loss, take-profit (target), time-stop
-    (max_hold_bars), then an ATR chandelier trailing stop (peak - chandelier_k*ATR)."""
+    (max_hold_bars), then an ATR chandelier trailing stop (peak - chandelier_k*ATR).
+
+    reentry_cooldown_bars: after a STOP_LOSS exit, no new BUY for N bars (parity with the
+    engine's per-sleeve reentry_cooldown_bars). exit_ladder_frac: for chandelier-less
+    (regime-holding) configs, sell this fraction once price falls exit_ladder_k*ATR off
+    its peak and ride the rest to the strategy's own exit - fires once per position
+    (parity with the engine's exit_ladder_frac)."""
     slip = costs.slippage() if slippage is None else slippage
     cash, qty, entry_spend, entry_price = capital, 0.0, 0.0, 0.0
     entry_i, peak = -1, 0.0
+    cooldown_until_i = -1
+    laddered = False
     trades: list[float] = []          # realized P&L per round trip (NET of all costs)
     equity_curve: list[float] = []
     fees_paid = 0.0                   # total fee+GST AND TDS in quote currency
@@ -107,12 +116,28 @@ def run(strategy, candles: list[dict], capital: float,
             if hit:
                 proceeds = _sell(qty, price)
                 trades.append(proceeds - entry_spend)
-                cash, qty, entry_price, entry_i, peak = proceeds, 0.0, 0.0, -1, 0.0
+                cash, qty, entry_price, entry_i, peak = cash + proceeds, 0.0, 0.0, -1, 0.0
+                laddered = False
+                if hit == "STOP_LOSS" and reentry_cooldown_bars:
+                    cooldown_until_i = i + reentry_cooldown_bars
                 exited = True
+            elif exit_ladder_frac and not chandelier_k and not laddered:
+                # partial-exit ladder (engine parity): bank a fraction at the ladder
+                # trail, keep the rest for the strategy's own exit.
+                a = atr(window, atr_period) or 0.0
+                if a and price <= peak - exit_ladder_k * a:
+                    part = qty * min(1.0, max(0.0, exit_ladder_frac))
+                    proceeds = _sell(part, price)
+                    part_spend = entry_spend * (part / qty)
+                    trades.append(proceeds - part_spend)
+                    cash += proceeds
+                    qty -= part
+                    entry_spend -= part_spend
+                    laddered = True
 
         action = strategy.decide(window)
 
-        if not exited and action == "BUY" and qty == 0:
+        if not exited and action == "BUY" and qty == 0 and i >= cooldown_until_i:
             fill = price * (1 + slip)         # buy slips up
             spend = cash
             fee = costs.trading_fee(spend)    # fee+GST on buy notional (no TDS on buys)
@@ -123,14 +148,15 @@ def run(strategy, candles: list[dict], capital: float,
         elif not exited and action == "SELL" and qty > 0:
             proceeds = _sell(qty, price)
             trades.append(proceeds - entry_spend)
-            cash, qty, entry_price = proceeds, 0.0, 0.0
+            cash, qty, entry_price = cash + proceeds, 0.0, 0.0
+            laddered = False
 
         if qty > 0:
             bars_in_market += 1
         equity_curve.append(cash + qty * price)
 
     # mark-to-market any still-open position at the last price (costs applied as if sold)
-    final_equity = _sell(qty, candles[-1]["close"]) if qty > 0 else cash
+    final_equity = cash + (_sell(qty, candles[-1]["close"]) if qty > 0 else 0.0)
 
     # max drawdown
     peak = equity_curve[0] if equity_curve else capital
@@ -358,6 +384,40 @@ def _selftest_exits() -> None:
     assert r2["trades"] >= 1, ("time-stop should close the position", r2)
 
 
+def _selftest_new_exits() -> None:
+    """v7 additions: re-entry cooldown after a stop-out; partial-exit ladder."""
+    from .strategies.base import Strategy
+
+    class _AlwaysBuy(Strategy):
+        min_candles = 2
+
+        def decide(self, candles):
+            return "BUY"
+
+    # Cooldown: price crashes through the stop then keeps sliding; without a cooldown
+    # the always-buy strategy re-enters every bar (many stop-outs), with cooldown=3 the
+    # re-entries are rate-limited -> strictly fewer round trips.
+    closes = [100, 100] + [95 - i * 4 for i in range(12)]
+    no_cd = run(_AlwaysBuy("s", "X", {}), _candles(closes), 1000, slippage=0.0,
+                stop_loss_pct=0.03)
+    cd = run(_AlwaysBuy("s", "X", {}), _candles(closes), 1000, slippage=0.0,
+             stop_loss_pct=0.03, reentry_cooldown_bars=3)
+    assert cd["trades"] < no_cd["trades"], (cd["trades"], no_cd["trades"])
+
+    # Ladder: rise then fall - a chandelier-less config with a ladder banks a partial
+    # round trip at the trail while the rest stays open (2 realized trades total once
+    # the final mark-to-market sell isn't counted; the partial IS a trade).
+    rise_fall = _candles([100, 100, 101, 110, 120, 130, 120, 108, 104, 103, 103, 103])
+    plain = run(_AlwaysBuy("s", "X", {}), rise_fall, 1000, slippage=0.0)
+    lad = run(_AlwaysBuy("s", "X", {}), rise_fall, 1000, slippage=0.0,
+              exit_ladder_frac=0.5, exit_ladder_k=1.0, atr_period=3)
+    assert plain["trades"] == 0, "no exits configured -> no round trips"
+    assert lad["trades"] == 1, ("ladder must bank exactly one partial", lad["trades"])
+    # in this fall-off-the-peak tape, banking half at the trail must beat riding it all
+    # down (that is the whole point of the ladder)
+    assert lad["final_equity"] > plain["final_equity"], (lad, plain)
+
+
 def _selftest_risk() -> None:
     """Item 8 + constraint C/A: fractional ceilings, no-dup-asset, no-leverage invariant."""
     from . import audit, sizing
@@ -519,6 +579,7 @@ def demo() -> None:
     _selftest_costs()
     _selftest_regime()
     _selftest_exits()
+    _selftest_new_exits()
     _selftest_risk()
     _selftest_sizing()
     _selftest_sleeves()
@@ -544,6 +605,11 @@ def main() -> None:
     p.add_argument("--chandelier-k", type=float, default=0.0, help="ATR multiple for chandelier trailing stop")
     p.add_argument("--atr-period", type=int, default=14, help="ATR lookback for the chandelier stop")
     p.add_argument("--max-hold-bars", type=int, default=0, help="time-stop: force-exit after N bars (0=off)")
+    p.add_argument("--cooldown-bars", type=int, default=0,
+                   help="re-entry cooldown after a stop-out, in bars (0=off)")
+    p.add_argument("--exit-ladder", type=float, default=0.0,
+                   help="partial-exit ladder fraction for chandelier-less configs (0=off)")
+    p.add_argument("--exit-ladder-k", type=float, default=3.5, help="ATR multiple for the ladder trail")
     p.add_argument("--walkforward", action="store_true", help="rolling train/test walk-forward report")
     p.add_argument("--train", type=int, default=400, help="walk-forward train window (bars)")
     p.add_argument("--test", type=int, default=100, help="walk-forward test window (bars)")
@@ -572,7 +638,8 @@ def main() -> None:
     strat = REGISTRY[a.module]("backtest", a.market, json.loads(a.params))
     kw = dict(stop_loss_pct=a.stop_loss, take_profit_pct=a.take_profit, slippage=a.slippage,
               interval=a.interval, chandelier_k=a.chandelier_k, atr_period=a.atr_period,
-              max_hold_bars=a.max_hold_bars)
+              max_hold_bars=a.max_hold_bars, reentry_cooldown_bars=a.cooldown_bars,
+              exit_ladder_frac=a.exit_ladder, exit_ladder_k=a.exit_ladder_k)
     if a.walkforward:
         walk_forward(strat, candles, a.capital, a.train, a.test, **kw)
         return

@@ -184,6 +184,16 @@ def order_exists(client_order_id: str) -> bool:
         return row is not None
 
 
+def order_status_of(client_order_id: str) -> str | None:
+    """The recorded status for a coid, or None if never logged. Lets the executor treat
+    an 'error' row (outcome unknown) differently from a real placed/dry_run duplicate."""
+    with _lock, _conn() as c:
+        row = c.execute(
+            "SELECT status FROM orders WHERE client_order_id=?", (client_order_id,)
+        ).fetchone()
+        return row["status"] if row else None
+
+
 def log_order(o: dict) -> bool:
     """Insert an order row. Returns False if the client_order_id already exists (idempotent skip)."""
     with _lock, _conn() as c:
@@ -284,7 +294,8 @@ def today_stats() -> dict:
     with _lock, _conn() as c:
         row = c.execute(
             """SELECT COUNT(*) AS n, COALESCE(SUM(realized_pnl),0) AS pnl,
-                      COALESCE(SUM(tds),0) AS tds
+                      COALESCE(SUM(tds),0) AS tds,
+                      COALESCE(SUM(side='buy'),0) AS buys
                FROM orders WHERE status IN ('placed','dry_run') AND day=?""",
             (day,),
         ).fetchone()
@@ -292,7 +303,77 @@ def today_stats() -> dict:
             "SELECT COALESCE(SUM(ABS(qty)*avg_price),0) AS exp FROM positions"
         ).fetchone()["exp"]
     return {"trades_today": row["n"], "realized_today": row["pnl"],
-            "tds_today": row["tds"], "capital_at_risk": exposure}
+            "tds_today": row["tds"], "capital_at_risk": exposure,
+            "buys_today": row["buys"]}
+
+
+def consecutive_losses(days: int = 90) -> int:
+    """Number of consecutive most-recent round-trip CLOSES (sell fills) with negative
+    realized P&L, scanning newest-first within `days` and stopping at the first win.
+    Buys are excluded (their realized_pnl is just the entry fee). Feeds the optional
+    max_consecutive_losses_halt breaker."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    with _lock, _conn() as c:
+        rows = c.execute(
+            """SELECT realized_pnl FROM orders
+               WHERE status IN ('placed','dry_run') AND side='sell' AND ts >= ?
+               ORDER BY id DESC LIMIT 100""",
+            (cutoff,),
+        ).fetchall()
+    n = 0
+    for r in rows:
+        if r["realized_pnl"] < 0:
+            n += 1
+        else:
+            break
+    return n
+
+
+def strategy_realized(strategy: str) -> float:
+    """All-time realized P&L for ONE strategy (its sleeve equity delta)."""
+    with _lock, _conn() as c:
+        return c.execute(
+            "SELECT COALESCE(SUM(realized_pnl),0) AS pnl FROM orders "
+            "WHERE status IN ('placed','dry_run') AND strategy=?",
+            (strategy,),
+        ).fetchone()["pnl"]
+
+
+def bump_sleeve_peak(strategy: str, value: float) -> float:
+    """Monotonic per-sleeve high-water-mark of cumulative realized P&L (meta table,
+    key sleeve_peak:<strategy>). Returns the resulting peak. Restart-durable, so a
+    sleeve's drawdown is measured from its best-ever realized equity."""
+    key = f"sleeve_peak:{strategy}"
+    with _lock, _conn() as c:
+        row = c.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
+        peak = float(row["value"]) if row else 0.0
+        if value > peak:
+            peak = value
+            c.execute(
+                "INSERT INTO meta(key,value) VALUES(?,?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                (key, peak),
+            )
+    return peak
+
+
+def get_cooldown_until(strategy: str, market: str) -> int:
+    """Candle-ts (ms) until which new entries for this sleeve are blocked (re-entry
+    cooldown after a stop-out). 0 = no cooldown recorded."""
+    key = f"cooldown_until:{strategy}:{market}"
+    with _lock, _conn() as c:
+        row = c.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
+    return int(row["value"]) if row else 0
+
+
+def set_cooldown_until(strategy: str, market: str, until_ts: int) -> None:
+    key = f"cooldown_until:{strategy}:{market}"
+    with _lock, _conn() as c:
+        c.execute(
+            "INSERT INTO meta(key,value) VALUES(?,?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (key, float(until_ts)),
+        )
 
 
 def total_realized() -> float:

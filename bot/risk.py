@@ -33,7 +33,44 @@ class RiskManager:
         # 0 disables it (default), leaving the "user accepts full market loss" stance intact.
         self.drawdown_kill_frac = float(r.get("drawdown_kill_frac", 0.0) or 0.0)
         self.max_trades_per_day = int(r["max_trades_per_day"])
+        # NEW-ENTRY throttle (0 = off): caps BUYS per UTC day, so several sleeves
+        # signalling together can't deploy the whole book into one correlated crypto-beta
+        # move in a single day. Deferred sleeves re-signal on later bars while their
+        # condition persists. Portfolio study: cap=1 leaves net within 2pts of baseline
+        # with a slightly better worst walk-forward fold (research/FINDINGS.md v7).
+        self.max_new_entries_per_day = int(r.get("max_new_entries_per_day", 0) or 0)
+        # Consecutive-loss halt (0 = off): after N straight losing round trips, block
+        # NEW entries and alert. This is a "something is broken" breaker, NOT a
+        # performance feature - the v7 study shows N=3 strangles the portfolio (it can
+        # deadlock: no entries -> no win -> never resets), so it stays off unless you
+        # want a manual-intervention tripwire. Protective exits always pass.
+        self.max_consecutive_losses_halt = int(r.get("max_consecutive_losses_halt", 0) or 0)
+        # Correlation-bucket exposure caps (off unless configured): asset_buckets maps
+        # base assets to a named bucket; exposure_caps caps each bucket's summed open
+        # exposure as a fraction of equity. All 7 lineup assets are ~one crypto-beta
+        # bucket (mean pairwise daily-return correlation ~0.5, FINDINGS v7) - this lets
+        # you bound that concentration explicitly.
+        self.asset_buckets = {str(k).upper(): str(v)
+                              for k, v in (r.get("asset_buckets") or {}).items()}
+        self.exposure_caps = {str(k): float(v)
+                              for k, v in (r.get("exposure_caps") or {}).items()}
         self.kill_file = config.ROOT / r["kill_switch_file"]
+
+    @staticmethod
+    def _base_asset(market: str) -> str:
+        """'I-BTC_INR' -> 'BTC' (best-effort; unknown formats return the input)."""
+        try:
+            return market.split("-", 1)[1].split("_", 1)[0].upper()
+        except IndexError:
+            return market.upper()
+
+    def _bucket_exposure(self, bucket: str) -> float:
+        """Summed open exposure (qty*avg cost) of positions whose asset is in `bucket`."""
+        total = 0.0
+        for p in audit.open_positions():
+            if self.asset_buckets.get(self._base_asset(p["market"])) == bucket:
+                total += abs(p["qty"]) * p["avg_price"]
+        return total
 
     def kill_switch_active(self) -> bool:
         return Path(self.kill_file).exists()
@@ -69,6 +106,19 @@ class RiskManager:
         # above, and the kill switch.
         if increasing and s["trades_today"] >= self.max_trades_per_day:
             return RiskDecision(False, f"MAX_TRADES_PER_DAY hit ({s['trades_today']})")
+        # Per-day NEW-ENTRY cap (correlation-aware entry staggering). Buys only; a
+        # position-closing sell is never an "entry".
+        if increasing and self.max_new_entries_per_day and \
+                s.get("buys_today", 0) >= self.max_new_entries_per_day:
+            return RiskDecision(
+                False, f"MAX_NEW_ENTRIES_PER_DAY hit ({s.get('buys_today', 0)})")
+        # Consecutive-loss halt: entries only, exits always pass.
+        if increasing and self.max_consecutive_losses_halt:
+            n = audit.consecutive_losses()
+            if n >= self.max_consecutive_losses_halt:
+                return RiskDecision(
+                    False, f"CONSECUTIVE_LOSS_HALT ({n} straight losses >= "
+                           f"{self.max_consecutive_losses_halt}; manual review needed)")
         if notional > self.max_position_frac * eq + _EPS:
             return RiskDecision(False, f"notional {notional:.2f} > MAX_POSITION {self.max_position_frac}*eq")
         if s["capital_at_risk"] + new_exposure > self.max_total_capital_at_risk_frac * eq + _EPS:
@@ -80,6 +130,17 @@ class RiskManager:
         # No-duplicate-asset: don't let two strategies pile into the same market.
         if increasing and market and audit.position_held_by_other(strategy, market):
             return RiskDecision(False, "DUP_ASSET")
+        # Correlation-bucket exposure cap: this order's asset bucket must stay under its
+        # configured fraction of equity after the new exposure is added.
+        if increasing and market and self.exposure_caps:
+            bucket = self.asset_buckets.get(self._base_asset(market))
+            cap = self.exposure_caps.get(bucket) if bucket else None
+            if cap is not None:
+                bexp = self._bucket_exposure(bucket)
+                if bexp + new_exposure > cap * eq + _EPS:
+                    return RiskDecision(
+                        False, f"BUCKET_EXPOSURE_CAP {bucket} "
+                               f"({bexp:.2f}+{new_exposure:.2f} > {cap}*eq)")
         # No-leverage invariant: never deploy more than the free cash on hand.
         if increasing and new_exposure > free + _EPS:
             return RiskDecision(False, f"INSUFFICIENT_BALANCE (need {new_exposure:.2f} > free {free:.2f})")

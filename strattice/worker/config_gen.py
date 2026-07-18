@@ -215,7 +215,15 @@ _BASE = {
     # DAILY bars (was 15m): the only altitude that survived the friction study
     # (research/FINDINGS.md). 5-min poll acts within minutes of each daily close;
     # 400 daily bars ≈ 13 months > regime(100) + slow MA + ATR warmups.
-    "engine": {"poll_seconds": 300, "candle_interval": "1d", "candle_limit": 400},
+    # crash_brake stays FALSE: the v7 study measured intraday hard-stops at -107pts
+    # net / +5pts max-DD (whipsaw), and it diverges from the close-based backtest.
+    "engine": {"poll_seconds": 300, "candle_interval": "1d", "candle_limit": 400,
+               "crash_brake": False},
+    # BTC 100d trend overlay, PROMOTED default-ON in v7: blocks NEW entries while BTC
+    # is under its 100d SMA. Better net/PF/worst-fold on BOTH venues (FINDINGS v7).
+    # Fails open on a bad BTC feed; never touches exits.
+    "portfolio": {"btc_regime_filter": {"enabled": True, "market": "I-BTC_INR",
+                                        "period": 100, "entry_mult": 0.0}},
     "starting_equity": 1000.0,   # DRY_RUN sim wallet; LIVE reads the real exchange balance
     "allocation_frac": 0.97,
     "quote_currency": "INR",
@@ -224,8 +232,11 @@ _BASE = {
     # daily_loss_frac 0.10: halt the day at -10% of equity. A 50% brake is not a
     # guardrail — nobody's "bad day" budget is half the account. Surfaced verbatim in
     # web/lib/risk.ts (keep in sync). max_trades_per_day is overwritten per tier.
+    # v7 risk knobs ship at their validated defaults (all off - FINDINGS v7).
     "risk": {"max_position_frac": 1.0, "max_total_capital_at_risk_frac": 1.0,
-             "daily_loss_frac": 0.10, "max_trades_per_day": 5},
+             "daily_loss_frac": 0.10, "max_trades_per_day": 5,
+             "max_new_entries_per_day": 0, "max_consecutive_losses_halt": 0,
+             "sleeve_drawdown_derisk_frac": 0.0, "sleeve_drawdown_derisk_mult": 0.5},
 }
 
 
@@ -305,6 +316,9 @@ if __name__ == "__main__":
     assert free["risk"]["max_trades_per_day"] == 100
     assert free["risk"]["daily_loss_frac"] == 0.10, "daily loss brake must stay at 10%"
     assert free["engine"]["candle_interval"] == "1d", "the engine trades DAILY bars"
+    assert free["engine"]["crash_brake"] is False, "intraday brake stays off (v7 evidence)"
+    assert free["portfolio"]["btc_regime_filter"]["enabled"] is True, "v7 BTC overlay ships on"
+    assert free["risk"]["max_consecutive_losses_halt"] == 0, "tripwire ships off"
     assert sum(s["enabled"] for s in free["strategies"]) == 4, "free -> all active while pricing is off"
     assert free["strategies"][3]["module"] == "rsi", "legacy retired rows must still resolve"
 

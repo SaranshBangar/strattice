@@ -120,6 +120,24 @@ set tiny `risk:` limits and `capital:` → go live → scale up only after revie
 sanity check that warns if a strategy's capital can't clear the exchange min-order or
 breaches a risk ceiling.
 
+**v7 additions** (evidence for every default in
+[research/FINDINGS.md](research/FINDINGS.md) v7; reproduce with
+`python -m research.portfolio_study`):
+
+- **BTC 100d trend overlay — ON by default** (`portfolio.btc_regime_filter`): new
+  entries are blocked while BTC closes under its 100-day SMA. Improved net, profit
+  factor and the worst walk-forward fold on both the INR venue and the USDT twins.
+  Exits are never touched; the filter fails open if the BTC feed is down.
+- Off-by-default knobs, each backtested: `risk.max_new_entries_per_day` (stagger
+  correlated same-day deployments), `risk.max_consecutive_losses_halt` (manual-review
+  tripwire — see FINDINGS for why it is *not* a performance feature),
+  `risk.sleeve_drawdown_derisk_frac` (per-sleeve derisk; the global ladder already
+  exists), `risk.asset_buckets`/`exposure_caps` (correlation-bucket exposure cap),
+  per-sleeve `vol_target_ann` (vol-targeted sizing: shallower drawdowns for less
+  net), `reentry_cooldown_bars`, `entry_slippage_cap_pct`, and `exit_ladder_frac`
+  (regime engines: bank part at an ATR trail). The intraday `engine.crash_brake`
+  exists but stays off — the study measured it at −107pts net (see FINDINGS v7).
+
 ### Failure handling (all tested in `bot/test_fallbacks.py` + `bot/test_reliability.py`)
 
 - **Bad candle data**: every feed is integrity-checked before `decide()` — stale,

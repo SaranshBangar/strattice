@@ -25,6 +25,31 @@ engine:
   candle_limit:
     400 # > regime_period(100) + slow MA(25) + ATR warmup, with margin.
     #   400 daily bars = ~13 months of history
+  crash_brake:
+    false # ALSO check each sleeve's hard stop against the in-progress bar between
+    #   daily closes (protective exits are otherwise close-based). OFF because the
+    #   v7 portfolio study measured it at -107pts net and +5pts max-DD over the
+    #   full window (intraday lows whipsaw positions that recover by the close),
+    #   and it deliberately diverges from the close-based backtest. Turn on only
+    #   if you want a bounded worst intraday excursion and accept that cost.
+
+# Portfolio-level overlays (v7, research/portfolio_study.py + FINDINGS v7).
+portfolio:
+  btc_regime_filter: # PROMOTED default-ON: block NEW entries while BTC < its 100d SMA.
+    #   Crypto sleeves are one beta bucket (mean pairwise daily-return corr 0.58);
+    #   when the bucket's anchor is below its regime line, fresh longs underperform.
+    #   Evidence (7-sleeve joint replay, both venues, walk-forward):
+    #     INR:  net +239.7% vs +216.7% base | maxDD 22.2 vs 22.5 | PF 4.57 vs 3.50
+    #           WF worst fold -1.7% vs -6.2%, compounded +234% vs +213%
+    #     USDT: net +102.9% vs  +89.8% base | maxDD 29.4 vs 34.0 | PF 2.54 vs 2.13
+    #           WF worst fold -11.8% vs -17.8%
+    #   Exits are NEVER touched; if the BTC feed is unusable the filter fails OPEN
+    #   (entries proceed unscaled) so a feed outage can't strangle the bot.
+    enabled: true
+    market: "I-BTC_INR"
+    period: 100 # the tested line is the 100d SMA — not "any long MA" (FINDINGS v6/v7)
+    entry_mult: 0.0 # 0.0 = block new entries below the line; 0.5 = half-size them
+    #   (0.5 also beats baseline on both venues, but 0.0 dominated)
 
 # --- wallet sizing (constraint B/D) ---
 starting_equity: 1000.0 # DRY_RUN simulated wallet. Live ignores this, reads exchange.
@@ -67,12 +92,61 @@ risk:
   drawdown_derisk_frac: 0.0 # peak-to-trough DD at which NEW entries size down. e.g. 0.08 = 8%
   drawdown_derisk_mult: 0.5 # size multiplier while in the derisk band (0.5 = half size)
   drawdown_kill_frac: 0.0 # DD at which NEW entries are blocked entirely. e.g. 0.15 = 15%
+  # --- v7 additions (all OFF by default; evidence in research/FINDINGS.md v7) ---
+  max_new_entries_per_day:
+    0 # cap on NEW entries (buys) per UTC day, 0 = off. Staggers correlated same-day
+    #   deployments; deferred sleeves re-signal on later bars while their condition
+    #   holds. Study: cap=1 keeps net within 2pts of baseline with a slightly better
+    #   worst walk-forward fold (-4.9% vs -6.2%). Off because the edge is marginal.
+  max_consecutive_losses_halt:
+    0 # halt NEW entries after N consecutive losing round trips (0 = off). This is a
+    #   "something is broken" TRIPWIRE needing manual review, NOT a performance
+    #   feature: the study shows N=3 can deadlock the portfolio (no entries -> no win
+    #   -> never resets; +46% vs +217% baseline). Protective exits always pass.
+  sleeve_drawdown_derisk_frac:
+    0.0 # per-SLEEVE realized-P&L drawdown (as a fraction of that sleeve's notional) at
+    #   which THAT sleeve's new entries scale down (0 = off). Complements the global
+    #   drawdown ladder above, which only sees whole-account drawdown.
+  sleeve_drawdown_derisk_mult: 0.5 # size multiplier for a derisked sleeve
+  # Correlation-bucket exposure caps (off unless BOTH maps are set). All 7 lineup
+  # assets are effectively ONE crypto-beta bucket: mean pairwise daily-return
+  # correlation 0.58 (range 0.39 XRP/BNB .. 0.71 ETH/BTC) over 2023-09..2026-07.
+  # Example — cap total crypto exposure at 80% of equity:
+  #   asset_buckets: { BTC: crypto, ETH: crypto, XRP: crypto, BNB: crypto,
+  #                    DOGE: crypto, ADA: crypto, SOL: crypto }
+  #   exposure_caps: { crypto: 0.8 }
 
 # Each strategy: its own market + params + position tracking + capital sleeve `weight`.
 # `weight` is RELATIVE (default 1.0 => equal split). sleeve_frac = allocation_frac*weight/sum(weights).
 # Exits are config-driven protective layers (strategies are entry-only):
 #   stop_loss_pct / take_profit_pct / max_hold_bars (time-stop) / chandelier_k (ATR trailing).
 # regime_period gates every long entry to an uptrend (price above its N-bar SMA, shared).
+#
+# OPTIONAL per-sleeve keys (v7, all default off; evidence in FINDINGS v7):
+#   reentry_cooldown_bars: N   no fresh BUY for N bars after a stop-out (study: neutral
+#                              at daily cadence — harmless hygiene knob)
+#   entry_slippage_cap_pct: F  skip an entry if the live price already ran >F above the
+#                              signal close (live-only guard; backtest-neutral by
+#                              construction — a skipped entry re-signals while valid).
+#                              Suggested 0.03 if used.
+#   vol_target_ann: F          scale entries by target/realized when 20d realized ann.
+#                              vol exceeds F (study: 0.40 cuts maxDD 22.5->19.0 and
+#                              fees 24.7->17.2 for ~50pts net — a risk dial, not free)
+#   exit_ladder_frac: F        regime engines only (chandelier_k 0): sell F of the
+#                              position at a exit_ladder_k*ATR trail, ride the rest to
+#                              the engine's own exit (study: maxDD -2.1pts INR /
+#                              -1.2pts USDT, net neutral) — fires once per position
+#   exit_ladder_k: 3.5         ATR multiple for that ladder trail
+#
+# WEIGHT PRESETS (v7 joint replay; equal weights stay the DEFAULT because preset tilts
+# are fitted on the same history they're scored on — treat these as options, not truth):
+#   balanced (default): all 1.0                 -> +216.7% | maxDD 22.5% | WF 3/4, worst -6.2%
+#   conservative: tsmom_eth 1.2, breakout_btc 1.2, turtle55_xrp 0.8, macd_bnb 1.4,
+#                 regime_doge 0.8, ichimoku_ada 0.8, macd_sol 0.8
+#                                               -> +229.9% | maxDD 22.8% | WF 3/4, worst -4.1%
+#   aggressive:   tsmom_eth 1.2, breakout_btc 0.6, turtle55_xrp 1.4, macd_bnb 1.4,
+#                 regime_doge 1.2, ichimoku_ada 0.6, macd_sol 0.6
+#                                               -> +269.5% | maxDD 23.5% | WF 3/4, worst -2.4%
 #
 # THE LINEUP (v6, all 1d bars). Seven engines, one per market — all seven INR pairs held —
 # so all can hold concurrently (no-dup-asset rule). Markets were assigned where each strategy

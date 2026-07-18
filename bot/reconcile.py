@@ -64,6 +64,59 @@ def _fill_from(resp: dict) -> tuple[float, float, str]:
     return qty, price, status
 
 
+def resolve_one(client: Client, row) -> tuple[str, str | None]:
+    """Resolve ONE 'error' order row against the exchange. Returns (outcome, line):
+       outcome  'healed'      the order filled; bot.db was updated to match
+                'not_found'   the exchange never saw it; row marked rejected (retry-safe)
+                'dead'        exchange says cancelled/rejected with no fill; row rejected
+                'manual'      order exists in an open/unknown state; needs a human
+                'lookup_failed' the status call itself failed; try again later
+       line is a human-readable description (None for lookup_failed)."""
+    coid = row["client_order_id"]
+    try:
+        resp = client.order_status(client_order_id=coid)
+    except CoinDCXError as e:
+        log.warning("reconcile: status lookup failed for %s: %s", coid, e)
+        return "lookup_failed", None
+    if resp is None:
+        # Definitive: the exchange never saw this order. Close the question.
+        audit.heal_order(coid, status="rejected",
+                         response={"reconciled": "exchange has no such order"})
+        return "not_found", (f"{row['strategy']} {row['market']} {row['side']}: "
+                             "never reached the exchange -> marked rejected")
+    qty, price, status = _fill_from(resp)
+    if status in _DEAD_STATES and qty <= 0:
+        audit.heal_order(coid, status="rejected",
+                         response={"reconciled": f"exchange status {status}"})
+        return "dead", (f"{row['strategy']} {row['market']} {row['side']}: "
+                        f"exchange says {status} -> marked rejected")
+    if qty > 0 and price > 0 and (status in _FILLED_STATES or status in _DEAD_STATES):
+        # The order DID fill (fully or partially) while we thought it errored:
+        # replay the fill into the position book exactly like the executor would.
+        old_qty, old_avg = audit.get_position(row["strategy"], row["market"])
+        new_qty, new_avg, realized = _apply_fill(old_qty, old_avg, row["side"], qty, price)
+        from . import costs
+        tds_paid = costs.tds(row["side"], qty * price)
+        audit.heal_order(coid, status="placed", qty=qty, price=price,
+                         notional=qty * price, realized_pnl=realized, tds=tds_paid,
+                         response={"reconciled": f"filled on exchange ({status})"})
+        if old_qty == 0 and new_qty > 0:
+            peak, entry_ts = price, 0
+        elif new_qty == 0:
+            peak, entry_ts = 0.0, 0
+        else:
+            peak, entry_ts = audit.get_meta(row["strategy"], row["market"])
+            peak = max(peak, price)
+        audit.set_position(row["strategy"], row["market"], new_qty, new_avg, peak, entry_ts)
+        return "healed", (f"{row['strategy']} {row['market']} {row['side']} qty={qty} "
+                          f"@{price}: FILLED on exchange -> book healed "
+                          f"(pos {old_qty} -> {new_qty})")
+    # Anything else (open/init/unknown status) needs eyes, not automation.
+    return "manual", (f"{row['strategy']} {row['market']} {row['side']} "
+                      f"(coid {coid[:12]}…): exchange status {status or 'unknown'} "
+                      "- manual check needed")
+
+
 def heal_lost_confirmations(client: Client, *, days: int = 3) -> list[str]:
     """Boot reconciliation pass. Returns human-readable lines describing every change
     made (empty = book was already consistent). Never raises: a reconcile failure must
@@ -75,52 +128,34 @@ def heal_lost_confirmations(client: Client, *, days: int = 3) -> list[str]:
         log.exception("reconcile: could not read error orders")
         return changes
     for row in rows:
-        coid = row["client_order_id"]
-        try:
-            resp = client.order_status(client_order_id=coid)
-        except CoinDCXError as e:
-            log.warning("reconcile: status lookup failed for %s: %s", coid, e)
-            continue
-        if resp is None:
-            # Definitive: the exchange never saw this order. Close the question.
-            audit.heal_order(coid, status="rejected",
-                             response={"reconciled": "exchange has no such order"})
-            changes.append(f"{row['strategy']} {row['market']} {row['side']}: "
-                           "never reached the exchange -> marked rejected")
-            continue
-        qty, price, status = _fill_from(resp)
-        if status in _DEAD_STATES and qty <= 0:
-            audit.heal_order(coid, status="rejected",
-                             response={"reconciled": f"exchange status {status}"})
-            changes.append(f"{row['strategy']} {row['market']} {row['side']}: "
-                           f"exchange says {status} -> marked rejected")
-            continue
-        if qty > 0 and price > 0 and (status in _FILLED_STATES or status in _DEAD_STATES):
-            # The order DID fill (fully or partially) while we thought it errored:
-            # replay the fill into the position book exactly like the executor would.
-            old_qty, old_avg = audit.get_position(row["strategy"], row["market"])
-            new_qty, new_avg, realized = _apply_fill(old_qty, old_avg, row["side"], qty, price)
-            from . import costs
-            tds_paid = costs.tds(row["side"], qty * price)
-            audit.heal_order(coid, status="placed", qty=qty, price=price,
-                             notional=qty * price, realized_pnl=realized, tds=tds_paid,
-                             response={"reconciled": f"filled on exchange ({status})"})
-            if old_qty == 0 and new_qty > 0:
-                peak, entry_ts = price, 0
-            elif new_qty == 0:
-                peak, entry_ts = 0.0, 0
-            else:
-                peak, entry_ts = audit.get_meta(row["strategy"], row["market"])
-                peak = max(peak, price)
-            audit.set_position(row["strategy"], row["market"], new_qty, new_avg, peak, entry_ts)
-            changes.append(f"{row['strategy']} {row['market']} {row['side']} qty={qty} "
-                           f"@{price}: FILLED on exchange -> book healed "
-                           f"(pos {old_qty} -> {new_qty})")
-            continue
-        # Anything else (open/init/unknown status) needs eyes, not automation.
-        changes.append(f"{row['strategy']} {row['market']} {row['side']} (coid {coid[:12]}…): "
-                       f"exchange status {status or 'unknown'} - manual check needed")
+        _outcome, line = resolve_one(client, row)
+        if line:
+            changes.append(line)
     return changes
+
+
+def resolve_stuck_order(client: Client, coid: str) -> str:
+    """On-demand resolution for the executor: an order row in status 'error' occupies
+    the idempotency key, which would otherwise block ANY retry of the same logical
+    decision (e.g. a protective exit re-fired on the same bar). Ask the exchange:
+    returns 'retry' ONLY when the outcome is now definitively 'the exchange has no such
+    fill' (row moved to rejected), else 'resolved' (healed - do not re-place) or
+    'unknown' (leave it alone; a blind resend could double-fire)."""
+    try:
+        rows = [r for r in audit.orders_with_status("error", days=30)
+                if r["client_order_id"] == coid]
+    except Exception:  # noqa: BLE001
+        return "unknown"
+    if not rows:
+        return "unknown"
+    outcome, line = resolve_one(client, rows[0])
+    if line:
+        log.warning("RECONCILED (on demand): %s", line)
+    if outcome in ("not_found", "dead"):
+        return "retry"
+    if outcome == "healed":
+        return "resolved"
+    return "unknown"
 
 
 def _base_currency(client: Client, market: str) -> str | None:

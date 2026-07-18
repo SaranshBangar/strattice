@@ -6,6 +6,7 @@ Position model: long-only, flat<->long, full capital allocation.
 The executor still owns all risk gating and idempotency.
 """
 import logging
+import math
 import sys
 import time
 
@@ -53,6 +54,18 @@ class Engine:
         self.strategies = self._build_strategies(cfg)
         self._bad_feed_alerted: dict[str, float] = {}  # market -> monotonic ts of last alert
         self._last_drift_check = 0.0                   # monotonic ts of last balance reconcile
+        # Intraday crash brake (config engine.crash_brake, DEFAULT OFF): also check the
+        # hard stop against the in-progress bar between daily closes. The v7 portfolio
+        # study measured this at -107pts net / +5pts max-DD (intraday lows whipsaw
+        # positions that recover by the close) - it exists for operators who want a
+        # bounded worst intraday excursion and accept that documented cost. Divergence
+        # from the close-based backtest is intentional and documented in FINDINGS v7.
+        self.crash_brake = bool(cfg.get("engine", {}).get("crash_brake", False))
+        # Portfolio-level BTC trend overlay (config portfolio.btc_regime_filter,
+        # DEFAULT ON, entry_mult 0.0): scale/block NEW entries while BTC trades below
+        # its 100d SMA. Promoted on v7 evidence: improves net, PF and worst
+        # walk-forward fold on BOTH venues (FINDINGS v7). Exits are never touched.
+        self.btc_filter = dict((cfg.get("portfolio") or {}).get("btc_regime_filter") or {})
 
     _BAD_FEED_ALERT_EVERY = 3600.0   # rate-limit bad-candle alerts to one/hour per market
     _DRIFT_CHECK_EVERY = 3600.0      # LIVE balance-vs-book reconcile cadence
@@ -88,6 +101,12 @@ class Engine:
         strat.chandelier_k = float(s.get("chandelier_k", 0) or 0)
         strat.exit_atr_period = int(s.get("atr_period", s.get("params", {}).get("atr_period", 14)) or 14)
         strat.max_hold_bars = int(s.get("max_hold_bars", 0) or 0)
+        # Optional per-sleeve execution layers (all default OFF; evidence in FINDINGS v7):
+        strat.reentry_cooldown_bars = int(s.get("reentry_cooldown_bars", 0) or 0)
+        strat.entry_slippage_cap_pct = float(s.get("entry_slippage_cap_pct", 0) or 0)
+        strat.vol_target_ann = float(s.get("vol_target_ann", 0) or 0)
+        strat.exit_ladder_frac = float(s.get("exit_ladder_frac", 0) or 0)
+        strat.exit_ladder_k = float(s.get("exit_ladder_k", 3.5) or 3.5)
         strat.sleeve_frac = sleeves.get(strat.name, 0.0)  # fraction of equity this strategy may deploy
         strat.entries_enabled = entries_enabled           # disabled-but-open -> exits only, no new BUYs
         return strat
@@ -123,6 +142,77 @@ class Engine:
                      sorted(f"{s.name}{'' if s.entries_enabled else '(exit-only)'}" for s in self.strategies),
                      sorted(f"{s.name}{'' if s.entries_enabled else '(exit-only)'}" for s in new))
             self.strategies = new
+
+    def _overlay_mult(self, candle_cache: dict) -> float:
+        """Portfolio BTC trend overlay entry multiplier for this cycle. 1.0 when the
+        filter is disabled, BTC is above its regime line, or the BTC feed can't be
+        judged (fail OPEN with a log line - blocking all entries on a feed outage would
+        silently strangle the whole bot)."""
+        f = self.btc_filter
+        if not f or not f.get("enabled", False):
+            return 1.0
+        market = str(f.get("market", "I-BTC_INR"))
+        period = int(f.get("period", 100))
+        mult = float(f.get("entry_mult", 0.0))
+        key = (market, self.interval)
+        try:
+            if key not in candle_cache:
+                candle_cache[key] = self._validated_candles(market)
+        except Exception:  # noqa: BLE001
+            log.warning("BTC overlay: candle fetch failed; entries proceed unscaled")
+            return 1.0
+        bars = candle_cache[key]
+        if not bars or len(bars) < period + 1:
+            log.info("BTC overlay: insufficient %s history; entries proceed unscaled", market)
+            return 1.0
+        closes = [b["close"] for b in bars[:-1]]  # closed bars only, like everything else
+        line = sum(closes[-period:]) / period
+        if closes[-1] < line:
+            log.info("BTC overlay ACTIVE: %s close %.0f < %dd SMA %.0f -> entry mult %.2f",
+                     market, closes[-1], period, line, mult)
+            return max(0.0, min(1.0, mult))
+        return 1.0
+
+    def _vol_target_mult(self, strat, closed: list[dict]) -> float:
+        """Vol-targeted entry sizing (per-sleeve vol_target_ann, 0 = off): scale the
+        entry down by target/realized when 20-bar realized annualized vol exceeds the
+        target. Never scales UP (mult is capped at 1)."""
+        target = strat.vol_target_ann
+        if target <= 0 or len(closed) < 22:
+            return 1.0
+        closes = [b["close"] for b in closed[-21:]]
+        rets = [closes[i] / closes[i - 1] - 1 for i in range(1, len(closes))]
+        m = sum(rets) / len(rets)
+        var = sum((r - m) ** 2 for r in rets) / (len(rets) - 1)
+        per_year = 365 * 86_400_000 / _INTERVAL_MS.get(self.interval, 86_400_000)
+        rv = math.sqrt(var) * math.sqrt(per_year)
+        if rv > target > 0:
+            return target / rv
+        return 1.0
+
+    def _ladder_exit(self, strat, closed, price, pos_qty, peak, entry_ts) -> bool:
+        """Partial-exit ladder for the regime-holding engines (per-sleeve
+        exit_ladder_frac, 0 = off; only sensible when chandelier_k == 0): bank
+        `exit_ladder_frac` of the position once price falls exit_ladder_k*ATR off its
+        peak, ride the rest to the engine's own exit. Fires at most once per position
+        (meta-keyed by entry_ts). v7 evidence: -2.1pts max-DD on INR, -1.2 on USDT,
+        net neutral. Returns True if a partial sell was placed."""
+        frac = strat.exit_ladder_frac
+        if frac <= 0 or strat.chandelier_k or pos_qty <= 0 or entry_ts <= 0:
+            return False
+        key_done = audit.get_cooldown_until(f"ladder:{strat.name}", strat.market)
+        if key_done == entry_ts:  # already laddered this position
+            return False
+        a = atr(closed, strat.exit_atr_period)
+        if not a or price > peak - strat.exit_ladder_k * a:
+            return False
+        sell_qty = pos_qty * min(1.0, max(0.0, frac))
+        log.info("LADDER %s %s: selling %.4g of %.4g at %.6g (peak %.6g)",
+                 strat.name, strat.market, sell_qty, pos_qty, price, peak)
+        self.executor.place(strategy=strat.name, market=strat.market, side="sell",
+                            qty=sell_qty, price=price, candle_ts=closed[-1]["time"])
+        audit.set_cooldown_until(f"ladder:{strat.name}", strat.market, entry_ts)
+        return True
 
     def _exit_signal(self, strat, candles, price, avg, peak, bars_held) -> str | None:
         """Force-close reasons for an open long (same precedence as the backtest):
@@ -170,6 +260,7 @@ class Engine:
         # candle fetch per (market, interval) for this pass so they don't each issue their own
         # duplicate public HTTP GET. Cleared every call so the next pass fetches fresh data.
         candle_cache: dict[tuple[str, str], list[dict]] = {}
+        overlay_mult: float | None = None  # computed lazily, once per cycle
         for strat in self.strategies:
             try:
                 key = (strat.market, self.interval)
@@ -195,6 +286,27 @@ class Engine:
                     peak, entry_ts = audit.get_meta(strat.name, strat.market)
                     interval_ms = _INTERVAL_MS.get(self.interval, 3_600_000)
                     bars_held = int((ts - entry_ts) // interval_ms) if entry_ts else 0
+                    # 1a) optional intraday crash brake: the hard stop also checks the
+                    # in-progress bar's close (the freshest price we have) between
+                    # daily closes. Config-gated OFF; see __init__ for the honest cost.
+                    if self.crash_brake and strat.stop_loss_pct and avg > 0:
+                        live_px = candles[-1]["close"]
+                        if live_px <= avg * (1 - strat.stop_loss_pct):
+                            log.warning("CRASH_BRAKE %s %s live %.6g <= stop of avg %.6g "
+                                        "-> intraday force SELL", strat.name, strat.market,
+                                        live_px, avg)
+                            notify.send(notify.bullets("Crash brake (intraday stop)", [
+                                ("Market", strat.market), ("Strategy", strat.name),
+                                ("Live price", f"{live_px}"), ("Avg cost", f"{avg}"),
+                            ]))
+                            self.executor.place(strategy=strat.name, market=strat.market,
+                                                side="sell", qty=pos_qty, price=live_px,
+                                                candle_ts=candles[-1]["time"])
+                            if strat.reentry_cooldown_bars:
+                                audit.set_cooldown_until(
+                                    strat.name, strat.market,
+                                    ts + strat.reentry_cooldown_bars * interval_ms)
+                            continue
                     hit = self._exit_signal(strat, closed, price, avg, peak, bars_held)
                     if hit:
                         log.info("%s %s %s @ %s (avg %s) -> force SELL",
@@ -206,6 +318,14 @@ class Engine:
                         ]))
                         self.executor.place(strategy=strat.name, market=strat.market,
                                             side="sell", qty=pos_qty, price=price, candle_ts=ts)
+                        if hit == "STOP_LOSS" and strat.reentry_cooldown_bars:
+                            # re-entry cooldown: no fresh BUY for N bars after a stop-out
+                            audit.set_cooldown_until(
+                                strat.name, strat.market,
+                                ts + strat.reentry_cooldown_bars * interval_ms)
+                        continue
+                    # 1b) partial-exit ladder (regime engines, opt-in)
+                    if self._ladder_exit(strat, closed, price, pos_qty, peak, entry_ts):
                         continue
 
                 if action == "HOLD":
@@ -213,7 +333,30 @@ class Engine:
 
                 # 2) strategy signal
                 if action == "BUY" and pos_qty <= 0 and strat.entries_enabled:
-                    qty = sizing.target_qty(strat.market, price, self.client, strat.sleeve_frac)
+                    if strat.reentry_cooldown_bars and \
+                            ts < audit.get_cooldown_until(strat.name, strat.market):
+                        log.info("%s %s BUY skipped: re-entry cooldown active",
+                                 strat.name, strat.market)
+                        continue
+                    # entry slippage cap: skip if the live price already ran away from
+                    # the signal close (a market order would pay untested slippage)
+                    if strat.entry_slippage_cap_pct:
+                        live_px = candles[-1]["close"]
+                        if live_px > price * (1 + strat.entry_slippage_cap_pct):
+                            log.info("%s %s BUY skipped: live %.6g > close %.6g + %.1f%% cap",
+                                     strat.name, strat.market, live_px, price,
+                                     strat.entry_slippage_cap_pct * 100)
+                            continue
+                    if overlay_mult is None:
+                        overlay_mult = self._overlay_mult(candle_cache)
+                    mult = overlay_mult * self._vol_target_mult(strat, closed) \
+                        * sizing.sleeve_derisk_mult(strat.name, strat.sleeve_frac, self.client)
+                    if mult <= 0:
+                        log.info("%s %s BUY skipped: entry multiplier 0 (overlay/derisk)",
+                                 strat.name, strat.market)
+                        continue
+                    qty = sizing.target_qty(strat.market, price, self.client,
+                                            strat.sleeve_frac, size_mult=mult)
                     if qty <= 0:
                         log.info("%s %s BUY skipped: sizing returned 0 (min-notional/balance)",
                                  strat.name, strat.market)
