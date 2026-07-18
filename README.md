@@ -15,9 +15,16 @@ No LLM in the execution path — every trade decision is plain algorithm code.
   validated Supertrend, MA Crossover, Volatility Expansion, Squeeze Breakout and
   risk-adjusted momentum modules plus an experimental Chronos-2 AI forecaster are
   available but not in the default lineup. Mean-reversion and all intraday variants
-  are retired: they lose net of India friction.
+  are retired: they lose net of India friction. A v8 study measured the "profit in
+  any market" bot families head-on — grid bots, martingale/DCA bots, symmetric
+  long/short trend and extremely tight SL/TP exits — and rejected every one on
+  real-data evidence (win-rate illusions and friction, not edges); see
+  [research/FINDINGS.md](research/FINDINGS.md).
 - Every signal + order persisted to SQLite (`data/bot.db`). Idempotent orders.
-- Backtester with realistic India costs (0.1% fee + 1% TDS).
+- Backtester with realistic India costs (0.1% fee + 1% TDS), plus a research-only
+  long/short mode (`--allow-short`) and a derivatives cost profile (`--venue
+  derivatives`) so short-side and low-friction hypotheses can be measured without
+  ever touching the live spot-only path.
 - Telegram alerts on trades, blocks, kill switch, and errors.
 
 ## Setup

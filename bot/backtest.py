@@ -39,6 +39,15 @@ _PERIODS_PER_YEAR = {
 _WINDOW_PAD = 300
 _WINDOW_FLOOR = 200
 
+# v8 RESEARCH venue profile — CoinDCX derivatives-style friction for long/short studies:
+# taker 0.075% per side + 18% GST on the fee, NO 1% TDS (derivatives P&L is business
+# income, not a VDA transfer), and a conservative flat perpetual-funding drag of
+# 0.03%/day charged on position notional in BOTH directions (assumes you always pay,
+# never receive). Used only via run(cost_profile=...) / --venue futures; the live bot
+# remains spot-only and never places a derivatives order.
+FUTURES_COSTS = {"fee_rate": 0.00075, "gst_on_fee": 0.18, "tds_rate": 0.0,
+                 "funding_pct_per_day": 0.0003}
+
 
 def _decision_window_bars(strategy) -> int:
     extra = int(getattr(strategy, "context", 0))  # hf_forecast's model context can exceed min_candles
@@ -50,7 +59,8 @@ def run(strategy, candles: list[dict], capital: float,
         slippage: float | None = None, interval: str = "1h",
         chandelier_k: float = 0.0, atr_period: int = 14, max_hold_bars: int = 0,
         trade_from: int = 0, reentry_cooldown_bars: int = 0,
-        exit_ladder_frac: float = 0.0, exit_ladder_k: float = 3.5) -> dict:
+        exit_ladder_frac: float = 0.0, exit_ladder_k: float = 3.5,
+        allow_short: bool = False, cost_profile: dict | None = None) -> dict:
     """All friction (fee+GST per side, TDS per sell, slippage on fills) comes from costs.py
     so the backtest, DRY_RUN, and live accounting can never diverge. slippage=None uses the
     configured slippage_bps; pass an explicit fraction to override.
@@ -66,10 +76,50 @@ def run(strategy, candles: list[dict], capital: float,
     engine's per-sleeve reentry_cooldown_bars). exit_ladder_frac: for chandelier-less
     (regime-holding) configs, sell this fraction once price falls exit_ladder_k*ATR off
     its peak and ride the rest to the strategy's own exit - fires once per position
-    (parity with the engine's exit_ladder_frac)."""
+    (parity with the engine's exit_ladder_frac).
+
+    allow_short (RESEARCH-ONLY, v8): honor "SHORT"/"COVER" actions from long/short
+    strategy modules. Shorts are modelled 1x and fully cash-collateralized (position
+    notional == cash, never more — the no-leverage invariant holds), with symmetric
+    costs and mirrored protective exits: stop above entry, target below, chandelier
+    trailed off the trough. A "BUY" while short (or "SHORT" while long) flips via
+    close-then-open in the same bar, paying both fills. The LIVE engine ignores
+    SHORT/COVER tokens entirely (spot venue cannot short); this exists so long/short
+    edges can be measured honestly before any venue that supports them is considered.
+    When allow_short=False a "SHORT" is downgraded to "SELL" (exit-long), so a
+    long/short module degrades to its long-only expression.
+
+    cost_profile (RESEARCH-ONLY, v8): override the venue friction model, e.g. a
+    CoinDCX-futures-style profile {"fee_rate": 0.00075, "gst_on_fee": 0.18,
+    "tds_rate": 0.0, "funding_pct_per_day": 0.0003}. funding_pct_per_day is a flat
+    perpetual-funding drag charged on position notional per day in market, BOTH
+    directions (conservative: assumes you always pay, never receive). None (default)
+    = the spot costs.py model, byte-for-byte the pre-v8 behavior."""
     slip = costs.slippage() if slippage is None else slippage
+    if cost_profile is None:
+        _fee, _tds_side = costs.trading_fee, costs.tds
+        funding_bar = 0.0
+    else:
+        _cp_fee = float(cost_profile.get("fee_rate", costs.params()["fee_rate"]))
+        _cp_gst = float(cost_profile.get("gst_on_fee", costs.params()["gst_on_fee"]))
+        _cp_tds = float(cost_profile.get("tds_rate", 0.0))
+
+        def _fee(notional: float) -> float:
+            return _cp_fee * notional * (1 + _cp_gst)
+
+        def _tds_side(side: str, notional: float) -> float:
+            return _cp_tds * notional if side == "sell" else 0.0
+
+        funding_bar = float(cost_profile.get("funding_pct_per_day", 0.0)) \
+            * 365.0 / _PERIODS_PER_YEAR.get(interval, 8760)
+        assert not (funding_bar and exit_ladder_frac), \
+            "funding drag + partial-exit ladder are not modelled together"
     cash, qty, entry_spend, entry_price = capital, 0.0, 0.0, 0.0
     entry_i, peak = -1, 0.0
+    # short-side state: sqty base units short, s_fill the entry fill, s_basis the cash
+    # committed at entry (collateral), trough the post-entry low for the mirrored trail
+    sqty, s_fill, s_basis, s_entry_i, trough = 0.0, 0.0, 0.0, -1, 0.0
+    fund_owed = 0.0                   # accrued funding drag, settled at position close
     cooldown_until_i = -1
     laddered = False
     trades: list[float] = []          # realized P&L per round trip (NET of all costs)
@@ -80,14 +130,47 @@ def run(strategy, candles: list[dict], capital: float,
     bars_in_market = 0
 
     def _sell(q: float, px: float) -> float:
-        nonlocal fees_paid, total_tds, sell_notional
+        nonlocal fees_paid, total_tds, sell_notional, fund_owed
         gross = q * px * (1 - slip)        # sell slips down
-        fee = costs.trading_fee(gross)
-        t = costs.tds("sell", gross)
+        fee = _fee(gross)
+        t = _tds_side("sell", gross)
         fees_paid += fee + t
         total_tds += t
         sell_notional += gross
-        return gross - fee - t
+        settle = fund_owed
+        fund_owed = 0.0
+        fees_paid += settle
+        return gross - fee - t - settle
+
+    def _open_short(px: float, i: int) -> None:
+        """Sell short with ALL free cash as 1x collateral (mirror of the long entry:
+        fee+any TDS on the committed notional, position sized on what remains)."""
+        nonlocal cash, sqty, s_fill, s_basis, s_entry_i, trough, fees_paid, total_tds, sell_notional
+        fill = px * (1 - slip)             # short entry is a sell: slips down
+        notional = cash
+        fee = _fee(notional)
+        t = _tds_side("sell", notional)
+        fees_paid += fee + t
+        total_tds += t
+        sell_notional += notional
+        sqty = (notional - fee - t) / fill
+        s_fill, s_basis, s_entry_i, trough = fill, notional, i, px
+        cash = 0.0
+
+    def _close_short(px: float) -> None:
+        """Cover at px (a buy: slips up, pays fee on the cover notional), settle funding,
+        return collateral +/- P&L to cash, and book the round trip."""
+        nonlocal cash, sqty, s_fill, s_basis, s_entry_i, trough, fees_paid, fund_owed
+        cover_fill = px * (1 + slip)
+        cover_notional = sqty * cover_fill
+        fee = _fee(cover_notional)
+        fees_paid += fee + fund_owed
+        collateral_net = sqty * s_fill      # == committed cash net of entry costs, by construction
+        back = collateral_net + sqty * (s_fill - cover_fill) - fee - fund_owed
+        trades.append(back - s_basis)
+        cash += back
+        sqty, s_fill, s_basis, s_entry_i, trough = 0.0, 0.0, 0.0, -1, 0.0
+        fund_owed = 0.0
 
     # Warmup bars before trade_from still populate the decision-window slice, but the loop
     # (and therefore every trade and every metric) begins at trade_from - the position starts
@@ -135,27 +218,75 @@ def run(strategy, candles: list[dict], capital: float,
                     entry_spend -= part_spend
                     laddered = True
 
-        action = strategy.decide(window)
+        # 1b) mirrored protective exits for a short: stop ABOVE entry, target BELOW,
+        # chandelier trailed UP off the post-entry trough. Same close-based precedence.
+        if sqty > 0 and s_fill > 0:
+            trough = min(trough, price)
+            s_chand = (trough + chandelier_k * (atr(window, atr_period) or 0.0)) \
+                if chandelier_k else 0.0
+            hit = None
+            if stop_loss_pct and price >= s_fill * (1 + stop_loss_pct):
+                hit = "STOP_LOSS"
+            elif take_profit_pct and price <= s_fill * (1 - take_profit_pct):
+                hit = "TAKE_PROFIT"
+            elif max_hold_bars and s_entry_i >= 0 and (i - s_entry_i) >= max_hold_bars:
+                hit = "TIME_STOP"
+            elif chandelier_k and s_chand and price >= s_chand:
+                hit = "CHANDELIER"
+            if hit:
+                _close_short(price)
+                if hit == "STOP_LOSS" and reentry_cooldown_bars:
+                    cooldown_until_i = i + reentry_cooldown_bars
+                exited = True
 
-        if not exited and action == "BUY" and qty == 0 and i >= cooldown_until_i:
-            fill = price * (1 + slip)         # buy slips up
-            spend = cash
-            fee = costs.trading_fee(spend)    # fee+GST on buy notional (no TDS on buys)
-            fees_paid += fee
-            qty = (spend - fee) / fill
-            entry_spend, entry_price, cash = spend, fill, 0.0
-            entry_i, peak = i, price
+        action = strategy.decide(window)
+        if action == "SHORT" and not allow_short:
+            action = "SELL"                   # long-only degradation: exit-long, never short
+
+        if not exited and action == "BUY":
+            if sqty > 0:                      # flip: cover the short, then the entry may fire
+                _close_short(price)
+            if qty == 0 and sqty == 0 and cash > 0 and i >= cooldown_until_i:
+                fill = price * (1 + slip)     # buy slips up
+                spend = cash
+                fee = _fee(spend)             # fee+GST on buy notional (no TDS on buys)
+                fees_paid += fee
+                qty = (spend - fee) / fill
+                entry_spend, entry_price, cash = spend, fill, 0.0
+                entry_i, peak = i, price
         elif not exited and action == "SELL" and qty > 0:
             proceeds = _sell(qty, price)
             trades.append(proceeds - entry_spend)
             cash, qty, entry_price = cash + proceeds, 0.0, 0.0
             laddered = False
+        elif not exited and action == "SHORT":
+            if qty > 0:                       # flip: close the long, then the entry may fire
+                proceeds = _sell(qty, price)
+                trades.append(proceeds - entry_spend)
+                cash, qty, entry_price = cash + proceeds, 0.0, 0.0
+                laddered = False
+            if qty == 0 and sqty == 0 and cash > 0 and i >= cooldown_until_i:
+                _open_short(price, i)
+        elif not exited and action == "COVER" and sqty > 0:
+            _close_short(price)
 
-        if qty > 0:
+        # funding drag (venue profiles only): accrue on position notional per bar in market
+        if funding_bar and (qty > 0 or sqty > 0):
+            fund_owed += funding_bar * (entry_spend if qty > 0 else s_basis)
+
+        if qty > 0 or sqty > 0:
             bars_in_market += 1
-        equity_curve.append(cash + qty * price)
+        equity_curve.append(cash + qty * price
+                            + (sqty * (2 * s_fill - price) if sqty > 0 else 0.0)
+                            - fund_owed)
 
-    # mark-to-market any still-open position at the last price (costs applied as if sold)
+    # mark-to-market any still-open position at the last price (costs applied as if closed)
+    if sqty > 0:
+        last_cover = candles[-1]["close"] * (1 + slip)
+        fee = _fee(sqty * last_cover)
+        fees_paid += fee + fund_owed
+        cash += sqty * (2 * s_fill - last_cover) - fee - fund_owed
+        fund_owed, sqty = 0.0, 0.0
     final_equity = cash + (_sell(qty, candles[-1]["close"]) if qty > 0 else 0.0)
 
     # max drawdown
@@ -547,6 +678,86 @@ def _selftest_static_invariants() -> None:
         assert spot.match(s["market"]), f"non-spot market in config: {s['market']}"
 
 
+def _selftest_short() -> None:
+    """v8: short-side round-trip math, mirrored protective exits, flip, degradation to
+    long-only, and byte-for-byte long-path parity when shorts never fire."""
+    from .strategies.base import Strategy
+
+    fut = {"fee_rate": 0.00075, "gst_on_fee": 0.18, "tds_rate": 0.0}
+
+    # (a) hand-calculated short round trip under the derivatives profile, no slippage.
+    class _ShortOnce(Strategy):
+        min_candles = 2
+
+        def decide(self, candles):
+            return "SHORT" if candles[-1]["close"] >= 99 else "COVER"
+
+    res = run(_ShortOnce("s", "X", {}), _candles([100, 100, 100, 96, 92, 90]),
+              1000, slippage=0.0, allow_short=True, cost_profile=fut)
+    fee_open = 1000 * 0.00075 * 1.18
+    sq = (1000 - fee_open) / 100.0
+    fee_close = sq * 96 * 0.00075 * 1.18
+    back = sq * 100 + sq * (100 - 96) - fee_close
+    assert res["trades"] == 1, res
+    assert res["net_pnl"] == round(back - 1000, 2), (res["net_pnl"], back - 1000)
+    assert res["net_pnl"] > 0, res
+
+    class _ShortHold(Strategy):
+        min_candles = 2
+
+        def decide(self, candles):
+            return "SHORT"
+
+    # (b) mirrored stop: a short is stopped out when price RISES through the stop.
+    r = run(_ShortHold("s", "X", {}), _candles([100, 100, 100, 103, 106, 108, 110]),
+            1000, slippage=0.0, allow_short=True, cost_profile=fut, stop_loss_pct=0.05)
+    assert r["trades"] >= 1 and r["net_pnl"] < 0, ("short stop must fire on a rise", r)
+
+    # (c) mirrored take-profit: a short banks profit when price FALLS through the target.
+    r = run(_ShortHold("s", "X", {}), _candles([100, 100, 100, 97, 94, 94, 94]),
+            1000, slippage=0.0, allow_short=True, cost_profile=fut, take_profit_pct=0.05)
+    assert r["trades"] == 1 and r["net_pnl"] > 0, ("short TP must bank on a fall", r)
+
+    # (d) allow_short=False degrades SHORT to exit-long: nothing ever opens.
+    r = run(_ShortOnce("s", "X", {}), _candles([100, 100, 100, 96, 92, 90]),
+            1000, slippage=0.0, allow_short=False)
+    assert r["trades"] == 0 and r["final_equity"] == 1000, ("degradation must stay flat", r)
+
+    # (e) flip: SHORT -> BUY covers the short (booked) and opens a long the same bar.
+    class _Flip(Strategy):
+        min_candles = 2
+
+        def decide(self, candles):
+            return "SHORT" if candles[-1]["close"] > 99 else "BUY"
+
+    r = run(_Flip("s", "X", {}), _candles([100, 100, 100, 95, 98, 102, 104]),
+            1000, slippage=0.0, allow_short=True, cost_profile=fut)
+    assert r["trades"] >= 1 and r["exposure_pct"] > 50, ("flip must stay engaged", r)
+
+    # (f) funding drag: an open position bleeds funding_pct_per_day while in market.
+    no_f = run(_ShortHold("s", "X", {}), _candles([100.0] * 40), 1000, slippage=0.0,
+               allow_short=True, cost_profile=fut, interval="1d")
+    with_f = run(_ShortHold("s", "X", {}), _candles([100.0] * 40), 1000, slippage=0.0,
+                 allow_short=True, cost_profile={**fut, "funding_pct_per_day": 0.001},
+                 interval="1d")
+    assert with_f["final_equity"] < no_f["final_equity"], (with_f, no_f)
+
+    # (g) long-path parity: a long-only tape produces IDENTICAL results with the v8
+    # machinery armed (allow_short=True) and disarmed — the pre-v8 behavior is intact.
+    class _LongStub(Strategy):
+        min_candles = 2
+
+        def decide(self, candles):
+            c = candles[-1]["close"]
+            return "BUY" if c <= 101 else "SELL" if c >= 109 else "HOLD"
+
+    tape = _candles([100, 100, 100.5, 103, 106, 109, 110])
+    base = run(_LongStub("s", "X", {}), tape, 1000, slippage=0.0)
+    armed = run(_LongStub("s", "X", {}), tape, 1000, slippage=0.0, allow_short=True)
+    assert base == armed, ("allow_short must not perturb the long path", base, armed)
+    print("short-side self-checks OK:", {k: res[k] for k in ("trades", "net_pnl")})
+
+
 def _selftest_walkforward() -> None:
     """trade_from gates trading to the test window, so a round trip in the warmup region is
     excluded once the fold skips past it - the core out-of-sample guarantee."""
@@ -584,6 +795,7 @@ def demo() -> None:
     _selftest_sizing()
     _selftest_sleeves()
     _selftest_static_invariants()
+    _selftest_short()
     _selftest_walkforward()
     print("ALL backtest self-checks OK")
 
@@ -610,6 +822,10 @@ def main() -> None:
     p.add_argument("--exit-ladder", type=float, default=0.0,
                    help="partial-exit ladder fraction for chandelier-less configs (0=off)")
     p.add_argument("--exit-ladder-k", type=float, default=3.5, help="ATR multiple for the ladder trail")
+    p.add_argument("--allow-short", action="store_true",
+                   help="RESEARCH: honor SHORT/COVER signals (1x, cash-collateralized)")
+    p.add_argument("--venue", choices=["spot", "derivatives"], default="spot",
+                   help="RESEARCH cost model: spot (default, costs.py) or derivatives (FUTURES_COSTS)")
     p.add_argument("--walkforward", action="store_true", help="rolling train/test walk-forward report")
     p.add_argument("--train", type=int, default=400, help="walk-forward train window (bars)")
     p.add_argument("--test", type=int, default=100, help="walk-forward test window (bars)")
@@ -639,7 +855,9 @@ def main() -> None:
     kw = dict(stop_loss_pct=a.stop_loss, take_profit_pct=a.take_profit, slippage=a.slippage,
               interval=a.interval, chandelier_k=a.chandelier_k, atr_period=a.atr_period,
               max_hold_bars=a.max_hold_bars, reentry_cooldown_bars=a.cooldown_bars,
-              exit_ladder_frac=a.exit_ladder, exit_ladder_k=a.exit_ladder_k)
+              exit_ladder_frac=a.exit_ladder, exit_ladder_k=a.exit_ladder_k,
+              allow_short=a.allow_short,
+              cost_profile=FUTURES_COSTS if a.venue == "derivatives" else None)
     if a.walkforward:
         walk_forward(strat, candles, a.capital, a.train, a.test, **kw)
         return

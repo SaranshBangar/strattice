@@ -1,5 +1,131 @@
 # Strategy review: backtest findings (July 2026)
 
+> **v8 addendum (mid-July 2026, `crypto-trader-profit-strategies`)** — the brief:
+> "analyze how other auto-crypto traders turn a profit regardless of how the market
+> moves, implement the same strategies, and if possible add longing and shorting with
+> extremely tight SL/TP limits." All three claims were implemented as measurable
+> systems and replayed against the same real data + cost models as every prior study
+> (`research/ls_study.py`; short-side + venue-profile support added to
+> `bot/backtest.py:run(allow_short=, cost_profile=)`, with a hand-checked selftest and
+> byte-for-byte long-path parity). **Nothing was promoted — every "any market" family
+> loses to the incumbent daily-trend lineup on this data, and the evidence says the
+> marketing behind such bots survives on a win-RATE illusion, not a win-EXPECTANCY
+> edge.** What follows is what the claim actually decomposes into, and the numbers.
+>
+> **How "profit in any market" bots actually work** — the auto-traders that advertise
+> steady profit in all conditions are, almost without exception, one of three machines:
+>
+> 1. **Grid bots** (Pionex/3Commas/exchange-native): ladder buy/sell pairs across a
+>    range — every oscillation through a grid step banks (step − friction). This is a
+>    SHORT-VOLATILITY inventory system: it converts chop into income and accumulates
+>    inventory losses when price trends out of the range.
+> 2. **Martingale/DCA bots** ("safety orders", volume-scaled averaging-down, small
+>    take-profit on the averaged price): a high win-rate, small-win machine whose
+>    losses are not realized but HELD as deepening open positions — the loss tail is
+>    hidden in unrealized drawdown until a trend breaks the averaging budget.
+> 3. **Funding-rate / cash-and-carry arbitrage** (the only genuinely market-neutral
+>    edge): long spot + short the same asset's perpetual, collect the funding
+>    payments longs pay shorts. Direction-free by construction, but it REQUIRES a
+>    derivatives short leg and pays single-digit-to-teens APY that shrinks when
+>    everyone crowds in. This bot is spot-only by hard invariant
+>    (`_selftest_static_invariants`), so this edge is documented, not implemented —
+>    an operator who wants it can run it manually on the derivatives venue.
+>
+> Families 1 and 2 were implemented as honest simulators (`--study neutral`) with the
+> full cost model, plus a derivatives-style cost profile (`FUTURES_COSTS`: 0.075%
+> taker + 18% GST on fee, **no 1% TDS** — derivatives P&L is business income, not a
+> VDA transfer — and a conservative 0.03%/day funding drag charged both directions)
+> so the friction argument can't be waved away as a spot artifact.
+>
+> **Result 1 — grid + martingale REJECTED: the "any market" claim is a win-rate
+> illusion.** Full 2.8y daily INR histories, all-in ₹1000, defaults matching the
+> popular products (grid ±15% × 20 levels; DCA base 2% + 7 safety orders at 1.4×
+> step / 1.5× volume scaling, TP 1.5%):
+>
+> | Sim | Venue | Median net (7 INR pairs) | Range | Fees, % of capital | Failure mode seen |
+> | --- | ----- | ---: | ---: | ---: | --- |
+> | grid       | spot  | **+3.1%** | −15.5 … +3.3 | 3–60 | ADA: −15.5%, price left the grid DOWN |
+> | grid       | deriv | +11.2% | +2.6 … +54.3 | 0.4–7.2 | 6/7 pairs: price left the grid UP (missed the trend) |
+> | martingale | spot  | **+3.1%** | −7.2 … +5.0 | 16–36 | 6/7 pairs ended STUCK holding open averaged-down bags |
+> | martingale | deriv | +23.8% | +13.3 … +32.9 | 2–4 | same stuck-open endings, cheaper |
+>
+> Buy-and-hold's median over the same window was +117%; the v7 lineup +216.7%. Even
+> the best derivatives-friction grid (+54% on XRP over 2.8 years) is a fraction of
+> the trend sleeves on the same asset — the machine harvests pennies inside the range
+> and forfeits the move that pays for everything. The distribution study is the
+> mechanism made visible — non-overlapping 1000-bar (~6-week) windows on the deep 1h
+> USDT archives, derivatives friction:
+>
+> | Sim | Windows profitable | Mean window | Worst window | Worst window's drift |
+> | --- | :---: | ---: | ---: | ---: |
+> | grid       | 15–20 of 25 per pair (60–80%) | +0.3 … +4.3% | **−21 … −31%** | −27 … −42% (always the trend) |
+> | martingale | 19–23 of 25 per pair (76–92%) | +0.3 … +2.0% | −7 … −15.5% | −27 … −39% (always the trend) |
+>
+> That first column IS the marketing ("profitable 9 weeks out of 10"); the third is
+> the business model. One trending window returns 5–20 chop-windows of income. These
+> are the retired mean-reversion economics of Result 1/2 (v1) wearing a bot UI.
+>
+> **Result 2 — long/short trend NOT promoted: the short side subtracts on this
+> history.** `donchian_ls` (symmetric 20/55-bar Donchian, flips on opposite
+> breakouts, mirrored protective exits) and `ensemble_ls` (the TRUE long/short form
+> of the v4-rejected Zarattini trend_ensemble) ran long-only-spot vs long/short-spot
+> vs long/short-derivatives across all 14 markets (`--study ls`):
+>
+> | Candidate | Mode/venue | Median net | Pairs positive | Median INR | Median USDT |
+> | --------- | ---------- | ---: | :---: | ---: | ---: |
+> | donch20_ls | long-only spot   | **+113.1%** | 13/14 | +144.6% | +53.9% |
+> | donch20_ls | long/short spot  | +30.9%  | 11/14 | +127.7% | +3.9% |
+> | donch20_ls | long/short deriv | +54.7%  | 12/14 | +130.2% | +18.6% |
+> | donch55_ls | long-only spot   | **+77.5%**  | 12/14 | +119.9% | +74.8% |
+> | donch55_ls | long/short deriv | +56.6%  | 13/14 | +81.7%  | +43.6% |
+> | ensemble_ls | long-only spot  | −10.2%  | 5/14  | +3.3%   | −41.6% |
+> | ensemble_ls | long/short deriv| −0.2%   | 7/14  | +34.7%  | −27.2% |
+>
+> Shorts help exactly where a 2024-25-shaped bull sample says they should (ETH
+> +63→+120, I-BTC +87→+118) and bleed everywhere else (XRP +243→+180, DOGE
+> +149→+57): crypto downtrends in this window are violent but BRIEF, so short trend
+> positions mostly buy whipsaw. Nor is it tail protection — 200-bar walk-forward
+> folds (derivatives friction): long/short improves BTC's worst fold (−17.7→−6.6%)
+> but WORSENS XRP (−20.5→−34.3%) and DOGE (−19.6→−29.6%). `ensemble_ls` fails for
+> the same reason v4 predicted: the published edge rides on continuous vol-targeted
+> sizing; expressed all-in it churns 40–87% of capital into fees. Both modules stay
+> in the registry as research modules (the rejection reproduces); the engine ignores
+> their SHORT/COVER tokens by construction, so they cannot short live even if
+> misconfigured.
+>
+> **Result 3 — "extremely tight SL/TP" REJECTED at every venue and altitude.** The
+> arithmetic first: a stop-out costs the stop distance PLUS a full round trip of
+> friction (~1.67% spot incl. TDS, ~0.18% derivatives), so at a 0.5–1% stop the
+> friction is 20–300% of the risk being taken per trade. Measured (donchian_ls
+> breakouts, friction gate bypassed to observe what it prevents — with an honest
+> `expected_move_pct` the pre-trade edge gate REFUSES every tight-TP spot config
+> outright, which is the platform working as designed):
+>
+> | Venue / altitude | SL/TP 0.5/1% | 1/2% | 2/4% | Wide baseline (7% + chandelier) |
+> | ---------------- | ---: | ---: | ---: | ---: |
+> | spot 1d (7 INR pairs, median) | **−36.3%** | −36.4% | −28.0% | (v6/v7 lineup: +216.7% portfolio) |
+> | deriv 1d (median) | +31.6% | +21.3% | +17.6% | **+130.2%** (beats tight on ALL 7 pairs) |
+> | deriv 1h (BTC/ETH/SOL) | −75.9…−94.2% | −61.8…−93.3% | −30.4…−85.8% | — |
+>
+> Tight-and-frequent is the exact shape India's 1% TDS + fee stack taxes to death on
+> spot (fees 39–119% of capital in these runs), and even at 10× cheaper derivatives
+> friction the tight exits systematically amputate the trend winners that pay for
+> the losers — the wide-stop baseline wins on every single pair. At 1h the churn
+> loses catastrophically on BOTH friction models. This closes the question at every
+> altitude this bot can express.
+>
+> **What shipped in v8:** short-capable backtester (`allow_short` — 1x,
+> cash-collateralized, mirrored stop/target/chandelier-off-the-trough, flip
+> handling, funding drag; long path verified byte-identical when disarmed), the
+> `FUTURES_COSTS` venue profile, research modules `donchian_ls` + `ensemble_ls`
+> (live-inert by design), the grid/martingale simulators, and
+> `research/ls_study.py --study neutral|ls|tight`. Live bot behavior is UNCHANGED:
+> spot-only, long-only, the v7 lineup + BTC regime overlay stay the default. The
+> honest answer to "profit regardless of direction" on this venue remains the one
+> already shipped: hold trend winners long enough to outrun friction, gate new longs
+> on the BTC 100d regime, and stay flat when there is no edge — flat IS the
+> market-neutral position with the best measured expectancy here.
+
 > **v7 addendum (mid-July 2026, `strattice-hardening-upgrade`)** — a PORTFOLIO-level
 > study (`research/portfolio_study.py`: all seven v6 sleeves replayed JOINTLY over the
 > aligned INR daily history with shared cash, sleeve sizing, and the full cost model;

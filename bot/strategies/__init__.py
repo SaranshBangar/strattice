@@ -4,6 +4,8 @@ from .adx_trend import AdxTrend
 from .bb_reversion import BBReversion
 from .capitulation import CapitulationReversal
 from .custom import CustomRules
+from .donchian_ls import DonchianLS
+from .ensemble_ls import EnsembleLS
 from .fast_rsi import FastRSIReversion
 from .hf_forecast import HFForecast
 from .ichimoku import IchimokuBreakout
@@ -24,6 +26,8 @@ REGISTRY = {
     "acceleration": AccelerationMomentum,
     "adx_trend": AdxTrend,
     "capitulation": CapitulationReversal,
+    "donchian_ls": DonchianLS,
+    "ensemble_ls": EnsembleLS,
     "ichimoku": IchimokuBreakout,
     "kama_trend": KamaTrend,
     "ma_crossover": MACrossover,
