@@ -79,7 +79,9 @@ python -m bot.backtest --selftest      # verifies the cost math + static invaria
 python -m bot.test_decision_window     # bounded-window parity over real data
 python -m bot.test_reliability         # rate limit / breaker / retry / clock / scrubbing
 python -m bot.test_fallbacks           # failure-scenario behaviors (see below)
+python -m bot.test_portfolio_features  # v7 overlays/knobs (BTC filter, caps, ladder)
 python -m research.run_backtests       # full research grid over research/data/
+python -m research.portfolio_study     # joint 7-sleeve portfolio study (v7 evidence)
 ```
 
 Reports (all after fee + TDS): net P&L, return %, trades, win rate, **profit factor,
