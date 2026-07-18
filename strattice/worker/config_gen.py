@@ -71,6 +71,42 @@ TEMPLATE_DEFAULTS: dict[str, dict] = {
         "params": {"atr_period": 10, "mult": 3.0, "confirm_bars": 2,
                    "regime_period": 50, "expected_move_pct": 0.08},
     },
+    # +264.9% net (PF 6.85) on I-BNB_INR (twin +188.8%); 8/8 walk-forward folds across
+    # both venues — the best fold record of any study (v6).
+    "macd_trend": {
+        "market": "I-BNB_INR",
+        "stop_loss_pct": 0.07, "take_profit_pct": 0.0, "chandelier_k": 3.5,
+        "atr_period": 14, "max_hold_bars": 0,
+        "params": {"fast": 12, "slow": 26, "signal": 9, "confirm_bars": 3,
+                   "require_positive": 1, "regime_period": 50, "expected_move_pct": 0.08},
+    },
+    # +209.8% net (PF 3.76) on I-DOGE_INR (twin +167.5%). Faber-style regime holder:
+    # the strategy's own SELL (close under the line - band) is the exit — NO chandelier
+    # (a trail would cut the multi-month holds), wider 10% disaster stop instead (v6).
+    "trend_regime": {
+        "market": "I-DOGE_INR",
+        "stop_loss_pct": 0.10, "take_profit_pct": 0.0, "chandelier_k": 0.0,
+        "atr_period": 14, "max_hold_bars": 0,
+        "params": {"period": 100, "band": 0.02, "slope_bars": 5, "expected_move_pct": 0.10},
+    },
+    # +83.3% net (PF 1.87) on I-ADA_INR (twin +42.6%); tested parameter sets 6/6
+    # positive on both venues. Own SELL below the kijun line — no chandelier (v6).
+    "ichimoku": {
+        "market": "I-ADA_INR",
+        "stop_loss_pct": 0.07, "take_profit_pct": 0.0, "chandelier_k": 0.0,
+        "atr_period": 14, "max_hold_bars": 0,
+        "params": {"tenkan": 9, "kijun": 26, "senkou_b": 52, "confirm_bars": 3,
+                   "expected_move_pct": 0.08},
+    },
+    # +272.2% net on I-ETH_INR (twin +41.1%); 3/4+3/4 folds. Risk-adjusted (vol-scaled)
+    # momentum — validated as a template; the ETH bot sleeve stays with tsmom (v6).
+    "sharpe_mom": {
+        "market": "I-ETH_INR",
+        "stop_loss_pct": 0.07, "take_profit_pct": 0.0, "chandelier_k": 3.5,
+        "atr_period": 14, "max_hold_bars": 0,
+        "params": {"lookback": 30, "min_score": 1.5, "min_return": 0.06,
+                   "near_high_frac": 0.03, "regime_period": 50, "expected_move_pct": 0.08},
+    },
     # --- RETIRED templates (mean reversion loses net of India friction at every tested
     # altitude — research/FINDINGS.md). Kept ONLY so legacy rows keep resolving and any
     # open position keeps its exits managed. Not offered for new adds in the UI. ---

@@ -23,9 +23,9 @@ const BASE = 1000; // the engine's paper base
 // Lower-priced markets on purpose: a ₹1,000 paper book buys quantities that
 // still read as non-zero at the tables' two-decimal formatting.
 const STRATS = [
-  { strategy: "tsmom", market: "I-SOL_INR", px: 12_850 },
-  { strategy: "momentum", market: "I-DOGE_INR", px: 18.4 },
-  { strategy: "ma_crossover", market: "I-XRP_INR", px: 210 },
+  { strategy: "macd_trend", market: "I-SOL_INR", px: 12_850 },
+  { strategy: "trend_regime", market: "I-DOGE_INR", px: 18.4 },
+  { strategy: "ichimoku", market: "I-ADA_INR", px: 55.2 },
 ] as const;
 
 function dayISO(offsetDays: number) {

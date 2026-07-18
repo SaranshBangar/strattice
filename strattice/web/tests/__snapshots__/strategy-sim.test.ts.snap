@@ -56,6 +56,30 @@ exports[`simulate snapshots (fixtureCandles(500, seed 42)) > fast_rsi trades are
 
 exports[`simulate snapshots (fixtureCandles(500, seed 42)) > fixture itself is stable 1`] = `246.76`;
 
+exports[`simulate snapshots (fixtureCandles(500, seed 42)) > ichimoku trades are stable 1`] = `
+{
+  "buyHoldPct": "144.56",
+  "closed": 2,
+  "exposurePct": "35.3",
+  "totalNetPct": "105.65",
+  "trades": [
+    {
+      "entry": 216,
+      "exit": 305,
+      "netPct": "49.91",
+      "reason": "signal",
+    },
+    {
+      "entry": 401,
+      "exit": 488,
+      "netPct": "37.19",
+      "reason": "signal",
+    },
+  ],
+  "wins": 2,
+}
+`;
+
 exports[`simulate snapshots (fixtureCandles(500, seed 42)) > ma_crossover trades are stable 1`] = `
 {
   "buyHoldPct": "144.56",
@@ -71,6 +95,36 @@ exports[`simulate snapshots (fixtureCandles(500, seed 42)) > ma_crossover trades
     },
   ],
   "wins": 0,
+}
+`;
+
+exports[`simulate snapshots (fixtureCandles(500, seed 42)) > macd_trend trades are stable 1`] = `
+{
+  "buyHoldPct": "144.56",
+  "closed": 2,
+  "exposurePct": "24.4",
+  "totalNetPct": "6.43",
+  "trades": [
+    {
+      "entry": 86,
+      "exit": 124,
+      "netPct": "3.74",
+      "reason": "trail",
+    },
+    {
+      "entry": 266,
+      "exit": 308,
+      "netPct": "2.59",
+      "reason": "trail",
+    },
+    {
+      "entry": 458,
+      "exit": null,
+      "netPct": "3.96",
+      "reason": "open",
+    },
+  ],
+  "wins": 2,
 }
 `;
 
@@ -115,6 +169,36 @@ exports[`simulate snapshots (fixtureCandles(500, seed 42)) > rsi trades are stab
 }
 `;
 
+exports[`simulate snapshots (fixtureCandles(500, seed 42)) > sharpe_mom trades are stable 1`] = `
+{
+  "buyHoldPct": "144.56",
+  "closed": 2,
+  "exposurePct": "52.7",
+  "totalNetPct": "63.20",
+  "trades": [
+    {
+      "entry": 50,
+      "exit": 124,
+      "netPct": "17.15",
+      "reason": "trail",
+    },
+    {
+      "entry": 223,
+      "exit": 308,
+      "netPct": "39.31",
+      "reason": "trail",
+    },
+    {
+      "entry": 396,
+      "exit": null,
+      "netPct": "47.70",
+      "reason": "open",
+    },
+  ],
+  "wins": 2,
+}
+`;
+
 exports[`simulate snapshots (fixtureCandles(500, seed 42)) > squeeze_breakout trades are stable 1`] = `
 {
   "buyHoldPct": "144.56",
@@ -156,6 +240,36 @@ exports[`simulate snapshots (fixtureCandles(500, seed 42)) > supertrend trades a
       "entry": 392,
       "exit": null,
       "netPct": "51.84",
+      "reason": "open",
+    },
+  ],
+  "wins": 1,
+}
+`;
+
+exports[`simulate snapshots (fixtureCandles(500, seed 42)) > trend_regime trades are stable 1`] = `
+{
+  "buyHoldPct": "144.56",
+  "closed": 2,
+  "exposurePct": "46.9",
+  "totalNetPct": "13.20",
+  "trades": [
+    {
+      "entry": 105,
+      "exit": 166,
+      "netPct": "-9.66",
+      "reason": "signal",
+    },
+    {
+      "entry": 226,
+      "exit": 323,
+      "netPct": "25.31",
+      "reason": "signal",
+    },
+    {
+      "entry": 424,
+      "exit": null,
+      "netPct": "16.18",
       "reason": "open",
     },
   ],
