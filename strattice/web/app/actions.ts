@@ -13,6 +13,7 @@ import {
   TIERS,
   ACTIVE_TEMPLATES,
   EXPERIMENTAL_TEMPLATES,
+  isShortCapable,
   type TierName,
   type PickableTemplate,
 } from "@/lib/entitlements";
@@ -62,7 +63,37 @@ function prepareStrategyInsert(
       !(EXPERIMENTAL_TEMPLATES as readonly string[]).includes(template)
     )
       throw new Error("unknown template");
-    if (rawParams) {
+    if (isShortCapable(template)) {
+      // Short-capable templates: an explicit stop-loss AND take-profit are MANDATORY
+      // (the UI always sends the full param set; a missing/zero value is refused here
+      // regardless of what the client did). Stored explicitly even at stock values so
+      // the row carries its own exits.
+      let parsed: Record<string, unknown> = {};
+      if (rawParams) {
+        try {
+          parsed = JSON.parse(String(rawParams)) as Record<string, unknown>;
+        } catch {
+          throw new Error("Invalid strategy parameters.");
+        }
+      }
+      const sl = Number(parsed?.stop_loss_pct);
+      const tp = Number(parsed?.take_profit_pct);
+      if (!Number.isFinite(sl) || sl < 0.005 || sl > 0.2)
+        throw new Error(
+          "Short-capable strategies require an explicit stop-loss between 0.5% and 20%.",
+        );
+      if (!Number.isFinite(tp) || tp < 0.01 || tp > 0.5)
+        throw new Error(
+          "Short-capable strategies require an explicit take-profit between 1% and 50%.",
+        );
+      const clean =
+        sanitizeParams(template as PickableTemplate, parsed) ?? {};
+      params = JSON.stringify({
+        ...clean,
+        stop_loss_pct: Number(sl.toFixed(6)),
+        take_profit_pct: Number(tp.toFixed(6)),
+      });
+    } else if (rawParams) {
       let parsed: unknown;
       try {
         parsed = JSON.parse(String(rawParams));
@@ -86,6 +117,15 @@ export async function addStrategiesAction(
   if (!Array.isArray(items) || items.length === 0)
     throw new Error("Select at least one coin.");
   if (items.length > 60) throw new Error("Too many strategies at once.");
+  // Short-capable templates need the explicit Settings opt-in - a SEPARATE consent
+  // from everything else, checked server-side so a crafted request can't skip it.
+  if (items.some((it) => isShortCapable(String(it.template)))) {
+    const allowed = await q.getAllowShorting(userId);
+    if (!allowed)
+      throw new Error(
+        'Enable "Allow short-capable strategies" in Settings before adding this template.',
+      );
+  }
   const prepared = items.map((it) =>
     prepareStrategyInsert(String(it.template), it.market, it.params ?? null),
   );
@@ -224,6 +264,16 @@ export async function setCurrencyAction(currency: string) {
   if (!isCurrencyCode(currency)) throw new Error("Unknown currency.");
   await q.setCurrency(userId, currency);
   revalidatePath("/settings");
+}
+
+/** Explicit opt-in/out for short-capable strategy templates. Turning it OFF is always
+ *  allowed (it's a safety control); it does not remove already-added strategies, but the
+ *  add path refuses new short-capable rows while the permission is off. */
+export async function setAllowShortingAction(allowed: boolean) {
+  const userId = await requireUserId();
+  await q.setAllowShorting(userId, !!allowed);
+  revalidatePath("/settings");
+  revalidatePath("/strategies");
 }
 
 export async function setStatWindowAction(statWindow: string) {

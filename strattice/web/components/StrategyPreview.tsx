@@ -573,7 +573,7 @@ export function StrategyPreview({
 
               {/* hover tooltip */}
               {hc && (
-                <div className="pointer-events-none absolute left-2 top-2 z-10 rounded-md bg-panel/95 px-2.5 py-1.5 font-mono text-[11px] shadow-xl backdrop-blur">
+                <div className="pointer-events-none absolute left-2 top-2 z-10 rounded-md bg-panel px-2.5 py-1.5 font-mono text-[11px] shadow-xl">
                   <div className="text-faint">
                     {new Date(hc.t).toLocaleString("en-IN", {
                       dateStyle: "medium",

@@ -41,7 +41,13 @@ export function Nav() {
     ].join(" ");
 
   return (
-    <header className="sticky top-0 z-40 bg-bg/75 shadow-[0_18px_36px_-26px_rgba(0,0,0,0.9)] backdrop-blur-md">
+    <header
+      className={[
+        "sticky top-0 z-40 shadow-[0_18px_36px_-26px_rgba(0,0,0,0.9)]",
+        // solid while the mobile dropdown hangs below it so the menu never reads as see-through
+        open ? "bg-bg" : "bg-bg/75 backdrop-blur-md",
+      ].join(" ")}
+    >
       <nav className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
         <Link
           href="/"

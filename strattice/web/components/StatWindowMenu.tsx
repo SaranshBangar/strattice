@@ -1,4 +1,7 @@
 "use client";
+// Compact dashboard timeline picker. Lives next to the stat cards it controls
+// (moved here from Settings): click the button, pick a window from the dropdown,
+// the trend sparklines re-render on the spot.
 import { useState, useTransition } from "react";
 import { setStatWindowAction } from "@/app/actions";
 import {
@@ -15,7 +18,7 @@ const OPTIONS = STAT_WINDOW_ORDER.map((k) => ({
   label: STAT_WINDOWS[k].label,
 }));
 
-export function StatWindowSettings({ initial }: { initial: string }) {
+export function StatWindowMenu({ initial }: { initial: string }) {
   const toast = useToast();
   const [value, setValue] = useState<string>(
     isStatWindow(initial) ? initial : DEFAULT_STAT_WINDOW,
@@ -40,23 +43,13 @@ export function StatWindowSettings({ initial }: { initial: string }) {
   }
 
   return (
-    <section className="card p-5">
-      <h2 className="font-display text-sm font-semibold tracking-tight text-dim">
-        Dashboard timeline
-      </h2>
-      <p className="mt-1 text-sm text-muted">
-        How far back the stat-card trend sparklines (and the pro-view charts)
-        look. The headline numbers are always up to date - this only changes the
-        trends.
-      </p>
-      <div className="mt-4 max-w-xs">
-        <Select
-          value={value}
-          onChange={onChange}
-          options={OPTIONS}
-          ariaLabel="Dashboard trend timeline"
-        />
-      </div>
-    </section>
+    <Select
+      size="sm"
+      className="w-28"
+      value={value}
+      onChange={onChange}
+      options={OPTIONS}
+      ariaLabel="Dashboard trend timeline"
+    />
   );
 }

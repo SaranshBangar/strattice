@@ -11,6 +11,7 @@ import { PositionsTable, type Position } from "@/components/PositionsTable";
 import { PriceChart } from "@/components/PriceChart";
 import { ProToggle } from "@/components/ProToggle";
 import { RefreshButton } from "@/components/RefreshButton";
+import { StatWindowMenu } from "@/components/StatWindowMenu";
 import { WinRateDonut } from "@/components/charts";
 import { DrawdownCard } from "@/components/DrawdownCard";
 import { PnlHistogramCard } from "@/components/PnlHistogramCard";
@@ -308,13 +309,7 @@ export default async function DashboardPage() {
           <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-faint">
             {trendCaption}
           </span>
-          <Link
-            href="/settings"
-            className="font-mono text-[11px] text-muted underline-offset-2 transition-colors hover:text-fg hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            title="Change the dashboard trend timeline"
-          >
-            change timeline
-          </Link>
+          <StatWindowMenu initial={win.key} />
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

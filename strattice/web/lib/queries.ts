@@ -83,6 +83,7 @@ const PREFS_DDL = `create table if not exists notification_prefs (
   telegram_chat_id text,
   currency         text not null default 'INR',
   stat_window      text not null default '1d',
+  allow_shorting   integer not null default 0,
   updated_at       text not null default (datetime('now'))
 )`;
 
@@ -90,6 +91,9 @@ const PREFS_DDL = `create table if not exists notification_prefs (
 const CURRENCY_DDL = `alter table notification_prefs add column currency text not null default 'INR'`;
 // stat_window shipped after currency, so deployed tables may lack it too (migration 0006).
 const STAT_WINDOW_DDL = `alter table notification_prefs add column stat_window text not null default '1d'`;
+// allow_shorting shipped after stat_window (migration 0007): opt-in gate for short-capable
+// strategy templates. Default OFF - shorting is an explicit, separate consent.
+const ALLOW_SHORTING_DDL = `alter table notification_prefs add column allow_shorting integer not null default 0`;
 
 async function withPrefsTable<T>(fn: () => Promise<T>): Promise<T> {
   try {
@@ -106,6 +110,10 @@ async function withPrefsTable<T>(fn: () => Promise<T>): Promise<T> {
     }
     if (msg.includes("no such column: stat_window")) {
       await d1Query(STAT_WINDOW_DDL);
+      return fn();
+    }
+    if (msg.includes("no such column: allow_shorting")) {
+      await d1Query(ALLOW_SHORTING_DDL);
       return fn();
     }
     throw e;
@@ -193,6 +201,29 @@ export async function setStatWindow(userId: string, statWindow: string) {
      values (?,?, datetime('now'))
      on conflict(user_id) do update set stat_window=excluded.stat_window, updated_at=datetime('now')`,
       [userId, statWindow],
+    ),
+  );
+}
+
+/** Whether the user has explicitly opted in to short-capable strategy templates.
+ *  No row => false: shorting is a separate consent, never a default. */
+export async function getAllowShorting(userId: string): Promise<boolean> {
+  const row = await withPrefsTable(() =>
+    d1First<{ allow_shorting: number }>(
+      "select allow_shorting from notification_prefs where user_id = ?",
+      [userId],
+    ),
+  );
+  return !!row?.allow_shorting;
+}
+
+export async function setAllowShorting(userId: string, allowed: boolean) {
+  await withPrefsTable(() =>
+    d1Query(
+      `insert into notification_prefs(user_id, allow_shorting, updated_at)
+     values (?,?, datetime('now'))
+     on conflict(user_id) do update set allow_shorting=excluded.allow_shorting, updated_at=datetime('now')`,
+      [userId, allowed ? 1 : 0],
     ),
   );
 }

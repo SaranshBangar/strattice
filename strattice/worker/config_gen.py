@@ -141,6 +141,25 @@ TEMPLATE_DEFAULTS: dict[str, dict] = {
         "params": {"model": "amazon/chronos-2", "context": 512, "horizon": 8,
                    "min_forecast_pct": 3.0, "regime_period": 100, "expected_move_pct": 0.06},
     },
+    # SHORT-CAPABLE research templates (v8, bot/strategies/donchian_ls.py + ensemble_ls.py).
+    # The live spot engine acts on exact BUY/SELL only, so the short side is inert - the
+    # long side trades. stop_loss_pct/take_profit_pct are MANDATORY user inputs riding in
+    # params (web-enforced); _strategy_spec lifts them into the exit layer. No chandelier:
+    # the user's own SL/TP pair is the whole protective layer by design.
+    "donchian_ls": {
+        "market": "I-BTC_INR",
+        "stop_loss_pct": 0.07, "take_profit_pct": 0.12, "chandelier_k": 0.0,
+        "atr_period": 14, "max_hold_bars": 0,
+        "params": {"lookback": 20, "buffer": 0.002, "expected_move_pct": 0.08,
+                   "stop_loss_pct": 0.07, "take_profit_pct": 0.12},
+    },
+    "ensemble_ls": {
+        "market": "I-ETH_INR",
+        "stop_loss_pct": 0.10, "take_profit_pct": 0.15, "chandelier_k": 0.0,
+        "atr_period": 14, "max_hold_bars": 0,
+        "params": {"enter_frac": 0.8, "exit_frac": 0.5, "confirm_bars": 3,
+                   "expected_move_pct": 0.08, "stop_loss_pct": 0.10, "take_profit_pct": 0.15},
+    },
     # User-built rule strategies (bot/strategies/custom.py). The rule JSON travels in the
     # row's params; exits come from the def's "exits" (clamped in _strategy_spec). These
     # baseline exits apply only when the def carries none — daily-bar friendly: 7% stop,
@@ -217,8 +236,15 @@ _BASE = {
     # 400 daily bars ≈ 13 months > regime(100) + slow MA + ATR warmups.
     # crash_brake stays FALSE: the v7 study measured intraday hard-stops at -107pts
     # net / +5pts max-DD (whipsaw), and it diverges from the close-based backtest.
+    # v8: adaptive cadence (fast polls for 30 min after each daily close, when a fresh
+    # closed bar can actually be waiting) + the multi-source feed layer (bot/feeds.py:
+    # Binance-reference fallback for USDT markets, per-closed-bar return crosscheck for
+    # every market with a USDT twin; both fail open).
     "engine": {"poll_seconds": 300, "candle_interval": "1d", "candle_limit": 400,
-               "crash_brake": False},
+               "crash_brake": False, "poll_seconds_fast": 60,
+               "fast_poll_window_minutes": 30,
+               "feeds": {"binance_fallback": True, "crosscheck": True,
+                         "max_divergence_pct": 10.0}},
     # BTC 100d trend overlay, PROMOTED default-ON in v7: blocks NEW entries while BTC
     # is under its 100d SMA. Better net/PF/worst-fold on BOTH venues (FINDINGS v7).
     # Fails open on a bad BTC feed; never touches exits.
@@ -274,6 +300,13 @@ def _strategy_spec(idx: int, s: dict) -> dict:
         spec["max_hold_bars"] = int(_clamp(e.get("max_hold_bars"), 0, 500, d["max_hold_bars"]))
         if isinstance(params.get("name"), str) and params["name"].strip():
             spec["name"] = f"custom_{idx}"  # engine name stays machine-safe; display name lives in the def
+    elif tpl in ("donchian_ls", "ensemble_ls"):
+        # short-capable templates: the mandatory user SL/TP rides in params (web-enforced);
+        # lift it into the exit layer with the same defensive clamps as custom exits.
+        spec["stop_loss_pct"] = _clamp(params.get("stop_loss_pct"), 0.005, 0.2,
+                                       d["stop_loss_pct"])
+        spec["take_profit_pct"] = _clamp(params.get("take_profit_pct"), 0.01, 0.5,
+                                         d["take_profit_pct"])
     return spec
 
 

@@ -15,6 +15,7 @@ import type { StrategyRow, StrategyStat } from "@/lib/queries";
 import {
   ACTIVE_TEMPLATES,
   EXPERIMENTAL_TEMPLATES,
+  isShortCapable,
   type BuiltinTemplate,
   type PickableTemplate,
   type Template,
@@ -108,10 +109,13 @@ const templateOf = (engineName: string) => engineName.replace(/_\d+$/, "");
 export function StrategyManager({
   strategies,
   breakdown = [],
+  allowShorting = false,
 }: {
   strategies: StrategyRow[];
   /** Per-strategy, per-market realized P&L (executed orders) for profit ranking. */
   breakdown?: StrategyStat[];
+  /** The user's Settings opt-in for short-capable templates; off = those cards lock. */
+  allowShorting?: boolean;
 }) {
   const [pending, start] = useTransition();
   const [tpl, setTpl] = useState<PickableTemplate>(ACTIVE_TEMPLATES[0]);
@@ -232,6 +236,11 @@ export function StrategyManager({
     });
   }
 
+  // Short-capable templates are pickable (so the warning is readable) but cannot be
+  // ADDED until the Settings permission is on; the server re-enforces this.
+  const tplShort = isShortCapable(tpl);
+  const shortLocked = tplShort && !allowShorting;
+
   function pickTemplate(t: PickableTemplate) {
     setTpl(t);
     setEdits({});
@@ -310,6 +319,7 @@ export function StrategyManager({
                   </span>
                   <span className="shrink-0 rounded-sm bg-inset px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-faint">
                     {m.kind}
+                    {isShortCapable(t) && !allowShorting ? " · locked" : ""}
                   </span>
                 </div>
                 <p className="mt-1.5 text-xs leading-relaxed text-muted">
@@ -354,7 +364,9 @@ export function StrategyManager({
           <h2 className="eyebrow">02 · {meta.label} - config &amp; preview</h2>
           <button
             type="button"
-            disabled={pending || selectedMarkets.length === 0 || !!ruleErr}
+            disabled={
+              pending || selectedMarkets.length === 0 || !!ruleErr || shortLocked
+            }
             onClick={() =>
               run(
                 () =>
@@ -362,7 +374,14 @@ export function StrategyManager({
                     selectedMarkets.map((m) => ({
                       template: tpl,
                       market: m,
-                      params: customised ? JSON.stringify(diffs) : null,
+                      // Short-capable templates always send the FULL param set so the
+                      // mandatory stop-loss/take-profit are explicit in the stored row
+                      // (the server refuses the add without them).
+                      params: tplShort
+                        ? JSON.stringify(paramValues)
+                        : customised
+                          ? JSON.stringify(diffs)
+                          : null,
                     })),
                   ),
                 `Added ${meta.label} to ${selectedMarkets.length} ${
@@ -458,6 +477,29 @@ export function StrategyManager({
           </div>
         )}
 
+        {tplShort && (
+          <div
+            role="alert"
+            className="mx-4 mb-1 rounded-md bg-warn/10 px-3 py-2.5 text-xs leading-relaxed text-warn"
+          >
+            <span className="font-semibold">Short-capable strategy: </span>
+            a stop-loss AND take-profit are mandatory - set both in Parameters
+            before adding.{" "}
+            {shortLocked && (
+              <>
+                Adding is locked until you enable{" "}
+                <Link
+                  href="/settings"
+                  className="font-medium underline underline-offset-2 hover:text-fg"
+                >
+                  “Allow short-capable strategies” in Settings
+                </Link>
+                .
+              </>
+            )}
+          </div>
+        )}
+
         <div className="grid gap-0 lg:grid-cols-[320px_1fr]">
           {/* config sidebar */}
           <div className="space-y-4 p-4">
@@ -549,7 +591,20 @@ export function StrategyManager({
 
           {/* live preview */}
           <div className="p-4">
-            {(EXPERIMENTAL_TEMPLATES as readonly string[]).includes(tpl) ? (
+            {tplShort ? (
+              <div className="grid h-[300px] place-items-center rounded-md border border-dashed border-line px-6 text-center text-sm text-muted">
+                <div>
+                  <p>
+                    No browser preview: the in-browser simulator is long-only
+                    and cannot express this strategy's short side.
+                  </p>
+                  <p className="mt-2 text-xs text-faint">
+                    On the live spot engine only the long entries execute;
+                    watch the full long/short behavior in DRY_RUN first.
+                  </p>
+                </div>
+              </div>
+            ) : (EXPERIMENTAL_TEMPLATES as readonly string[]).includes(tpl) ? (
               <div className="grid h-[300px] place-items-center rounded-md border border-dashed border-line px-6 text-center text-sm text-muted">
                 <div>
                   <p>

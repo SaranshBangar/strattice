@@ -19,6 +19,29 @@ engine:
     300 # re-check every 5 min so the engine acts within minutes of each
     #   daily bar CLOSE. Entries AND protective exits key off closed
     #   bars only (no repainting) — exact backtest parity
+  poll_seconds_fast:
+    60 # v8 adaptive cadence: for the first fast_poll_window_minutes after each
+    #   bar-close boundary — the only stretch where a fresh CLOSED bar can be
+    #   waiting — poll at this faster rate, then relax back to poll_seconds.
+    #   Signals are unchanged (closed bars only); this only cuts the latency
+    #   between a bar closing and the engine acting on it. 0 disables.
+  fast_poll_window_minutes:
+    30 # how long after the bar-close boundary the fast cadence applies
+  feeds: # v8 multi-source data layer (bot/feeds.py). BOTH fail open: a reference
+    #   outage can never strangle the bot — the reference only vetoes when it
+    #   demonstrably disagrees, and only substitutes when it is the same market.
+    binance_fallback:
+      true # B-*_USDT markets: substitute Binance public klines for one cycle when
+      #   the primary feed is unusable (same asset+quote). INR pairs NEVER
+      #   substitute — no alternative INR venue exists.
+    crosscheck:
+      true # compare each newly closed bar's RETURN against the USDT twin's return
+      #   on the same UTC bar (quote-free comparison, so INR levels cancel).
+    max_divergence_pct:
+      10.0 # veto threshold in percentage points; a closed daily bar whose return
+      #   diverges this much from the global reference is a bad print or a book
+      #   dislocation — the engine HOLDs that market for the cycle and alerts.
+      #   Checked once per closed bar per market (a few requests/day, not per poll).
   candle_interval:
     "1d" # DAILY bars (was 15m). CoinDCX supports [1m,15m,1h,1d]; 1d is the
     #   only altitude that survived the friction study (see header)
@@ -462,4 +485,32 @@ strategies:
   #     engines (BTC breakout +108.7 vs supertrend +94.6, DOGE squeeze +138.9 vs +17.3).
   #   trend_ensemble (multi-lookback Donchian consensus) REJECTED — long-only spot
   #     adaptation fails venue robustness (best variant 4/7 USDT twins positive).
+  #
+  # v8 study (mid-July 2026, crypto-trader-profit-strategies) — the "profit in any
+  # market" bot families, long/short, and tight SL/TP, all MEASURED on the same real
+  # data + cost models (research/ls_study.py; tables in research/FINDINGS.md):
+  #   grid bots + martingale/DCA bots REJECTED — they are short-volatility inventory
+  #     systems, not all-weather edges: 72-92% of 6-week windows profit (the number
+  #     the marketing quotes) but the worst windows lose 21-31%, precisely the
+  #     trending ones. Spot full-history nets +1.6..+5% over 2.8y (fees 16-60% of
+  #     capital) vs +216.7% for this lineup; grid on downtrending ADA: -15.5%.
+  #   long/short trend (donchian_ls / ensemble_ls, research-only modules) NOT
+  #     promoted — the short side SUBTRACTS on this history even at derivatives
+  #     friction (donch20: median +113% long-only vs +55% long/short-deriv) and
+  #     does not reliably protect the worst walk-forward fold (helps BTC, doubles
+  #     the XRP/DOGE fold loss). ensemble_ls — the true long/short form of the
+  #     v4-rejected trend_ensemble — fails AGAIN: all-in sleeve sizing churns
+  #     40-87% of capital into fees; the published edge needs continuous
+  #     vol-targeted sizing this bot cannot express.
+  #   extremely tight SL/TP (0.5-2% stop / 1-4% target) REJECTED at every venue and
+  #     altitude: spot 1d -22..-55% on ALL 7 pairs (the pre-trade edge gate already
+  #     refuses these configs — a 1-2% target cannot clear ~1.7% round-trip
+  #     friction); at derivatives friction (~0.18%) tight combos survive but lose
+  #     to the wide-stop trend baseline on every pair (e.g. ETH +45% vs +275%);
+  #     at 1h they lose -30..-94% even at derivatives friction.
+  #   The live bot stays SPOT-ONLY and long-only: SHORT/COVER tokens exist only in
+  #   bot/backtest.py (allow_short research mode) and the engine ignores them by
+  #   construction. The one genuinely market-neutral edge found (funding-rate /
+  #   cash-and-carry basis capture) requires a derivatives leg this bot deliberately
+  #   does not trade; documented in FINDINGS v8 for operators who want it manually.
   # ===========================================================================

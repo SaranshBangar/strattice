@@ -4,7 +4,7 @@ import * as q from "@/lib/queries";
 import { telegramConfigured } from "@/lib/telegram";
 import { NotificationSettings } from "@/components/NotificationSettings";
 import { CurrencySettings } from "@/components/CurrencySettings";
-import { StatWindowSettings } from "@/components/StatWindowSettings";
+import { TradingPermissions } from "@/components/TradingPermissions";
 import { AccountActions } from "@/components/AccountActions";
 
 export const dynamic = "force-dynamic";
@@ -13,10 +13,10 @@ export default async function SettingsPage() {
   const user = await getUser();
   if (!user) redirect("/sign-in");
 
-  const [prefs, currency, statWindow] = await Promise.all([
+  const [prefs, currency, allowShorting] = await Promise.all([
     q.getNotificationPrefs(user.id),
     q.getCurrency(user.id),
-    q.getStatWindow(user.id),
+    q.getAllowShorting(user.id),
   ]);
 
   return (
@@ -41,7 +41,9 @@ export default async function SettingsPage() {
 
         <CurrencySettings initial={currency} />
 
-        <StatWindowSettings initial={statWindow} />
+        {/* The dashboard timeline picker moved to the dashboard itself, next to the
+            stat cards it controls. */}
+        <TradingPermissions initial={allowShorting} />
 
         <AccountActions />
       </div>
