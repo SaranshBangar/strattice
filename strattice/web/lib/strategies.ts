@@ -22,6 +22,78 @@ export interface StrategyMeta {
 }
 
 export const STRATEGY_META: Record<Template, StrategyMeta> = {
+  sharpe_mom: {
+    label: "Risk-Adjusted Momentum",
+    backtestNetPct: 272.2,
+    kind: "TREND",
+    blurb:
+      "Momentum divided by its own volatility - buys clean, persistent thrust, skips lottery spikes.",
+    entry:
+      "The 30-day return is ≥ 6% AND its volatility-normalized score (return ÷ realized vol × √30) is ≥ 1.5, with the close within 3% of the 30-day high and above the 50-day regime SMA.",
+    exit: "ATR chandelier trail (3.5×ATR(14) off the peak) plus a 7% hard stop. No take-profit - winners are left to run.",
+    style:
+      "The vol-scaled refinement of time-series momentum. A handful of trades per year.",
+    explain: [
+      "Raw momentum has a known weakness: a +20% month made of violent 8% daily swings is statistically fragile - that is where momentum crashes live. The published fix (the risk-managed momentum literature) is to normalize the return by its own realized volatility, so only clean, persistent trends score high.",
+      "This template applies that fix directly: the 30-day return must clear 6% on its own AND clear a risk-adjusted score of 1.5 after dividing by realized volatility. A grind-up on low noise qualifies; a lottery spike on huge noise does not. The usual gates stack on top - close within 3% of the 30-day high (not rolling over) and the 50-day regime filter.",
+      "Exits are the shared trend-following layer: a 3.5×ATR chandelier trail, a 7% disaster stop, and deliberately no take-profit - the fat right tail is the edge.",
+      "Backtested on real CoinDCX daily data (2023-2026): +272.2% net on ETH/INR (USDT twin +41.1%), positive in 3 of 4 rolling out-of-sample folds on both venues - the strongest headline number in the current catalog.",
+    ],
+  },
+  macd_trend: {
+    label: "MACD Continuation",
+    backtestNetPct: 264.9,
+    kind: "TREND",
+    blurb:
+      "Buys fresh MACD crossovers inside an uptrend - the best walk-forward record we have ever measured.",
+    entry:
+      "The MACD line (EMA12 − EMA26) crosses above its 9-day signal line within the last 3 days, with MACD above zero, the histogram expanding, and price above its 50-day regime SMA.",
+    exit: "ATR chandelier trail (3.5×ATR(14) off the peak) plus a 7% hard stop. No take-profit.",
+    style:
+      "Classic momentum re-acceleration rider: enters when a pullback inside a trend resolves upward.",
+    explain: [
+      "MACD compares a fast (12-day) and slow (26-day) exponential average; their gap measures momentum, and the 9-day average of that gap smooths it into a signal line. A fresh cross of MACD above its signal inside an uptrend marks the exact moment a pullback stops and the trend re-accelerates.",
+      "This template refuses the counter-trend versions of that signal: MACD itself must be above zero (the 12-day average is above the 26-day - real uptrend, not a bear-market bounce), the cross must be fresh (within 3 days), the histogram must still be expanding (momentum building, not fading), and the 50-day regime filter must agree.",
+      "Exits are the shared trend-following layer: 3.5×ATR chandelier trail, 7% hard stop, no target.",
+      "Backtested on real CoinDCX daily data (2023-2026): +264.9% net on BNB/INR (USDT twin +188.8%) and positive in 8 of 8 rolling out-of-sample folds across both venues - the best walk-forward record of any strategy we have ever tested. Every one of the 12 parameter combinations in the study was profitable on both venues.",
+    ],
+  },
+  trend_regime: {
+    label: "Trend Regime",
+    backtestNetPct: 209.8,
+    kind: "TREND",
+    blurb:
+      "The oldest edge in trend-following: long above the 100-day line, flat below it.",
+    entry:
+      "The close is ≥ 2% above the 100-day SMA and the line itself is rising. The 2% hysteresis band stops chop around the line from churning entries.",
+    exit: "Its own signal: the close dropping ≥ 2% below the 100-day line. Plus a 10% disaster stop. No trail - trails would cut the multi-month holds this edge depends on.",
+    style:
+      "Patient regime holder: rides the whole bull market, steps aside for the bear. ~1-3 round trips per year.",
+    explain: [
+      "This is the Faber timing rule - the most replicated result in trend-following research, famous on Bitcoin as \"the 200-day line\": simply being long above a long moving average and flat below it has historically captured most of the upside while skipping the catastrophic drawdowns.",
+      "The naive version churns when price hovers at the line. This template adds a hysteresis band: buy only ≥ 2% ABOVE the line (and only while the line is rising), sell only ≥ 2% BELOW it. Entries and exits happen at different prices, so chop costs one round trip, not ten - the friction-minimal expression of trend following.",
+      "Unlike the burst-entry engines it holds through the whole regime: fewer, much longer trades, higher exposure. The exit is the strategy's own signal rather than a trail, because a trail would cut exactly the multi-month holds the edge depends on. A 10% hard stop is the disaster brake.",
+      "Backtested on real CoinDCX daily data (2023-2026): +209.8% net on DOGE/INR (USDT twin +167.5%), with every tested 100-120-day variant positive on both venues. Its INR out-of-sample record is +308% compounded across folds; the USDT fold record is thinner (1 of 4 positive, though still +24.8% compounded) - judge it over quarters, not weeks.",
+    ],
+  },
+  ichimoku: {
+    label: "Ichimoku Breakout",
+    backtestNetPct: 83.3,
+    kind: "TREND",
+    blurb:
+      "The classic Japanese cloud system: buys fresh breaks above the kumo, exits under the kijun.",
+    entry:
+      "The close breaks above the Ichimoku cloud (9/26/52) freshly - within the last 3 days - with tenkan above kijun and the lagging-span check clear.",
+    exit: "Its own signal: the close dropping below the 26-day kijun line. Plus a 7% hard stop. No trail.",
+    style:
+      "Structured trend rider with a built-in exit line; holds while price stays above the kijun.",
+    explain: [
+      "Ichimoku Kinko Hyo draws a 'cloud' (kumo) from two projected midlines; trading above the cloud is its definition of an uptrend, and the cloud's thickness reflects how much volatility that judgment has absorbed. It is one of the most widely used trend systems in crypto.",
+      "This template trades only the highest-conviction version of the classic long signal: a FRESH close above the cloud top (within 3 days - no chasing a market that has been above the cloud for weeks), with the 9-day tenkan above the 26-day kijun (short-term momentum agrees) and the chikou-span check (price above its own level 26 days ago).",
+      "The exit is the standard Ichimoku long-exit: a close below the kijun line. That line trails the trend at its own pace, so - like Trend Regime - this engine manages its own exit and carries no ATR trail, just a 7% disaster stop.",
+      "Backtested on real CoinDCX daily data (2023-2026): +83.3% net on ADA/INR (USDT twin +42.6%), with all six tested parameter sets positive on both venues. It replaced the Acceleration sleeve on ADA, which it beat on every measured metric.",
+    ],
+  },
   tsmom: {
     label: "Time-Series Momentum",
     backtestNetPct: 207.6,

@@ -20,7 +20,8 @@ from dataclasses import dataclass
 # LEGACY rows still resolve and open positions keep their exits managed, but the web UI
 # no longer offers them for new adds (see web/lib/entitlements.ts RETIRED_TEMPLATES).
 ACTIVE_TEMPLATES = (
-    "tsmom", "momentum", "squeeze_breakout", "ma_crossover", "vol_expansion",
+    "tsmom", "momentum", "macd_trend", "trend_regime", "ichimoku", "sharpe_mom",
+    "squeeze_breakout", "ma_crossover", "vol_expansion",
     "supertrend", "hf_forecast", "custom",
 )
 RETIRED_TEMPLATES = ("rsi", "fast_rsi", "bb_reversion")

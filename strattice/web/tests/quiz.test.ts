@@ -8,6 +8,10 @@ const VALID_KEYS: QuizKey[] = [
   "ma_crossover",
   "vol_expansion",
   "supertrend",
+  "macd_trend",
+  "trend_regime",
+  "ichimoku",
+  "sharpe_mom",
 ];
 
 describe("quiz data", () => {
@@ -24,16 +28,16 @@ describe("quiz data", () => {
 });
 
 describe("recommend", () => {
-  it("no answers falls back to the patient default (tsmom)", () => {
+  it("no answers falls back to the patient default (trend_regime)", () => {
     const r = recommend([]);
-    expect(r.key).toBe("tsmom");
-    expect(r.runnerUp).toBe("ma_crossover");
+    expect(r.key).toBe("trend_regime");
+    expect(r.runnerUp).toBe("tsmom");
     expect(r.traits).toEqual([]);
   });
 
   it("out-of-range answer indices are ignored, not crashed on", () => {
     const r = recommend([9, 9, 9, 9, 9]);
-    expect(r.key).toBe("tsmom"); // all scores zero -> tie order
+    expect(r.key).toBe("trend_regime"); // all scores zero -> tie order
     expect(r.traits).toEqual([]);
   });
 
@@ -44,10 +48,10 @@ describe("recommend", () => {
   });
 
   it("all-first answers land on a slow trend template", () => {
-    // Hand-scored: ma_crossover 9, tsmom 8, supertrend 6.
+    // Hand-scored: trend_regime 10, ma_crossover 9, tsmom 8.
     const r = recommend([0, 0, 0, 0, 0]);
-    expect(r.key).toBe("ma_crossover");
-    expect(r.runnerUp).toBe("tsmom");
+    expect(r.key).toBe("trend_regime");
+    expect(r.runnerUp).toBe("ma_crossover");
   });
 
   it("breakout-leaning answers land on a breakout template", () => {
@@ -56,9 +60,9 @@ describe("recommend", () => {
     expect(["squeeze_breakout", "vol_expansion", "momentum"]).toContain(r.key);
   });
 
-  it("patience + big-winner answers land on tsmom", () => {
+  it("patience + big-winner answers land on a patient trend rider", () => {
     const r = recommend([0, 0, 2, 2, 0]);
-    expect(r.key).toBe("tsmom");
+    expect(["tsmom", "trend_regime"]).toContain(r.key);
   });
 
   it("every possible combination yields a valid, distinct top pair", () => {

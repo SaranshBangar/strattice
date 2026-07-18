@@ -1,5 +1,59 @@
 # Strategy review: backtest findings (July 2026)
 
+> **v6 addendum (mid-July 2026, `strategy-optimization-research`)** — a six-family
+> research sweep (`research/run_backtests.py --only regime_1d,...,breakout55_1d`) of
+> externally documented daily trend edges, each implemented as a candle-pure module and
+> replayed through the same harness + India cost model, then plateau-swept and
+> walk-forwarded (200-bar OOS folds) head-to-head against the incumbent sleeve on every
+> contested asset. Families researched: Faber-style trend-regime timing (the 100/200-day
+> rule), Kaufman KAMA adaptive trend, Ichimoku kumo breakout, Wilder ADX/DMI-confirmed
+> trend, risk-adjusted (vol-scaled) momentum per the risk-managed-momentum literature,
+> MACD fresh-cross continuation, and the turtle System-2 55-day Donchian.
+>
+> **Promotions (each beats its incumbent under the identical protocol):**
+>
+> | Sleeve | Engine | Net (INR/twin) | WF folds (INR/USDT) | Replaces |
+> | ------ | ------ | -------------: | :-----------------: | -------- |
+> | I-BNB_INR  | **macd_trend 12/26/9** | +264.9% / +188.8% | **4/4 + 4/4** | volexp (+143.6/+171.9, 3/4+4/4) |
+> | I-DOGE_INR | **trend_regime 100d**  | +209.8% / +167.5% | 3/4 + 1/4     | squeeze (+138.9/+36.5, 3/4+2/4) |
+> | I-XRP_INR  | **momentum 55d (turtle S2)** | +274.4% / +101.9% | 2/4 + 2/4 | ma_cross (+187.7/+109.8, 1/4+1/4) |
+> | I-ADA_INR  | **ichimoku 9/26/52**   | +83.3% / +42.6%   | 2/4 + 1/4     | accel (+60.1/+1.7, 1/4+1/4) |
+> | I-SOL_INR  | **macd_trend 12/26/9** | +47.8% / +14.8%   | 3/4 + 3/4     | (none — SOL was unheld) |
+>
+> - **macd@BNB** posted the best walk-forward record in this repo's history: 8/8 folds
+>   positive across BOTH venues, OOS +224%/+129% vs the incumbent's +138%/+93%. Its
+>   whole 12-combo plateau (fast/slow 8/21-12/26 × signal 7/9 × confirm 3/5) is
+>   positive on both venues.
+> - **regime@DOGE** (Faber rule with a 2% hysteresis band + rising-line check)
+>   dominates squeeze on full history on both venues; its p∈{100,120}×band∈{1-3%}
+>   plateau is 6/6 positive on the USDT twin. Caveat carried forward: only 1/4 USDT
+>   folds positive (compounded USDT OOS still +24.8%). The 150-day variant is
+>   REJECTED (negative on most twins) — the 100-day line is the tested edge, not
+>   "any long MA".
+> - **turtle55@XRP** doubles ma_cross's INR net with the better fold record; it is a
+>   second Donchian expression (lookback 55 vs BTC's 20) — family overlap accepted
+>   because ma_cross's 1/4+1/4 folds were the weakest of the incumbent lineup.
+> - **ichimoku@ADA** beats accel on every measured metric; accel@ADA is retired
+>   (disabled stub) — its USDT OOS was **-10.5%**, the closest thing to a
+>   loss-maker in the v5 lineup. Ichimoku's tested parameter sets are 6/6 positive
+>   on both venues on ADA.
+> - **macd@SOL**: SOL had NO venue-robust engine across five prior studies; macd is
+>   the first (3/4+3/4 folds, positive both venues). The macd family clone
+>   (BNB + SOL) is accepted for that reason and documented as correlated timing.
+> - **Kept after defending their asset:** tsmom@ETH (challenger sharpe_mom scored
+>   +272.2%/+41.1% full-history but a narrower plateau and -31pts INR OOS; tsmom keeps
+>   the sleeve on plateau depth 18/18 and its 17/21 record from the 250-bar study) and
+>   breakout20@BTC (challengers ichimoku@BTC and regime@BTC each lose on the USDT fold
+>   record).
+> - **REJECTED families:** `kama_trend` (adaptive MA — INR-positive but pays 40-78% of
+>   capital in fees; twins negative on 3/7) and `adx_trend` (DMI cross + ADX filter —
+>   negative on 5/7 USDT twins). Both stay in the registry so the rejections reproduce.
+>   `sharpe_mom` is VALIDATED as a platform template (risk-adjusted momentum, default
+>   I-ETH_INR +272.2% / twin +41.1%, 3/4+3/4 folds) but holds no bot sleeve.
+> - Equal-sleeve average across the seven engines: **~+171%** net of all friction
+>   (v5 six-sleeve lineup: ~+141%). Seven sleeves dilute each to ~0.139 of equity;
+>   at the ₹100 exchange min-notional keep total capital ≥ ~₹1000.
+
 > **v5 addendum (mid-July 2026, `crypto-profit-strategies`)** — two aggressive
 > spot engines added and studied against the same data
 > (`research/run_backtests.py --only accel_1d,cap_1d_tp,cap_1d_ch,...`). The brief

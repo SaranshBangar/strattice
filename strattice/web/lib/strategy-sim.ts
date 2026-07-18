@@ -31,7 +31,7 @@ export interface SimTrade {
   exitPrice: number; // last close if still open
   grossPct: number; // % move, before friction
   netPct: number; // after ~1.47% round-trip friction (fee+GST both sides, 1% TDS on sell)
-  reason: "stop" | "target" | "trail" | "time" | "open";
+  reason: "stop" | "target" | "trail" | "time" | "signal" | "open";
 }
 
 export interface SimResult {
@@ -266,6 +266,184 @@ export const TEMPLATE_CONFIG: Record<SimTemplate, TemplateConfig> = {
         max: 20,
         step: 1,
         int: true,
+      },
+      {
+        key: "regime_period",
+        label: "Regime SMA period",
+        min: 10,
+        max: 400,
+        step: 1,
+        int: true,
+      },
+    ],
+  },
+  // MACD continuation @ BNB: +264.9% net (PF 6.85) on I-BNB_INR (twin +188.8%);
+  // 8/8 walk-forward folds across both venues - the best fold record of any study (v6).
+  macd_trend: {
+    market: "I-BNB_INR",
+    exits: {
+      stopLossPct: 0.07,
+      takeProfitPct: 0,
+      chandelierK: 3.5,
+      atrPeriod: 14,
+      maxHoldBars: 0,
+    },
+    params: {
+      fast: 12,
+      slow: 26,
+      signal: 9,
+      confirm_bars: 3,
+      require_positive: 1,
+      regime_period: 50,
+      expected_move_pct: 0.08,
+    },
+    editable: [
+      { key: "fast", label: "Fast EMA period", min: 3, max: 100, step: 1, int: true },
+      { key: "slow", label: "Slow EMA period", min: 5, max: 200, step: 1, int: true },
+      {
+        key: "signal",
+        label: "Signal EMA period",
+        min: 2,
+        max: 50,
+        step: 1,
+        int: true,
+      },
+      {
+        key: "confirm_bars",
+        label: "Cross freshness (bars)",
+        min: 1,
+        max: 10,
+        step: 1,
+        int: true,
+      },
+      {
+        key: "regime_period",
+        label: "Regime SMA period",
+        min: 10,
+        max: 400,
+        step: 1,
+        int: true,
+      },
+    ],
+  },
+  // Trend-regime holder @ DOGE: +209.8% net (PF 3.76) on I-DOGE_INR (twin +167.5%).
+  // The strategy's own SELL (close under the line - band) is the exit; no trail (v6).
+  trend_regime: {
+    market: "I-DOGE_INR",
+    exits: {
+      stopLossPct: 0.1,
+      takeProfitPct: 0,
+      chandelierK: 0,
+      atrPeriod: 14,
+      maxHoldBars: 0,
+    },
+    params: {
+      period: 100,
+      band: 0.02,
+      slope_bars: 5,
+      expected_move_pct: 0.1,
+    },
+    editable: [
+      {
+        key: "period",
+        label: "Regime SMA period",
+        min: 20,
+        max: 300,
+        step: 1,
+        int: true,
+      },
+      { key: "band", label: "Hysteresis band (frac)", min: 0, max: 0.1, step: 0.005 },
+      {
+        key: "slope_bars",
+        label: "Rising-line window (bars)",
+        min: 1,
+        max: 30,
+        step: 1,
+        int: true,
+      },
+    ],
+  },
+  // Ichimoku kumo breakout @ ADA: +83.3% net (PF 1.87) on I-ADA_INR (twin +42.6%);
+  // tested parameter sets 6/6 positive on both venues. Own SELL below the kijun (v6).
+  ichimoku: {
+    market: "I-ADA_INR",
+    exits: {
+      stopLossPct: 0.07,
+      takeProfitPct: 0,
+      chandelierK: 0,
+      atrPeriod: 14,
+      maxHoldBars: 0,
+    },
+    params: {
+      tenkan: 9,
+      kijun: 26,
+      senkou_b: 52,
+      confirm_bars: 3,
+      expected_move_pct: 0.08,
+    },
+    editable: [
+      { key: "tenkan", label: "Tenkan period", min: 3, max: 30, step: 1, int: true },
+      { key: "kijun", label: "Kijun period", min: 10, max: 60, step: 1, int: true },
+      {
+        key: "senkou_b",
+        label: "Senkou B period",
+        min: 20,
+        max: 120,
+        step: 1,
+        int: true,
+      },
+      {
+        key: "confirm_bars",
+        label: "Break freshness (bars)",
+        min: 1,
+        max: 10,
+        step: 1,
+        int: true,
+      },
+    ],
+  },
+  // Risk-adjusted momentum @ ETH: +272.2% net on I-ETH_INR (twin +41.1%); 3/4 + 3/4
+  // walk-forward folds. The vol-scaled refinement of tsmom (v6).
+  sharpe_mom: {
+    market: "I-ETH_INR",
+    exits: {
+      stopLossPct: 0.07,
+      takeProfitPct: 0,
+      chandelierK: 3.5,
+      atrPeriod: 14,
+      maxHoldBars: 0,
+    },
+    params: {
+      lookback: 30,
+      min_score: 1.5,
+      min_return: 0.06,
+      near_high_frac: 0.03,
+      regime_period: 50,
+      expected_move_pct: 0.08,
+    },
+    editable: [
+      {
+        key: "lookback",
+        label: "Momentum lookback (bars)",
+        min: 10,
+        max: 200,
+        step: 1,
+        int: true,
+      },
+      {
+        key: "min_score",
+        label: "Min risk-adj score",
+        min: 0.5,
+        max: 4,
+        step: 0.1,
+      },
+      { key: "min_return", label: "Min return (frac)", min: 0.02, max: 0.5, step: 0.01 },
+      {
+        key: "near_high_frac",
+        label: "Max off-high (frac)",
+        min: 0.005,
+        max: 0.1,
+        step: 0.005,
       },
       {
         key: "regime_period",
@@ -941,6 +1119,130 @@ const squeezeBreakoutEntry: EntryFn = (candles, closes, end, p) => {
   return av !== null && candles[end].v >= vol_mult * av;
 };
 
+/** EMA per bar over values[from..end], seeded with the first value (bot base.ema_series). */
+function emaSeriesSlice(values: number[], n: number): number[] {
+  if (values.length === 0) return [];
+  const k = 2 / (n + 1);
+  const out = [values[0]];
+  for (let i = 1; i < values.length; i++)
+    out.push(values[i] * k + out[out.length - 1] * (1 - k));
+  return out;
+}
+
+const macdTrendEntry: EntryFn = (candles, closes, end, p) => {
+  const { fast, slow, signal, confirm_bars, require_positive, regime_period } = p;
+  const minCandles = Math.max(slow + signal + confirm_bars + 2, regime_period + 1);
+  if (end + 1 < minCandles) return false;
+  // EMAs are recursive: compute over the SAME fixed-length trailing slice as the bot
+  // (macd_trend.py trunc = min_candles + 200) so signals match bar-for-bar.
+  const from = Math.max(0, end + 1 - (minCandles + 200));
+  const closesW = closes.slice(from, end + 1);
+  if (!uptrend(closesW, closesW.length - 1, regime_period)) return false;
+  const f = emaSeriesSlice(closesW, fast);
+  const s = emaSeriesSlice(closesW, slow);
+  const macd = f.map((v, i) => v - s[i]);
+  const sig = emaSeriesSlice(macd, signal);
+  const hist = macd.map((v, i) => v - sig[i]);
+  const last = hist.length - 1;
+  if (hist[last] <= 0) return false;
+  if (require_positive !== 0 && macd[last] <= 0) return false;
+  // fresh cross: histogram was <= 0 within the last confirm_bars bars before now
+  const recent = hist.slice(Math.max(0, last - confirm_bars), last);
+  if (recent.length === 0 || recent.every((h) => h > 0)) return false;
+  return hist[last] > recent[recent.length - 1]; // must be expanding
+};
+
+const trendRegimeEntry: EntryFn = (candles, closes, end, p) => {
+  const { period, band, slope_bars } = p;
+  if (end + 1 < period + slope_bars + 1) return false;
+  const maNow = sma(closes, end, period);
+  const maThen = sma(closes, end - slope_bars, period);
+  if (maNow === null || maThen === null || maNow <= 0) return false;
+  return closes[end] > maNow * (1 + band) && maNow > maThen;
+};
+
+const trendRegimeExit: EntryFn = (candles, closes, end, p) => {
+  const { period, slope_bars, band } = p;
+  if (end + 1 < period + slope_bars + 1) return false;
+  const maNow = sma(closes, end, period);
+  if (maNow === null || maNow <= 0) return false;
+  return closes[end] < maNow * (1 - band); // regime broken -> step aside
+};
+
+/** Midpoint of the highest high / lowest low of the n bars ending at `end` (inclusive). */
+function ichiMid(candles: Candle[], end: number, n: number): number | null {
+  if (end + 1 < n) return null;
+  let hi = -Infinity,
+    lo = Infinity;
+  for (let i = end - n + 1; i <= end; i++) {
+    hi = Math.max(hi, candles[i].h);
+    lo = Math.min(lo, candles[i].l);
+  }
+  return (hi + lo) / 2;
+}
+
+/** Cloud top ACTIVE at bar `end - shift`: senkou A/B computed kijun bars earlier. */
+function ichiCloudTop(
+  candles: Candle[],
+  end: number,
+  shift: number,
+  tenkanP: number,
+  kijunP: number,
+  senkouBP: number,
+): number | null {
+  const histEnd = end - shift - kijunP; // forward projection: cloud lags kijun bars
+  if (histEnd < 0) return null;
+  const tenkan = ichiMid(candles, histEnd, tenkanP);
+  const kijun = ichiMid(candles, histEnd, kijunP);
+  const sb = ichiMid(candles, histEnd, senkouBP);
+  if (tenkan === null || kijun === null || sb === null) return null;
+  return Math.max((tenkan + kijun) / 2, sb);
+}
+
+const ichimokuEntry: EntryFn = (candles, closes, end, p) => {
+  const { tenkan, kijun, senkou_b, confirm_bars } = p;
+  if (end + 1 < senkou_b + kijun + confirm_bars + 1) return false;
+  const price = closes[end];
+  const kijunLine = ichiMid(candles, end, kijun);
+  if (kijunLine === null || price < kijunLine) return false;
+  const topNow = ichiCloudTop(candles, end, 0, tenkan, kijun, senkou_b);
+  if (topNow === null || price <= topNow) return false;
+  // fresh breakout: close was NOT above the then-active cloud confirm_bars ago
+  const then = closes[end - confirm_bars];
+  const topThen = ichiCloudTop(candles, end, confirm_bars, tenkan, kijun, senkou_b);
+  if (topThen !== null && then > topThen) return false; // stale - already above
+  const tenkanLine = ichiMid(candles, end, tenkan);
+  if (tenkanLine === null || tenkanLine <= kijunLine) return false; // momentum must agree
+  return price > closes[end - kijun]; // chikou span free
+};
+
+const ichimokuExit: EntryFn = (candles, closes, end, p) => {
+  const { kijun, senkou_b, confirm_bars } = p;
+  if (end + 1 < senkou_b + kijun + confirm_bars + 1) return false;
+  const kijunLine = ichiMid(candles, end, kijun);
+  return kijunLine !== null && closes[end] < kijunLine; // long-exit line broken
+};
+
+const sharpeMomEntry: EntryFn = (candles, closes, end, p) => {
+  const { lookback, min_score, min_return, near_high_frac, regime_period } = p;
+  if (end + 1 < Math.max(lookback + 2, regime_period + 1)) return false;
+  if (!uptrend(closes, end, regime_period)) return false;
+  const base = closes[end - lookback];
+  if (base <= 0) return false;
+  const ret = closes[end] / base - 1;
+  if (ret < min_return) return false;
+  const rets: number[] = [];
+  for (let i = end - lookback + 1; i <= end; i++)
+    if (closes[i - 1] > 0) rets.push(closes[i] / closes[i - 1] - 1);
+  const vol = stdev(rets, rets.length - 1, rets.length);
+  if (vol === null || vol <= 0) return false;
+  if (ret / (vol * Math.sqrt(lookback)) < min_score) return false; // vol-normalized thrust
+  let windowHigh = 0; // high of the last `lookback` bars INCLUDING the current one
+  for (let i = end - lookback + 1; i <= end; i++)
+    windowHigh = Math.max(windowHigh, candles[i].h);
+  return closes[end] >= windowHigh * (1 - near_high_frac); // not rolling over
+};
+
 // Exported so signal-level parity against bot/strategies/*.py can be scripted.
 export const ENTRY: Record<BuiltinTemplate, EntryFn> = {
   tsmom: tsmomEntry,
@@ -952,6 +1254,18 @@ export const ENTRY: Record<BuiltinTemplate, EntryFn> = {
   fast_rsi: rsiEntry, // same rule as rsi, different stock params
   bb_reversion: bbReversionEntry,
   squeeze_breakout: squeezeBreakoutEntry,
+  macd_trend: macdTrendEntry,
+  trend_regime: trendRegimeEntry,
+  ichimoku: ichimokuEntry,
+  sharpe_mom: sharpeMomEntry,
+};
+
+/** Strategy-signal exits for the regime-holding templates: the exit is part of the
+ *  edge (bot decide() emits SELL), unlike the entry-only engines whose exits are all
+ *  protective. Checked after the protective layer, same precedence as the live engine. */
+export const EXIT_SIGNAL: Partial<Record<BuiltinTemplate, EntryFn>> = {
+  trend_regime: trendRegimeExit,
+  ichimoku: ichimokuExit,
 };
 
 // ---------- custom params: merge + validation ----------
@@ -980,6 +1294,12 @@ export function paramRuleError(
     return "Fast SMA period must be below the slow SMA period.";
   if (template === "vol_expansion" && params.short_atr >= params.long_atr)
     return "Short ATR period must be below the long ATR period.";
+  if (template === "macd_trend" && params.fast >= params.slow)
+    return "Fast EMA period must be below the slow EMA period.";
+  if (template === "ichimoku" && params.tenkan >= params.kijun)
+    return "Tenkan period must be below the kijun period.";
+  if (template === "ichimoku" && params.kijun > params.senkou_b)
+    return "Kijun period must not exceed the senkou B period.";
   return null;
 }
 
@@ -1024,11 +1344,13 @@ export function simulate(
 ): SimResult {
   const cfg = TEMPLATE_CONFIG[template];
   const entryFn = ENTRY[template];
+  const exitFn = EXIT_SIGNAL[template];
   const params = mergedParams(template, overrides);
   return runSim(
     candles,
     (cs, closes, i) => entryFn(cs, closes, i, params),
     cfg.exits,
+    exitFn ? (cs, closes, i) => exitFn(cs, closes, i, params) : undefined,
   );
 }
 
@@ -1038,6 +1360,7 @@ export function runSim(
   candles: Candle[],
   canEnter: (candles: Candle[], closes: number[], end: number) => boolean,
   exits: ExitConfig,
+  canExitSignal?: (candles: Candle[], closes: number[], end: number) => boolean,
 ): SimResult {
   const closes = candles.map((c) => c.c);
   const { stopLossPct, takeProfitPct, chandelierK, atrPeriod, maxHoldBars } =
@@ -1064,6 +1387,10 @@ export function runSim(
       }
       if (!reason && maxHoldBars > 0 && i - entryIdx >= maxHoldBars)
         reason = "time";
+      // strategy-signal exit (regime-holding templates): protective exits take
+      // precedence, same as the live engine.
+      if (!reason && canExitSignal && canExitSignal(candles, closes, i))
+        reason = "signal";
       if (reason) {
         const grossPct = ((close - entryPrice) / entryPrice) * 100;
         trades.push({
@@ -1456,6 +1783,61 @@ export function overlays(
         regime,
       ];
     }
+    case "macd_trend": {
+      const fastLine = emaSeriesSlice(closes, p.fast);
+      const slowLine = emaSeriesSlice(closes, p.slow);
+      return [
+        {
+          name: `EMA(${p.fast})`,
+          points: fastLine.map((v, i) => (i + 1 < p.fast ? null : v)),
+          role: "primary",
+        },
+        {
+          name: `EMA(${p.slow})`,
+          points: slowLine.map((v, i) => (i + 1 < p.slow ? null : v)),
+          role: "secondary",
+        },
+      ];
+    }
+    case "trend_regime": {
+      const line = smaSeries(closes, p.period);
+      return [
+        {
+          name: `Buy line (SMA(${p.period}) +${(p.band * 100).toFixed(1)}%)`,
+          points: line.map((v) => (v === null ? null : v * (1 + p.band))),
+          role: "primary",
+        },
+        {
+          name: `Sell line (SMA(${p.period}) -${(p.band * 100).toFixed(1)}%)`,
+          points: line.map((v) => (v === null ? null : v * (1 - p.band))),
+          role: "secondary",
+        },
+      ];
+    }
+    case "ichimoku":
+      return [
+        {
+          name: `Cloud top (${p.tenkan}/${p.kijun}/${p.senkou_b})`,
+          points: candles.map((_, i) =>
+            ichiCloudTop(candles, i, 0, p.tenkan, p.kijun, p.senkou_b),
+          ),
+          role: "primary",
+        },
+        {
+          name: `Kijun(${p.kijun})`,
+          points: candles.map((_, i) => ichiMid(candles, i, p.kijun)),
+          role: "secondary",
+        },
+      ];
+    case "sharpe_mom":
+      return [
+        {
+          name: `${p.lookback}-bar high`,
+          points: priorHighSeries(highs, p.lookback),
+          role: "primary",
+        },
+        regime,
+      ];
     case "rsi":
     case "fast_rsi":
       return [regime];
@@ -1467,5 +1849,6 @@ export const EXIT_REASON_LABEL: Record<SimTrade["reason"], string> = {
   target: "take-profit",
   trail: "ATR trail",
   time: "time-stop",
+  signal: "strategy exit",
   open: "still open",
 };

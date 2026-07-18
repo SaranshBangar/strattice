@@ -13,30 +13,34 @@ import { faqPageSchema, softwareApplicationSchema } from "@/lib/seo";
 export const metadata: Metadata = {
   title: "Strattice · Algorithmic trading on your own CoinDCX account",
   description:
-    "Backtest-proven strategy templates, a visual strategy builder and a paper-trading-first bot that runs on your own CoinDCX account. Non-custodial - your keys, your exchange, your money.",
+    "Fully automated buying AND selling on your own CoinDCX account: backtest-proven strategy templates, a visual strategy builder and a paper-trading-first bot. Non-custodial - your keys, your exchange, your money.",
   alternates: { canonical: "/" },
   openGraph: {
     title: "Strattice · Algorithmic trading on your own CoinDCX account",
     description:
-      "Backtest-proven strategy templates, a visual strategy builder and a paper-trading-first bot. Non-custodial - your keys, your exchange, your money.",
+      "Fully automated buying AND selling: backtest-proven strategy templates, a visual strategy builder and a paper-trading-first bot. Non-custodial - your keys, your exchange, your money.",
     url: "/",
   },
 };
 
 // The strategy templates that actually ship - shown as a terminal-style ledger.
-// The ACTIVE daily lineup (research/FINDINGS.md), each on its venue-robust market.
+// The ACTIVE daily lineup (research/FINDINGS.md v6), each on its venue-robust market.
 const STRATS: [keyof typeof STRATEGY_META, string][] = [
+  ["sharpe_mom", "ETH/INR"],
+  ["macd_trend", "BNB/INR"],
+  ["trend_regime", "DOGE/INR"],
   ["tsmom", "ETH/INR"],
-  ["momentum", "BTC/INR"],
-  ["squeeze_breakout", "DOGE/INR"],
   ["ma_crossover", "XRP/INR"],
   ["vol_expansion", "BNB/INR"],
+  ["squeeze_breakout", "DOGE/INR"],
+  ["momentum", "BTC/INR"],
   ["supertrend", "BTC/INR"],
+  ["ichimoku", "ADA/INR"],
   ["hf_forecast", "BTC/INR"],
 ];
 
 const NUMBERS: [string, string][] = [
-  ["6", "backtest-proven daily templates, plus an experimental AI forecaster"],
+  ["10", "backtest-proven daily templates, plus an experimental AI forecaster"],
   ["4", "risk checks in front of every single order"],
   ["~1.5%", "real round-trip cost, modeled in every simulation"],
   ["₹0", "per month while we're in early access"],
@@ -45,7 +49,7 @@ const NUMBERS: [string, string][] = [
 const STEPS: [string, string][] = [
   ["Connect your exchange", "Add a CoinDCX API key with withdrawals off - the bot can trade for you, never take money out."],
   ["Pick a ready-made strategy", "Every entry and exit marked on real market data before you commit to anything."],
-  ["Let it practice first", "Paper mode first: real prices, fake money. Flip to live only when the numbers earn it."],
+  ["Let it do the rest", "Paper mode first: real prices, fake money. Flip to live when the numbers earn it - from then on the bot does the buying AND the selling on its own."],
 ];
 
 // The engine's order path, stage by stage. This mirrors what the code actually
@@ -80,11 +84,11 @@ const COST_ROWS: [string, string, string][] = [
 ];
 
 const FEATURES: [string, string][] = [
-  ["Every strategy template", "Trend, momentum, breakout and volatility systems that survived a real-data cost study."],
+  ["Every strategy template", "Ten trend, momentum, breakout and volatility systems that survived six rounds of real-data cost studies."],
   ["Entry / exit previews", "Simulated on real candles, entries and exits on the chart, before you add it."],
   ["Build your own", "Compose entry rules from indicator blocks and backtest while you design."],
   ["Full analytics dashboard", "Equity curve, drawdown, daily P&L, win rate, per-strategy breakdown."],
-  ["Risk-managed executor", "Hard stops, trailing stops, daily loss limits and a kill switch."],
+  ["Hands-off, entry to exit", "The bot buys, manages and sells on its own - hard stops, trailing exits, daily loss limits and a kill switch watch every position 24/7."],
   ["DRY_RUN first", "Realistic paper fills with fees and TDS before a single rupee goes live."],
 ];
 
@@ -141,7 +145,12 @@ export default function Home() {
             Pick a rulebook. Watch it practice with{" "}
             <span className="font-medium text-fg">fake money on real prices</span>
             . Go live only once it has{" "}
-            <span className="font-medium text-fg">earned your trust</span>.
+            <span className="font-medium text-fg">earned your trust</span> — then
+            it does{" "}
+            <span className="font-medium text-fg">
+              the buying and the selling
+            </span>{" "}
+            on its own. No charts to watch, no orders to place.
           </p>
           <HeroCta />
           <p className="mt-4 font-mono text-[11px] uppercase tracking-wider text-faint">no card · withdrawals stay disabled · DRY_RUN by default</p>
@@ -170,7 +179,7 @@ export default function Home() {
             ))}
           </ul>
           <div className="flex items-center justify-between bg-white/[0.03] px-4 py-2.5 font-mono text-[11px] text-faint">
-            <span className="caret">exits: shared stop-loss / take-profit / ATR trail</span>
+            <span className="caret">exits: automatic - stops / ATR trails / regime lines</span>
             <span className="text-accent">+ build your own</span>
           </div>
         </div>

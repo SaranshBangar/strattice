@@ -8,12 +8,16 @@
 /** The ACTIVE stock templates: the daily trend engines that survived the real-data
  *  backtest study (research/FINDINGS.md). Order = picker order, strongest first. */
 export const ACTIVE_TEMPLATES = [
+  "sharpe_mom",
+  "macd_trend",
+  "trend_regime",
   "tsmom",
-  "momentum",
-  "squeeze_breakout",
   "ma_crossover",
   "vol_expansion",
+  "squeeze_breakout",
+  "momentum",
   "supertrend",
+  "ichimoku",
 ] as const;
 /** RETIRED templates: mean reversion loses net of India friction at EVERY tested
  *  altitude (research/FINDINGS.md). Not offered for new adds; kept so legacy rows
