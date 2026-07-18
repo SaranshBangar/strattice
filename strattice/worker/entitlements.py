@@ -25,7 +25,13 @@ ACTIVE_TEMPLATES = (
     "supertrend", "hf_forecast", "custom",
 )
 RETIRED_TEMPLATES = ("rsi", "fast_rsi", "bb_reversion")
-ALL_TEMPLATES = ACTIVE_TEMPLATES + RETIRED_TEMPLATES
+# SHORT-CAPABLE research templates (v8): symmetric long/short trend modules. The live
+# spot engine acts on exact BUY/SELL only, so their SHORT side is inert; the long side
+# trades with the user's MANDATORY stop-loss/take-profit (enforced web-side, lifted
+# into exits in config_gen._strategy_spec). Gated in the web UI behind the per-user
+# allow_shorting permission.
+SHORT_CAPABLE_TEMPLATES = ("donchian_ls", "ensemble_ls")
+ALL_TEMPLATES = ACTIVE_TEMPLATES + RETIRED_TEMPLATES + SHORT_CAPABLE_TEMPLATES
 DEFAULT_TEMPLATE = "tsmom"  # the starting template new users see first
 
 

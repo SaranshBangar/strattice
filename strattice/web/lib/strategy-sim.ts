@@ -779,6 +779,102 @@ export const TEMPLATE_CONFIG: Record<SimTemplate, TemplateConfig> = {
       },
     ],
   },
+
+  // ---- SHORT-CAPABLE research templates (v8). No browser preview: the TS sim is
+  // long-only and cannot express the short side. stop_loss_pct / take_profit_pct ride
+  // in params (MANDATORY - actions.ts refuses an add without both) and the worker's
+  // config_gen lifts them into the engine's exit layer. The live spot engine executes
+  // the LONG side only; short signals are inert by construction. ----
+  donchian_ls: {
+    market: "I-BTC_INR",
+    exits: {
+      stopLossPct: 0.07,
+      takeProfitPct: 0.12,
+      chandelierK: 0,
+      atrPeriod: 14,
+      maxHoldBars: 0,
+    },
+    params: {
+      lookback: 20,
+      buffer: 0.002,
+      expected_move_pct: 0.08,
+      stop_loss_pct: 0.07,
+      take_profit_pct: 0.12,
+    },
+    editable: [
+      {
+        key: "lookback",
+        label: "Channel lookback (bars)",
+        min: 5,
+        max: 200,
+        step: 1,
+        int: true,
+      },
+      {
+        key: "stop_loss_pct",
+        label: "Stop-loss (fraction, required)",
+        min: 0.005,
+        max: 0.2,
+        step: 0.005,
+      },
+      {
+        key: "take_profit_pct",
+        label: "Take-profit (fraction, required)",
+        min: 0.01,
+        max: 0.5,
+        step: 0.01,
+      },
+    ],
+  },
+  ensemble_ls: {
+    market: "I-ETH_INR",
+    exits: {
+      stopLossPct: 0.1,
+      takeProfitPct: 0.15,
+      chandelierK: 0,
+      atrPeriod: 14,
+      maxHoldBars: 0,
+    },
+    params: {
+      enter_frac: 0.8,
+      exit_frac: 0.5,
+      confirm_bars: 3,
+      expected_move_pct: 0.08,
+      stop_loss_pct: 0.1,
+      take_profit_pct: 0.15,
+    },
+    editable: [
+      {
+        key: "enter_frac",
+        label: "Consensus to enter (fraction)",
+        min: 0.5,
+        max: 1,
+        step: 0.05,
+      },
+      {
+        key: "confirm_bars",
+        label: "Freshness window (bars)",
+        min: 1,
+        max: 10,
+        step: 1,
+        int: true,
+      },
+      {
+        key: "stop_loss_pct",
+        label: "Stop-loss (fraction, required)",
+        min: 0.005,
+        max: 0.2,
+        step: 0.005,
+      },
+      {
+        key: "take_profit_pct",
+        label: "Take-profit (fraction, required)",
+        min: 0.01,
+        max: 0.5,
+        step: 0.01,
+      },
+    ],
+  },
 };
 
 // ---------- indicators (match bot/strategies/base.py exactly) ----------

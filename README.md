@@ -26,6 +26,12 @@ No LLM in the execution path — every trade decision is plain algorithm code.
   derivatives`) so short-side and low-friction hypotheses can be measured without
   ever touching the live spot-only path.
 - Telegram alerts on trades, blocks, kill switch, and errors.
+- Multi-source data layer (v8): Binance public klines serve as a fallback feed for
+  USDT markets and as an independent cross-check for every market with a USDT twin —
+  a closed bar whose return diverges >10pp from the global reference is treated as a
+  bad print and held, not traded. Both layers fail open. Adaptive polling checks
+  every 60s for the half hour after each daily close (when a fresh bar can actually
+  be waiting), then relaxes to the 5-minute cadence.
 
 ## Setup
 

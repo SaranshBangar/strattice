@@ -285,7 +285,7 @@ export function StrategyDemo() {
 
           {entryChipVisible && (
             <span
-              className="pointer-events-none absolute z-10 -translate-x-1/2 whitespace-nowrap rounded-md bg-panel/95 px-2 py-1 font-mono text-[10px] text-gain shadow-lg backdrop-blur"
+              className="pointer-events-none absolute z-10 -translate-x-1/2 whitespace-nowrap rounded-md bg-panel px-2 py-1 font-mono text-[10px] text-gain shadow-lg"
               style={{
                 left: `${Math.max(12, Math.min(88, (X(ENTRY) / W) * 100))}%`,
                 top: `${Math.max(4, (Y(CLOSES[ENTRY]) / H) * 100 - 16)}%`,
@@ -296,7 +296,7 @@ export function StrategyDemo() {
           )}
           {exitChipVisible && (
             <span
-              className="pointer-events-none absolute z-10 -translate-x-1/2 whitespace-nowrap rounded-md bg-panel/95 px-2 py-1 font-mono text-[10px] text-loss shadow-lg backdrop-blur"
+              className="pointer-events-none absolute z-10 -translate-x-1/2 whitespace-nowrap rounded-md bg-panel px-2 py-1 font-mono text-[10px] text-loss shadow-lg"
               style={{
                 left: `${Math.max(12, Math.min(88, (X(EXIT) / W) * 100))}%`,
                 top: `${Math.min(90, (Y(CLOSES[EXIT]) / H) * 100 + 10)}%`,
@@ -307,7 +307,7 @@ export function StrategyDemo() {
           )}
 
           {/* Running P&L on a ₹10,000 practice stake */}
-          <div className="pointer-events-none absolute right-2 top-2 rounded-md bg-panel/95 px-2.5 py-1.5 text-right font-mono shadow-lg backdrop-blur">
+          <div className="pointer-events-none absolute right-2 top-2 rounded-md bg-panel px-2.5 py-1.5 text-right font-mono shadow-lg">
             <div className="text-[9px] uppercase tracking-wider text-faint">
               {exited ? "trade closed" : inTrade ? "in trade" : "waiting for signal"}
             </div>

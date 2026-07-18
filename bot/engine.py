@@ -10,7 +10,7 @@ import math
 import sys
 import time
 
-from . import audit, candles as candlemod, config, notify, reconcile, sizing
+from . import audit, candles as candlemod, config, feeds, notify, reconcile, sizing
 from .client import Client
 from .executor import Executor
 from .reliability import CircuitOpen
@@ -66,18 +66,61 @@ class Engine:
         # its 100d SMA. Promoted on v7 evidence: improves net, PF and worst
         # walk-forward fold on BOTH venues (FINDINGS v7). Exits are never touched.
         self.btc_filter = dict((cfg.get("portfolio") or {}).get("btc_regime_filter") or {})
+        # Multi-source feed layer (v8, config engine.feeds, bot/feeds.py). Both fail-open:
+        #   binance_fallback: B-*_USDT markets substitute Binance klines for ONE cycle
+        #     when the primary feed is unusable (same asset+quote; INR pairs never).
+        #   crosscheck: compare each newly closed bar's RETURN against the USDT twin's;
+        #     divergence past max_divergence_pct pct-points -> HOLD that market + alert
+        #     (a bad print that passes structural validation). Checked once per closed
+        #     bar per market, not per poll, so the reference host sees a few requests/day.
+        fcfg = dict((cfg.get("engine") or {}).get("feeds") or {})
+        self.feed_fallback = bool(fcfg.get("binance_fallback", True))
+        self.feed_crosscheck_pct = float(fcfg.get("max_divergence_pct", 10.0)) \
+            if fcfg.get("crosscheck", True) else 0.0
+        self._crosschecked: dict[str, int] = {}  # market -> last closed-bar ts verified
+        # Adaptive polling (v8): poll fast for the first window after each bar close -
+        # the only stretch where a fresh closed bar can be waiting - then relax. Signals
+        # are unchanged (closed bars only); this only cuts entry/exit latency.
+        self.poll_fast = int(cfg["engine"].get("poll_seconds_fast", 0) or 0)
+        self.fast_window_s = int(cfg["engine"].get("fast_poll_window_minutes", 30) or 0) * 60
 
     _BAD_FEED_ALERT_EVERY = 3600.0   # rate-limit bad-candle alerts to one/hour per market
     _DRIFT_CHECK_EVERY = 3600.0      # LIVE balance-vs-book reconcile cadence
 
     def _validated_candles(self, market: str) -> list[dict] | None:
         """Fetch + integrity-check candles for a market. None = feed unusable this cycle
-        (stale/gapped/malformed): the caller must HOLD - never trade on garbage bars."""
+        (stale/gapped/malformed/diverged): the caller must HOLD - never trade on garbage
+        bars. v8: an unusable primary can be substituted from the Binance reference for
+        B-*_USDT markets, and a healthy-looking primary is cross-checked (once per newly
+        closed bar) against the USDT twin to catch bad prints. Both layers fail open."""
+        interval_ms = _INTERVAL_MS.get(self.interval, 86_400_000)
         bars = self.client.candles(market, self.interval, self.limit)
-        rep = candlemod.validate(bars, _INTERVAL_MS.get(self.interval, 86_400_000),
-                                 now_ms=int(time.time() * 1000))
+        rep = candlemod.validate(bars, interval_ms, now_ms=int(time.time() * 1000))
+        if not rep.ok and self.feed_fallback and feeds.can_substitute(market):
+            alt = feeds.fetch_reference(market, self.interval, self.limit)
+            if alt:
+                rep_alt = candlemod.validate(alt, interval_ms,
+                                             now_ms=int(time.time() * 1000))
+                if rep_alt.ok:
+                    log.warning("PRIMARY FEED UNUSABLE for %s (%s) -> substituting the "
+                                "Binance reference bars for this cycle",
+                                market, "; ".join(rep.problems))
+                    rep = rep_alt
         if rep.notes:
             log.info("candle feed normalized for %s: %s", market, "; ".join(rep.notes))
+        if rep.ok and self.feed_crosscheck_pct > 0 and len(rep.bars) >= 2:
+            closed_ts = int(rep.bars[-2]["time"])
+            if self._crosschecked.get(market) != closed_ts:
+                ref = feeds.fetch_reference(market, self.interval, 5)
+                div = feeds.crosscheck_divergence(rep.bars, ref)
+                if div is None or div[0] <= self.feed_crosscheck_pct:
+                    # verified (or reference unavailable -> fail open); don't re-check this bar
+                    self._crosschecked[market] = closed_ts
+                else:
+                    rep.ok = False
+                    rep.problems.append(
+                        f"crosscheck: closed-bar return diverges {div[0]:.1f}pp from the "
+                        f"USDT reference (> {self.feed_crosscheck_pct:.1f}pp)")
         if rep.ok:
             return rep.bars
         log.warning("BAD CANDLE FEED for %s: %s -> holding (no trades this cycle)",
@@ -476,7 +519,10 @@ class Engine:
             self._reconcile()  # pick up portal on/off toggles before this cycle's run
             self.run_once()
             self._maintenance()
-            time.sleep(self.poll)
+            # adaptive cadence (v8): fast polls right after a bar close, base otherwise
+            time.sleep(feeds.poll_delay(self.poll, self.poll_fast, self.fast_window_s,
+                                        _INTERVAL_MS.get(self.interval, 86_400_000),
+                                        time.time()))
 
 
 if __name__ == "__main__":

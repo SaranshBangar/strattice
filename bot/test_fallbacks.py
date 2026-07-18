@@ -159,7 +159,10 @@ def _fresh_world(tmp: Path):
     audit.init()
 
     cfg = {
-        "engine": {"poll_seconds": 300, "candle_interval": "1d", "candle_limit": 400},
+        # feeds OFF: these worlds are hermetic - no network to the reference host.
+        # bot/test_feeds.py exercises the feed layer with a stubbed reference.
+        "engine": {"poll_seconds": 300, "candle_interval": "1d", "candle_limit": 400,
+                   "feeds": {"binance_fallback": False, "crosscheck": False}},
         "starting_equity": 100000.0,
         "allocation_frac": 0.97,
         "quote_currency": "INR",

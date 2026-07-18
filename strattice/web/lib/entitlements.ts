@@ -28,10 +28,21 @@ export const BUILTIN_TEMPLATES = [
   ...ACTIVE_TEMPLATES,
   ...RETIRED_TEMPLATES,
 ] as const;
-/** Experimental templates: run in the bot's Python engine only (ML model
- *  inference is server-side), so the browser cannot simulate/backtest them.
- *  Kept out of BUILTIN_TEMPLATES so the TS sim never tries. */
-export const EXPERIMENTAL_TEMPLATES = ["hf_forecast"] as const;
+/** SHORT-CAPABLE templates (the v8 research modules): symmetric long/short trend
+ *  engines whose SHORT side is inert on the live spot engine (it acts on exact
+ *  BUY/SELL only) - the long side trades, the short side is paper/research. Gated
+ *  behind the per-user allow_shorting permission (Settings) and a MANDATORY
+ *  stop-loss + take-profit on every add (server-enforced in actions.ts). The v8
+ *  study found the short side SUBTRACTS on this venue's history - the risk warning
+ *  on each template says so. */
+export const SHORT_CAPABLE_TEMPLATES = ["donchian_ls", "ensemble_ls"] as const;
+/** Experimental templates: run in the bot's Python engine only (ML inference or
+ *  long/short behavior the long-only browser sim cannot express), so there is no
+ *  browser preview. Kept out of BUILTIN_TEMPLATES so the TS sim never tries. */
+export const EXPERIMENTAL_TEMPLATES = [
+  "hf_forecast",
+  ...SHORT_CAPABLE_TEMPLATES,
+] as const;
 /** Everything a user may run: builtins + experimental + "custom" (user-built rule
  *  strategies, interpreted by bot/strategies/custom.py; the rule JSON lives in
  *  user_strategies.params). */
@@ -45,6 +56,9 @@ export type ActiveTemplate = (typeof ACTIVE_TEMPLATES)[number];
 export type RetiredTemplate = (typeof RETIRED_TEMPLATES)[number];
 export type BuiltinTemplate = (typeof BUILTIN_TEMPLATES)[number];
 export type ExperimentalTemplate = (typeof EXPERIMENTAL_TEMPLATES)[number];
+export type ShortCapableTemplate = (typeof SHORT_CAPABLE_TEMPLATES)[number];
+export const isShortCapable = (t: string): t is ShortCapableTemplate =>
+  (SHORT_CAPABLE_TEMPLATES as readonly string[]).includes(t);
 /** Templates pickable from the template cards (active + experimental; retired and
  *  "custom" are excluded — custom has its own builder). */
 export type PickableTemplate = ActiveTemplate | ExperimentalTemplate;

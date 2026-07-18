@@ -265,6 +265,43 @@ export const STRATEGY_META: Record<Template, StrategyMeta> = {
       "Honest framing: published research finds pretrained forecasters rarely beat simple baselines on raw crypto prices. This template exists to let you test that claim safely on your own account, not because the edge is established. Watch its net numbers over weeks in DRY_RUN before giving it real capital.",
     ],
   },
+  donchian_ls: {
+    label: "Long/Short Donchian",
+    kind: "L/S · EXPT",
+    blurb:
+      "Symmetric channel breakout: long over the recent high, short under the recent low - the short side is research/paper on spot.",
+    entry:
+      "Buy when the close breaks the prior N-day high; signal a short when it breaks the prior N-day low. No long-only regime filter - the short side IS the down-regime expression.",
+    exit: "YOUR stop-loss and take-profit (both mandatory on this template). No chandelier trail - the exits you set are the whole protective layer.",
+    style:
+      "Always-eligible trend flipper. Fires in both directions; on the live spot engine only the long entries execute.",
+    warning:
+      "Short/leverage-style strategy - advanced, opt-in, and honestly: our own backtests found no edge in it here. Shorts profit when price FALLS and lose when it RISES, so a rally is the risk, not the crash - and losses on a short have no natural cap the way a long's downside stops at zero. A stop-loss AND take-profit are mandatory and enforced on every add. Spot markets cannot short: the live engine executes the LONG side only, and short signals run as paper/research behavior. The v8 study (research/FINDINGS.md) measured the short side SUBTRACTING from returns across 2023-2026 (long-only median +113% vs +55% long/short at derivatives friction) - this template exists so you can verify that yourself in DRY_RUN, not because we recommend it.",
+    explain: [
+      "The Donchian channel is the highest high and lowest low of the last N days. Breaking above the channel top is the classic trend-following long; breaking below the bottom is the mirror-image short. Run symmetrically it is the textbook 'profit in either direction' trend machine - the same family the turtle traders used.",
+      "This template is deliberately un-gated: no 50-day regime filter, because the short side is what handles downtrends. An opposite-side breakout flips the position.",
+      "The catch, measured on real data: crypto downtrends in 2023-2026 were violent but BRIEF, so short trend positions mostly bought whipsaw. Long-only Donchian beat the long/short version on 12 of 14 markets in the v8 study even before spot friction. Treat the short side as an experiment you watch in DRY_RUN, not as income.",
+      "Exits are exactly what you configure - a mandatory hard stop and take-profit. Tight values (under ~2%/4%) were also measured and rejected: at spot friction every tight combination lost on all 7 INR pairs. Use daily-scale distances (5-10% stop, 10-20% target) or expect friction to eat the account.",
+    ],
+  },
+  ensemble_ls: {
+    label: "Long/Short Ensemble",
+    kind: "L/S · EXPT",
+    blurb:
+      "Five Donchian clocks vote long or short; strong consensus either way takes the position - the published long/short form of the trend ensemble.",
+    entry:
+      "Each of five lookbacks (10..160 days) votes long when the close is above its channel midline. A fresh ≥80% consensus buys; a fresh ≤20% consensus signals a short; a fading consensus exits.",
+    exit: "YOUR stop-loss and take-profit (both mandatory), plus the ensemble's own exit when the vote decays through 50%.",
+    style:
+      "Slow consensus machine holding a position most of the time, long or short.",
+    warning:
+      "Short/leverage-style strategy - advanced, opt-in, and the weakest performer we have ever measured: the v8 study found this ensemble NEGATIVE on most markets in every mode (its published edge needs continuous position sizing that a full-allocation sleeve cannot express, and the churn pays 40-87% of capital in fees at spot friction). Shorts lose when price rises, with no natural cap. A stop-loss AND take-profit are mandatory and enforced on every add. Spot markets cannot short: the live engine executes the LONG side only; short signals are paper/research. This template is in the catalog so the rejection is reproducible on your own account in DRY_RUN - do not fund it expecting the paper's numbers.",
+    explain: [
+      "The idea comes from published research (Zarattini, Pagani & Barbon 2025, 'Catching Crypto Trends'): instead of one lookback, run an ensemble of Donchian channels from fast (10 days) to slow (160 days) and size a long/short position by how many agree. It is the academically honest 'profit in any direction' trend design.",
+      "Our v4 study rejected the long-only spot adaptation; v8 added true short support to the backtester and re-tested the symmetric form. It failed again - the paper's edge rides on continuous vol-targeted sizing (position proportional to consensus and inverse to volatility), while this engine is all-in-or-flat. Expressed that way the ensemble churns: 26-49 round trips over 2.8 years, 40-87% of capital paid in fees on spot.",
+      "It remains here as a transparent, reproducible experiment: run it in DRY_RUN and watch the mechanics - fresh consensus entries, decay exits, both directions - with your mandatory stop and target as the safety net.",
+    ],
+  },
   custom: {
     label: "Custom Strategy",
     kind: "CUSTOM",

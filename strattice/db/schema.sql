@@ -119,7 +119,9 @@ create table if not exists bot_state (
 -- users keep getting fill emails). telegram_chat_id is the numeric chat id from @userinfobot;
 -- the app sends via the shared TELEGRAM_BOT_TOKEN bot the user has started a chat with.
 -- currency is the user's preferred display currency (ISO code, default INR). stat_window is
--- the dashboard stat-card trend timeline (1h|6h|1d|1w|1m|all, default 1d).
+-- the dashboard stat-card trend timeline (1h|6h|1d|1w|1m|all, default 1d). allow_shorting
+-- is the explicit opt-in for short-capable strategy templates (default OFF; the live spot
+-- engine executes the long side only regardless - the flag gates configuration).
 create table if not exists notification_prefs (
   user_id          text primary key references user(id) on delete cascade,
   email_enabled    integer not null default 1,
@@ -127,6 +129,7 @@ create table if not exists notification_prefs (
   telegram_chat_id text,
   currency         text not null default 'INR',
   stat_window      text not null default '1d',
+  allow_shorting   integer not null default 0,
   updated_at       text not null default (datetime('now'))
 );
 

@@ -49,7 +49,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div
             key={t.id}
             role="status"
-            className="pointer-events-auto flex items-start gap-2.5 rounded-md bg-white/5 px-3.5 py-3 text-sm text-fg shadow-lg shadow-black/40 [animation:toastIn_.18s_ease-out]"
+            className="pointer-events-auto flex items-start gap-2.5 rounded-md border border-line bg-panel px-3.5 py-3 text-sm text-fg shadow-lg shadow-black/40 [animation:toastIn_.18s_ease-out]"
           >
             <ToastIcon kind={t.kind} />
             <span className="flex-1 leading-snug">{t.msg}</span>

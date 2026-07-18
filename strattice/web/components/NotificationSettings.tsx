@@ -203,7 +203,7 @@ export function NotificationSettings({
   );
 }
 
-function Toggle({
+export function Toggle({
   checked,
   disabled,
   onClick,
