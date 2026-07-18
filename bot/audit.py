@@ -28,12 +28,66 @@ def _conn() -> sqlite3.Connection:
     global _conn_obj
     if _conn_obj is None:
         config.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-        _conn_obj = sqlite3.connect(config.DB_PATH, check_same_thread=False)
+        # timeout: if another process (supervisor projection, sqlite3 CLI, backup) holds
+        # the write lock, wait up to 30s instead of instantly raising 'database is locked'.
+        _conn_obj = sqlite3.connect(config.DB_PATH, check_same_thread=False, timeout=30)
         _conn_obj.row_factory = sqlite3.Row
         # WAL lets a concurrent read-only connection (e.g. the SaaS supervisor's per-user
         # projection reader) proceed without blocking on this process's writes.
         _conn_obj.execute("PRAGMA journal_mode=WAL")
+        _conn_obj.execute("PRAGMA busy_timeout=30000")
     return _conn_obj
+
+
+def integrity_check() -> str | None:
+    """Run SQLite's quick_check. None if healthy, else the first problem line. A corrupt
+    audit DB means positions/risk accounting can't be trusted - the engine must refuse
+    to trade on it (restore data/backups/, or investigate) rather than guess."""
+    try:
+        with _lock, _conn() as c:
+            row = c.execute("PRAGMA quick_check").fetchone()
+        verdict = str(row[0]) if row else "no result"
+        return None if verdict == "ok" else verdict
+    except sqlite3.DatabaseError as e:
+        return str(e)
+
+
+BACKUP_KEEP = 7  # daily rotation depth
+
+
+def backup_db(keep: int = BACKUP_KEEP) -> "str | None":
+    """Consistent daily snapshot of bot.db into data/backups/bot-YYYYMMDD.db via the
+    SQLite online-backup API (safe while the engine is writing). At most one per UTC
+    day (idempotent within a day); prunes to the newest `keep`. Returns the path
+    written, or None if today's backup already exists / on any failure (backup is
+    best-effort and must never break trading)."""
+    try:
+        bdir = config.DB_PATH.parent / "backups"
+        bdir.mkdir(parents=True, exist_ok=True)
+        day = datetime.now(timezone.utc).strftime("%Y%m%d")
+        dest = bdir / f"bot-{day}.db"
+        if dest.exists():
+            return None
+        with _lock:
+            out = sqlite3.connect(dest)
+            try:
+                _conn().backup(out)
+            finally:
+                out.close()
+        try:  # least-privilege: backups hold the same trade history as the live DB
+            import os
+            if os.name == "posix":
+                os.chmod(dest, 0o600)
+        except OSError:
+            pass
+        backups = sorted(bdir.glob("bot-*.db"))
+        for old in backups[:-keep]:
+            old.unlink(missing_ok=True)
+        return str(dest)
+    except Exception:  # noqa: BLE001
+        import logging
+        logging.getLogger("audit").exception("bot.db backup failed")
+        return None
 
 
 def init() -> None:
@@ -150,6 +204,37 @@ def log_order(o: dict) -> bool:
             return True
         except sqlite3.IntegrityError:
             return False
+
+
+def orders_with_status(status: str, days: int = 3) -> list[sqlite3.Row]:
+    """Orders in a given status within the last `days` (UTC). Feeds the boot
+    reconciliation pass (status='error' = outcome unknown, worth asking the exchange)."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    with _lock, _conn() as c:
+        return c.execute(
+            "SELECT * FROM orders WHERE status=? AND ts >= ? ORDER BY id",
+            (status, cutoff),
+        ).fetchall()
+
+
+def heal_order(client_order_id: str, *, status: str, qty: float | None = None,
+               price: float | None = None, notional: float | None = None,
+               realized_pnl: float | None = None, tds: float | None = None,
+               response: dict | None = None) -> None:
+    """Correct an order row after reconciliation resolved its true outcome on the
+    exchange. Only the provided fields change; the row keeps its identity (coid)."""
+    sets, vals = ["status=?"], [status]
+    for col, v in (("qty", qty), ("price", price), ("notional", notional),
+                   ("realized_pnl", realized_pnl), ("tds", tds)):
+        if v is not None:
+            sets.append(f"{col}=?")
+            vals.append(v)
+    if response is not None:
+        sets.append("response=?")
+        vals.append(json.dumps(response))
+    vals.append(client_order_id)
+    with _lock, _conn() as c:
+        c.execute(f"UPDATE orders SET {', '.join(sets)} WHERE client_order_id=?", vals)
 
 
 def get_position(strategy: str, market: str) -> tuple[float, float]:

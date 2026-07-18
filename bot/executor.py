@@ -130,7 +130,28 @@ class Executor:
         # slippage_bps and max_fill_notional are 0. risk.check() already cleared the FULL
         # notional, so a partial fill only ever takes LESS exposure than was approved.
         if config.LIVE:
+            # Prefer the exchange's own numbers when the create response carries them
+            # (partial fills, real average price); fall back to the requested qty and
+            # signal price when it doesn't. A partial live fill therefore books ONLY the
+            # filled amount - position state and the exchange stay in agreement.
             fill_price, fill_qty = price, qty
+            o = (response.get("orders") or [response])[0] or {}
+            for k in ("filled_quantity", "executed_quantity", "total_quantity"):
+                try:
+                    v = float(o.get(k) or 0.0)
+                except (TypeError, ValueError):
+                    continue
+                if 0 < v <= qty:
+                    fill_qty = v
+                    break
+            for k in ("avg_price", "average_price", "price_per_unit"):
+                try:
+                    v = float(o.get(k) or 0.0)
+                except (TypeError, ValueError):
+                    continue
+                if v > 0:
+                    fill_price = v
+                    break
         else:
             fill_price = costs.fill_price(side, price)
             fill_qty = self.client.round_qty(market, costs.fillable_qty(qty, price))
@@ -180,7 +201,9 @@ class Executor:
         return {"status": status, "client_order_id": coid, "realized_pnl": realized}
 
     def kill(self) -> None:
-        """Kill switch action: cancel open orders (live) and halt. Idempotent to call."""
+        """Kill switch action: cancel open orders (live) and halt. Idempotent to call.
+        The kill path must ALWAYS win: any failure here (circuit breaker open, network
+        down, clock-drift halt) is logged but never prevents the halt itself."""
         log.critical("KILL SWITCH engaged")
         notify.send("KILL SWITCH engaged - cancelling open orders, halting.")
         if config.LIVE:
@@ -188,3 +211,5 @@ class Executor:
                 self.client.cancel_all()  # no market => cancel every open order
             except CoinDCXError as e:
                 log.error("cancel_all failed: %s", e)
+            except Exception as e:  # noqa: BLE001 - halting must not depend on the API
+                log.error("cancel_all failed (%s); halting anyway", e)

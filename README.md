@@ -75,7 +75,10 @@ python -m bot.backtest --module tsmom --market I-ETH_INR \
        --stop-loss 0.07 --chandelier-k 3.5 --atr-period 14
 python -m bot.backtest --module tsmom --interval 1d \
        --data research/data/I-ETH_INR_1d.csv.gz ...   # same, offline (CI-fetched snapshot)
-python -m bot.backtest --selftest      # verifies the cost math
+python -m bot.backtest --selftest      # verifies the cost math + static invariants
+python -m bot.test_decision_window     # bounded-window parity over real data
+python -m bot.test_reliability         # rate limit / breaker / retry / clock / scrubbing
+python -m bot.test_fallbacks           # failure-scenario behaviors (see below)
 python -m research.run_backtests       # full research grid over research/data/
 ```
 
@@ -117,6 +120,34 @@ set tiny `risk:` limits and `capital:` → go live → scale up only after revie
 sanity check that warns if a strategy's capital can't clear the exchange min-order or
 breaches a risk ceiling.
 
+### Failure handling (all tested in `bot/test_fallbacks.py` + `bot/test_reliability.py`)
+
+- **Bad candle data**: every feed is integrity-checked before `decide()` — stale,
+  gapped, malformed or misaligned bars mean the market **HOLDs** (nothing trades on
+  garbage) with a rate-limited alert; duplicate/out-of-order bars are normalized.
+- **Lost order confirmation**: an order POST that dies mid-flight is recorded as
+  `error` without touching positions; on the next start a LIVE reconciliation pass asks
+  the exchange by `client_order_id` and heals `bot.db` (filled → book the fill;
+  never-seen → mark rejected; still open → alert for manual attention).
+- **Partial fills**: LIVE fills book the exchange-reported quantity/average price, so
+  a partial fill can never desync the book.
+- **Balance desync**: LIVE engines compare wallet holdings against the position book
+  hourly and alert on any deficit beyond tolerance (detection, never auto-"fixing").
+- **Network/exchange trouble**: every call has a timeout; idempotent GETs retry with
+  exponential backoff + jitter (429 `Retry-After` honored); repeated 5xx/timeouts open
+  a circuit breaker that pauses calls, alerts once, and probes with backoff. A
+  client-side token bucket caps request rate. Signed requests refuse to fire if the
+  local clock drifts >30s from exchange time (warns at 2s — fix NTP).
+- **SQLite**: `bot.db` gets a `quick_check` at boot (corrupt ⇒ halt + alert, never
+  trade on a broken book), a daily online-backup snapshot into `data/backups/`
+  (7 kept), and a 30s busy timeout for locked-DB contention.
+- **Telegram down**: alerts spool to disk and flush when Telegram recovers; trading
+  never blocks on notifications.
+- **Crash loops**: 5 starts inside 30 min throttles restarts with doubling sleeps and
+  one alert (works with or without systemd rate limiting; see the unit below).
+- **Kill switch beats everything**: it is checked before every order (entries *and*
+  exits), and the halt path completes even if the exchange API is unreachable.
+
 ### Kill switch
 
 Create a file named `KILL` in the project root (name from `config.yaml`):
@@ -133,6 +164,11 @@ touch KILL      # cancels open orders, halts trading; delete it to resume
 [Unit]
 Description=CoinDCX trading bot
 After=network-online.target
+# crash-loop brake: max 5 starts per 10 min, then systemd stops retrying until
+# `systemctl reset-failed coindcx-bot`. The engine ALSO throttles itself
+# (data/engine_starts), so even without these lines a crash loop backs off.
+StartLimitIntervalSec=600
+StartLimitBurst=5
 
 [Service]
 WorkingDirectory=/opt/coindcx
