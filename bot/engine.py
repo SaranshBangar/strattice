@@ -470,10 +470,20 @@ class Engine:
         forever - hammering the exchange and burying the real error. Track our own start
         times in data/; past _CRASH_LIMIT starts inside _CRASH_WINDOW_S, alert once and
         sleep before proceeding so the loop is visibly throttled even if systemd isn't
-        configured with StartLimitIntervalSec."""
+        configured with StartLimitIntervalSec.
+
+        A config-only recycle - the SaaS supervisor restarting the engine after a strategy
+        edit, flagged by SUPPRESS_START_ALERT - is a deliberate, healthy restart into new
+        state, not a crash. Counting it would let a user who tweaks strategies a few times
+        in half an hour trip a false 'crash loop' alert and eat a throttle sleep on a good
+        restart. Mirror the supervisor's own _crash_reset here: a config change means crash
+        history no longer applies, so wipe the window and return without counting."""
         try:
             marker = config.DB_PATH.parent / "engine_starts"
             marker.parent.mkdir(parents=True, exist_ok=True)
+            if config.SUPPRESS_START_ALERT:
+                marker.unlink(missing_ok=True)
+                return
             now = time.time()
             starts = []
             if marker.exists():

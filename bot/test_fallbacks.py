@@ -366,11 +366,12 @@ def test_kill_switch_always_wins(tmp: Path) -> None:
 
 
 def test_crash_loop_guard(tmp: Path) -> None:
-    from . import notify
+    from . import config, notify
     eng, _ = _fresh_world(tmp)
     sleeps: list[float] = []
     sent: list[str] = []
     orig_sleep, orig_send = time.sleep, notify.send
+    orig_suppress = config.SUPPRESS_START_ALERT
     time.sleep = lambda s: sleeps.append(s)
     notify.send = lambda m: sent.append(m)
     try:
@@ -383,8 +384,22 @@ def test_crash_loop_guard(tmp: Path) -> None:
         n_alerts = len(sent)
         eng._crash_loop_guard()  # 6th: doubled delay, no repeat alert
         assert sleeps[-1] == 60.0 and len(sent) == n_alerts
+
+        # A config-only recycle (supervisor restart after a strategy edit) is a healthy
+        # restart, not a crash: it must NOT throttle or alert, and it resets the window so
+        # the accumulated crash history no longer applies. Without this, a user tweaking
+        # strategies a few times in half an hour would trip a false crash-loop alert.
+        config.SUPPRESS_START_ALERT = True
+        eng._crash_loop_guard()
+        assert len(sleeps) == 2 and len(sent) == n_alerts, "config recycle never throttles/alerts"
+        # Window was wiped: a fresh burst of real crashes must climb from zero again, so
+        # the very next crash restart does not immediately re-cross the limit.
+        config.SUPPRESS_START_ALERT = False
+        eng._crash_loop_guard()
+        assert len(sleeps) == 2, "first crash after a recycle is well below the limit"
     finally:
         time.sleep, notify.send = orig_sleep, orig_send
+        config.SUPPRESS_START_ALERT = orig_suppress
 
 
 def main() -> None:
