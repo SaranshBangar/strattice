@@ -662,8 +662,6 @@ export function Sparkline({
   height = 32,
   color,
   area = false,
-  gradient = false,
-  gradientId,
   fullWidth = false,
 }: {
   data: number[];
@@ -671,11 +669,6 @@ export function Sparkline({
   height?: number;
   color?: string;
   area?: boolean;
-  /** Fill under the line with a vertical color -> transparent gradient (top to bottom). */
-  gradient?: boolean;
-  /** Stable, unique id for the gradient def. Required when `gradient` so two sparklines
-   *  on the same page never share a DOM id (server-safe - no useId in this RSC-friendly file). */
-  gradientId?: string;
   /** Stretch to 100% of the container width instead of a fixed pixel width. */
   fullWidth?: boolean;
 }) {
@@ -691,8 +684,6 @@ export function Sparkline({
     )
     .join(" ");
   const stroke = color ?? (data[data.length - 1] >= data[0] ? C.gain : C.loss);
-  const gid = gradientId ?? "spark-fill";
-  const fill = gradient ? `url(#${gid})` : stroke;
   return (
     <svg
       viewBox={`0 0 ${width} ${height}`}
@@ -702,19 +693,11 @@ export function Sparkline({
       aria-hidden="true"
       style={fullWidth ? { display: "block" } : undefined}
     >
-      {gradient && (
-        <defs>
-          <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={stroke} stopOpacity={0.4} />
-            <stop offset="100%" stopColor={stroke} stopOpacity={0} />
-          </linearGradient>
-        </defs>
-      )}
-      {(area || gradient) && (
+      {area && (
         <path
           d={`${path} L${width} ${height} L0 ${height} Z`}
-          fill={fill}
-          fillOpacity={gradient ? 1 : 0.08}
+          fill={stroke}
+          fillOpacity={0.08}
         />
       )}
       <path

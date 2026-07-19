@@ -6,12 +6,17 @@
 // `hours` bounds the equity-snapshot time series (null => all time). `days` maps the same
 // choice onto the daily-P&L series (which is bucketed per calendar day, so sub-day windows
 // still show at least the current day).
+// Windows follow the standard chart-timeline vocabulary (lib/timeframes.ts):
+// 1H / 3H / 6H / 12H / 1D / 1W / 1M / ALL. Keys are stored per user, so the
+// legacy keys ("6h", "1m", …) keep their meaning - the set only grows.
 export const STAT_WINDOWS = {
-  "1h": { label: "1 hour", hours: 1, days: 1 },
-  "6h": { label: "6 hours", hours: 6, days: 1 },
-  "1d": { label: "1 day", hours: 24, days: 1 },
-  "1w": { label: "1 week", hours: 24 * 7, days: 7 },
-  "1m": { label: "1 month", hours: 24 * 30, days: 30 },
+  "1h": { label: "1H", hours: 1, days: 1 },
+  "3h": { label: "3H", hours: 3, days: 1 },
+  "6h": { label: "6H", hours: 6, days: 1 },
+  "12h": { label: "12H", hours: 12, days: 1 },
+  "1d": { label: "1D", hours: 24, days: 1 },
+  "1w": { label: "1W", hours: 24 * 7, days: 7 },
+  "1m": { label: "1M", hours: 24 * 30, days: 30 },
   all: { label: "All time", hours: null, days: 365 },
 } as const;
 
@@ -21,7 +26,9 @@ export const DEFAULT_STAT_WINDOW: StatWindow = "1d";
 
 export const STAT_WINDOW_ORDER: StatWindow[] = [
   "1h",
+  "3h",
   "6h",
+  "12h",
   "1d",
   "1w",
   "1m",

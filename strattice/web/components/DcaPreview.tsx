@@ -5,16 +5,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { simulateDca, type Candle, type DcaResult } from "@/lib/strategy-sim";
 import { DCA_META } from "@/lib/strategies";
+import { MARKETS, marketLabel } from "@/lib/coins";
+import { CoinLogo } from "@/components/CoinLogo";
 import { Select } from "@/components/Select";
 import { Spinner } from "@/components/Spinner";
-
-const MARKETS = [
-  "I-BTC_INR",
-  "I-ETH_INR",
-  "I-SOL_INR",
-  "I-XRP_INR",
-  "I-BNB_INR",
-];
 const SCHEDULES = [
   { value: "7", label: "Weekly" },
   { value: "14", label: "Every 2 weeks" },
@@ -127,7 +121,8 @@ export function DcaPreview() {
           onChange={setMarket}
           options={MARKETS.map((m) => ({
             value: m,
-            label: m.replace(/^I-/, "").replace("_", "/"),
+            label: marketLabel(m),
+            icon: <CoinLogo market={m} size={14} />,
           }))}
         />
         <Select

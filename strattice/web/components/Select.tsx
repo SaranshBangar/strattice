@@ -6,6 +6,8 @@ import { useEffect, useId, useRef, useState } from "react";
 export interface SelectOption {
   value: string;
   label: string;
+  /** Optional leading icon (e.g. a coin logo), shown in the button and list. */
+  icon?: React.ReactNode;
 }
 
 export function Select({
@@ -15,6 +17,7 @@ export function Select({
   ariaLabel,
   className,
   size = "md",
+  disabled = false,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -22,6 +25,7 @@ export function Select({
   ariaLabel?: string;
   className?: string;
   size?: "sm" | "md";
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(() =>
@@ -90,15 +94,20 @@ export function Select({
         aria-expanded={open}
         aria-controls={listId}
         aria-label={ariaLabel}
+        disabled={disabled}
         onClick={() => setOpen((o) => !o)}
         onKeyDown={onKeyDown}
         className={[
           "flex w-full items-center justify-between gap-2 rounded-md border border-line bg-inset text-fg transition-colors",
           "hover:border-faint focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+          "disabled:cursor-not-allowed disabled:opacity-50",
           pad,
         ].join(" ")}
       >
-        <span className="truncate">{current?.label}</span>
+        <span className="flex min-w-0 items-center gap-1.5">
+          {current?.icon}
+          <span className="truncate">{current?.label}</span>
+        </span>
         <svg
           viewBox="0 0 20 20"
           className={[
@@ -139,6 +148,7 @@ export function Select({
                   i === active ? "bg-inset text-fg" : "text-dim",
                 ].join(" ")}
               >
+                {o.icon}
                 <span className="flex-1 truncate">{o.label}</span>
                 {selected && (
                   <svg

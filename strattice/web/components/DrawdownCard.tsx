@@ -3,17 +3,24 @@ import { useMemo, useState } from "react";
 import { DrawdownCurve } from "@/components/charts";
 import { shortTs, tsMs, xFractions, timeTicks } from "@/lib/dashboard-format";
 import { RangeButtons } from "@/components/RangeButtons";
+import { timeframe, timeframesFor, sliceByTime } from "@/lib/timeframes";
 
 export function DrawdownCard({
   series,
 }: {
   series: { ts: string; equity: number }[];
 }) {
-  const [frac, setFrac] = useState(1);
-  const windowed = useMemo(() => {
-    const n = Math.max(2, Math.round(series.length * frac));
-    return series.slice(-n);
-  }, [series, frac]);
+  const [win, setWin] = useState("all");
+  // Standard windows the loaded snapshots can actually fill (1H/3H/… up to ALL).
+  const options = useMemo(() => {
+    if (series.length < 2) return timeframesFor(0);
+    const span = tsMs(series[series.length - 1].ts) - tsMs(series[0].ts);
+    return timeframesFor(span);
+  }, [series]);
+  const windowed = useMemo(
+    () => sliceByTime(series, (s) => tsMs(s.ts), timeframe(win)),
+    [series, win],
+  );
 
   // Drawdown relative to the peak within the visible window, not the account's
   // all-time peak - zooming into a recent slice should show that slice's own dip.
@@ -35,7 +42,7 @@ export function DrawdownCard({
 
   return (
     <section className="card">
-      <div className="flex items-center justify-between px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
         <h3 className="font-display text-sm font-semibold tracking-tight text-dim">
           Drawdown from peak
         </h3>
@@ -43,7 +50,11 @@ export function DrawdownCard({
           <span className="font-mono text-[11px] text-faint">
             max -{maxDD.toFixed(1)}%
           </span>
-          <RangeButtons frac={frac} onChange={setFrac} />
+          <RangeButtons
+            value={win}
+            options={options.map((t) => ({ key: t.key, label: t.label }))}
+            onChange={setWin}
+          />
         </div>
       </div>
       <div className="p-4">

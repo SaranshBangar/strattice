@@ -18,6 +18,8 @@ import { PnlHistogramCard } from "@/components/PnlHistogramCard";
 import { strategyLabel } from "@/lib/strategies";
 import { usdRate } from "@/lib/fx";
 import { currencySymbol } from "@/lib/currencies";
+import { marketLabel } from "@/lib/coins";
+import { CoinLogo } from "@/components/CoinLogo";
 import { fmt, inr, shortTs, tsMs, xFractions } from "@/lib/dashboard-format";
 import { statWindow, windowSinceISO } from "@/lib/stat-window";
 
@@ -63,9 +65,7 @@ export default async function DashboardPage() {
     q.getCurrency(user.id),
   ]);
   const trendCaption =
-    win.key === "all"
-      ? "All-time trends"
-      : `Trends · last ${win.label.toLowerCase()}`;
+    win.key === "all" ? "All-time trends" : `Trends · last ${win.label}`;
   const rate = (await usdRate(currency)) ?? 1;
   const fx = { symbol: currencySymbol(currency), rate };
 
@@ -504,7 +504,12 @@ export default async function DashboardPage() {
                 ),
               },
               {
-                v: b.market.replace(/^I-/, "").replace("_", "/"),
+                v: (
+                  <span className="inline-flex items-center gap-1.5">
+                    <CoinLogo market={b.market} size={14} />
+                    {marketLabel(b.market)}
+                  </span>
+                ),
                 tone: "muted",
               },
               {

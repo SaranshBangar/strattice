@@ -5,6 +5,7 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Select } from "@/components/Select";
+import { CoinLogo } from "@/components/CoinLogo";
 import { strategyLabel } from "@/lib/strategies";
 
 export interface Trade {
@@ -315,7 +316,10 @@ export function TradesTable({ trades }: { trades: Trade[] }) {
                         )}
                       </td>
                       <td className="whitespace-nowrap px-4 py-2.5 font-mono text-dim">
-                        {t.market}
+                        <span className="inline-flex items-center gap-1.5">
+                          <CoinLogo market={t.market} size={13} />
+                          {t.market}
+                        </span>
                       </td>
                       <td
                         className={[

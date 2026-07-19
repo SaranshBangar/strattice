@@ -61,7 +61,7 @@ export default async function AdminPage({
             Owner console · {user.email}
           </p>
         </div>
-        <span className="rounded-md border border-accent/40 bg-accent/10 px-3 py-1 font-mono text-xs uppercase tracking-wider text-accent">
+        <span className="rounded-md bg-accent/10 px-3 py-1 font-mono text-xs uppercase tracking-wider text-accent">
           owner
         </span>
       </div>

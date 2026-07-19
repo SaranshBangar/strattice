@@ -1,14 +1,15 @@
 "use client";
-import { useId, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { InfoHint } from "@/components/InfoHint";
 import { C } from "@/components/chart/primitives";
 import { inr } from "@/lib/dashboard-format";
 
-// A stat card whose whole bottom edge is a full-bleed sparkline: gradient fill (the tone's
-// colour at the line, fading to transparent at the card's bottom) and a hover tooltip that
-// reads out the exact value + timestamp at the point under the cursor. Self-contained so the
-// server dashboard can drop three of them in without passing any functions across the
-// server/client boundary (values arrive pre-formatted; the tooltip formats with inr()).
+// A stat card whose whole bottom edge is a full-bleed sparkline: a flat low-opacity fill
+// under the line (matching the no-gradient convention in components/charts.tsx) and a hover
+// tooltip that reads out the exact value + timestamp at the point under the cursor.
+// Self-contained so the server dashboard can drop three of them in without passing any
+// functions across the server/client boundary (values arrive pre-formatted; the tooltip
+// formats with inr()).
 type Tone = "default" | "good" | "bad";
 const valueTone: Record<Tone, string> = {
   default: "text-fg",
@@ -49,7 +50,6 @@ export function GraphStatCard({
    *  currency-localized formatter (safe here - both caller and card are client-side). */
   fmt?: (n: number) => string;
 }) {
-  const gid = "gsc" + useId().replace(/[^a-zA-Z0-9]/g, "");
   const wrapRef = useRef<HTMLDivElement>(null);
   const [hi, setHi] = useState<number | null>(null);
 
@@ -138,13 +138,11 @@ export function GraphStatCard({
               aria-hidden="true"
               style={{ display: "block" }}
             >
-              <defs>
-                <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={stroke} stopOpacity={0.4} />
-                  <stop offset="100%" stopColor={stroke} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <path d={`${line} L${W} ${H} L0 ${H} Z`} fill={`url(#${gid})`} />
+              <path
+                d={`${line} L${W} ${H} L0 ${H} Z`}
+                fill={stroke}
+                fillOpacity={0.08}
+              />
               <path
                 d={line}
                 fill="none"

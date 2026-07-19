@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { Select } from "@/components/Select";
+import { CoinLogo } from "@/components/CoinLogo";
 import { strategyLabel } from "@/lib/strategies";
 import { fmt } from "@/lib/dashboard-format";
 
@@ -164,7 +165,10 @@ export function PositionsTable({ positions }: { positions: Position[] }) {
                     {strategyLabel(p.strategy)}
                   </td>
                   <td className="px-4 py-2.5 text-sm text-muted">
-                    {prettyMarket(p.market)}
+                    <span className="inline-flex items-center gap-1.5">
+                      <CoinLogo market={p.market} size={14} />
+                      {prettyMarket(p.market)}
+                    </span>
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono text-sm tnum text-dim">
                     {fmt(p.qty)}

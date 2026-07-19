@@ -108,8 +108,8 @@ function prepareStrategyInsert(
 }
 
 /** Add one template across several coins, or several distinct template+market pairs,
- *  in a single call. Backs both the multi-coin add form and the "best strategy"
- *  cross-coin comparison, which each add several rows at once. */
+ *  in a single call. Backs both the multi-coin add form and the "compare the
+ *  strategies" cross-coin comparison, which each add several rows at once. */
 export async function addStrategiesAction(
   items: { template: string; market: string; params?: string | null }[],
 ) {
