@@ -1,20 +1,31 @@
 "use client";
 // "Choose the best strategies for me": a short guided flow next to the
 // Your-strategies list. Asks a few plain-English questions (trade frequency,
-// what to optimize for, how many coins), scores the strategies the user has
-// already added - realized P&L when there is enough live history, backtested
-// net return otherwise - and proposes which ones to enable and which to
-// disable. Nothing changes until the user reviews the plan and applies it;
-// applying just flips the enable switches (no rows are added or removed).
+// what to optimize for, how many coins), then recommends the best-fitting
+// strategy per coin - drawn from the active template catalog on each
+// template's backtested market, merged with the strategies the user already
+// added (which carry realized P&L once there is enough live history).
+//
+// The questionnaire ends with two actions:
+//   Add strategies       - add the recommended picks (and enable ones the
+//                          user already has), leaving everything else alone.
+//   Replace current      - the same, then remove every current strategy that
+//   strategies             is not in the recommendation (confirmed first).
 import { useMemo, useState, useTransition } from "react";
-import { toggleStrategyAction } from "@/app/actions";
+import {
+  addStrategiesAction,
+  removeStrategyAction,
+  toggleStrategyAction,
+} from "@/app/actions";
 import type { StrategyRow, StrategyStat } from "@/lib/queries";
 import {
+  ACTIVE_TEMPLATES,
   EXPERIMENTAL_TEMPLATES,
   RETIRED_TEMPLATES,
   type Template,
 } from "@/lib/entitlements";
 import { STRATEGY_META, strategyLabel } from "@/lib/strategies";
+import { TEMPLATE_CONFIG } from "@/lib/strategy-sim";
 import { parseCustomDef } from "@/lib/custom-strategy";
 import { marketLabel } from "@/lib/coins";
 import { CoinLogo } from "@/components/CoinLogo";
@@ -63,20 +74,26 @@ const COIN_CAPS = [1, 3, 6];
 // Engine strategy names are "<template>_<idx>"; strip the index to match rows.
 const templateOf = (engineName: string) => engineName.replace(/_\d+$/, "");
 
-interface PlanRow {
-  s: StrategyRow;
-  enable: boolean;
-  changed: boolean;
-  reason: string;
+interface Rec {
+  template: string;
+  market: string;
+  /** The user's matching row when this pick is already added. */
+  existing: StrategyRow | null;
   /** Profit evidence shown next to the name. */
   evidence: string | null;
+}
+
+interface Plan {
+  recs: Rec[];
+  /** Current strategies that "Replace" would remove (everything not recommended). */
+  removeOnReplace: StrategyRow[];
 }
 
 function buildPlan(
   strategies: StrategyRow[],
   breakdown: StrategyStat[],
   answers: number[],
-): PlanRow[] {
+): Plan {
   const [freq, optimize, coins] = answers;
   const cap = COIN_CAPS[coins] ?? 3;
 
@@ -94,86 +111,100 @@ function buildPlan(
     live.set(s.id, { pnl, closed });
   }
 
-  // Experimental (incl. short-capable) and retired templates are never
-  // auto-enabled - they carry explicit risk warnings and stay a manual choice.
-  const excluded = new Map<string, string>();
-  for (const s of strategies) {
-    if ((EXPERIMENTAL_TEMPLATES as readonly string[]).includes(s.template))
-      excluded.set(s.id, "experimental — enable manually if you want it");
-    else if ((RETIRED_TEMPLATES as readonly string[]).includes(s.template))
-      excluded.set(s.id, "retired template — loses money net of fees");
+  // Candidates = the user's rows (minus experimental/retired templates, which
+  // carry explicit risk warnings and are never auto-picked) merged with every
+  // active catalog template on its backtested default market.
+  interface Cand {
+    template: string;
+    market: string;
+    existing: StrategyRow | null;
+    pnl: number;
+    closed: number;
+    hasData: boolean;
+    backtest?: number;
   }
-  const candidates = strategies.filter((s) => !excluded.has(s.id));
+  const byKey = new Map<string, Cand>();
+  for (const s of strategies) {
+    if (
+      (EXPERIMENTAL_TEMPLATES as readonly string[]).includes(s.template) ||
+      (RETIRED_TEMPLATES as readonly string[]).includes(s.template)
+    )
+      continue;
+    const lv = live.get(s.id) ?? { pnl: 0, closed: 0 };
+    byKey.set(`${s.template}|${s.market}`, {
+      template: s.template,
+      market: s.market,
+      existing: s,
+      pnl: lv.pnl,
+      closed: lv.closed,
+      hasData: lv.closed >= MIN_CLOSED,
+      backtest: STRATEGY_META[s.template as Template]?.backtestNetPct,
+    });
+  }
+  for (const t of ACTIVE_TEMPLATES) {
+    const m = TEMPLATE_CONFIG[t].market;
+    const key = `${t}|${m}`;
+    if (!byKey.has(key))
+      byKey.set(key, {
+        template: t,
+        market: m,
+        existing: null,
+        pnl: 0,
+        closed: 0,
+        hasData: false,
+        backtest: STRATEGY_META[t].backtestNetPct,
+      });
+  }
 
   // Profit ordering first (live P&L with enough history, else backtest), then
   // temperament bonuses scaled to the pool size so preferences reorder near-ties
   // without drowning out a clearly better performer.
-  const scored = candidates
-    .map((s) => {
-      const lv = live.get(s.id) ?? { pnl: 0, closed: 0 };
-      const hasData = lv.closed >= MIN_CLOSED;
-      const backtest = STRATEGY_META[s.template as Template]?.backtestNetPct;
-      return { s, hasData, pnl: lv.pnl, backtest };
-    })
-    .sort((a, b) => {
-      if (a.hasData !== b.hasData) return a.hasData ? -1 : 1;
-      if (a.hasData && b.hasData) return b.pnl - a.pnl;
-      return (b.backtest ?? -Infinity) - (a.backtest ?? -Infinity);
-    });
+  const scored = [...byKey.values()].sort((a, b) => {
+    if (a.hasData !== b.hasData) return a.hasData ? -1 : 1;
+    if (a.hasData && b.hasData) return b.pnl - a.pnl;
+    return (b.backtest ?? -Infinity) - (a.backtest ?? -Infinity);
+  });
   const n = scored.length;
   const profitWeight = optimize === 0 ? 2 : 1;
-  const score = new Map<string, number>();
-  scored.forEach((row, i) => {
+  const score = new Map<Cand, number>();
+  scored.forEach((c, i) => {
     let pts = (n - i) * profitWeight;
-    const t = row.s.template;
+    const t = c.template;
     if (freq === 0) pts += SLOW.has(t) ? n * 0.5 : ACTIVE.has(t) ? -n * 0.25 : 0;
     if (freq === 1) pts += ACTIVE.has(t) ? n * 0.5 : SLOW.has(t) ? -n * 0.25 : 0;
     if (optimize === 1) pts += STEADY.has(t) ? n * 0.75 : -n * 0.25;
     if (optimize === 2) pts += STEADY.has(t) ? n * 0.25 : 0;
-    score.set(row.s.id, pts);
+    score.set(c, pts);
   });
 
   // One winner per coin, then the best `cap` coins overall.
-  const bestPerMarket = new Map<string, StrategyRow>();
-  for (const { s } of scored) {
-    const cur = bestPerMarket.get(s.market);
-    if (!cur || (score.get(s.id) ?? 0) > (score.get(cur.id) ?? 0))
-      bestPerMarket.set(s.market, s);
+  const bestPerMarket = new Map<string, Cand>();
+  for (const c of scored) {
+    const cur = bestPerMarket.get(c.market);
+    if (!cur || (score.get(c) ?? 0) > (score.get(cur) ?? 0))
+      bestPerMarket.set(c.market, c);
   }
-  const chosenMarkets = [...bestPerMarket.entries()]
-    .sort((a, b) => (score.get(b[1].id) ?? 0) - (score.get(a[1].id) ?? 0))
+  const recs = [...bestPerMarket.values()]
+    .sort((a, b) => (score.get(b) ?? 0) - (score.get(a) ?? 0))
     .slice(0, cap)
-    .map(([m]) => m);
-  const enableIds = new Set(
-    chosenMarkets.map((m) => bestPerMarket.get(m)!.id),
-  );
+    .map(
+      (c): Rec => ({
+        template: c.template,
+        market: c.market,
+        existing: c.existing,
+        evidence: c.hasData
+          ? `${c.pnl >= 0 ? "+" : ""}${inr(c.pnl)} realized`
+          : c.backtest !== undefined
+            ? `${c.backtest >= 0 ? "+" : ""}${c.backtest.toFixed(1)}% backtest`
+            : null,
+      }),
+    );
 
-  return strategies.map((s): PlanRow => {
-    const lv = live.get(s.id) ?? { pnl: 0, closed: 0 };
-    const backtest = STRATEGY_META[s.template as Template]?.backtestNetPct;
-    const evidence =
-      lv.closed >= MIN_CLOSED
-        ? `${lv.pnl >= 0 ? "+" : ""}${inr(lv.pnl)} realized`
-        : backtest !== undefined
-          ? `${backtest >= 0 ? "+" : ""}${backtest.toFixed(1)}% backtest`
-          : null;
-    const enable = enableIds.has(s.id);
-    let reason: string;
-    if (enable) {
-      reason = `best fit on ${marketLabel(s.market)} for your answers`;
-    } else if (excluded.has(s.id)) {
-      reason = excluded.get(s.id)!;
-    } else if (
-      bestPerMarket.get(s.market) &&
-      bestPerMarket.get(s.market)!.id !== s.id &&
-      chosenMarkets.includes(s.market)
-    ) {
-      reason = `outranked by ${strategyLabel(bestPerMarket.get(s.market)!.template)} on the same coin`;
-    } else {
-      reason = `outside your ${cap}-coin limit`;
-    }
-    return { s, enable, changed: enable !== !!s.enabled, reason, evidence };
-  });
+  const keep = new Set(recs.map((r) => r.existing?.id).filter(Boolean));
+  return {
+    recs,
+    removeOnReplace: strategies.filter((s) => !keep.has(s.id)),
+  };
 }
 
 export function StrategyAutoPick({
@@ -196,38 +227,70 @@ export function StrategyAutoPick({
     () => (done ? buildPlan(strategies, breakdown, answers) : null),
     [done, strategies, breakdown, answers],
   );
-  const changes = plan?.filter((p) => p.changed) ?? [];
+  const toAdd = plan?.recs.filter((r) => !r.existing) ?? [];
+  const toEnable =
+    plan?.recs.filter((r) => r.existing && !r.existing.enabled) ?? [];
 
-  function reset() {
-    setAnswers([]);
-  }
   function close() {
     setOpen(false);
     setAnswers([]);
   }
 
-  function apply() {
-    if (!plan) return;
-    const toFlip = plan.filter((p) => p.changed);
+  // Shared first half of both actions: add the missing picks, enable the
+  // recommended ones that exist but are switched off.
+  async function ensureRecommended() {
+    if (toAdd.length)
+      await addStrategiesAction(
+        toAdd.map((r) => ({ template: r.template, market: r.market })),
+      );
+    // Sequential: each server action revalidates the page; serial keeps them
+    // from racing each other's cache invalidation.
+    for (const r of toEnable) await toggleStrategyAction(r.existing!.id, true);
+  }
+
+  function applyAdd() {
     start(async () => {
       try {
-        // Sequential: each toggle revalidates the page; serial keeps the server
-        // actions from racing each other's cache invalidation.
-        for (const p of toFlip) await toggleStrategyAction(p.s.id, p.enable);
-        const on = toFlip.filter((p) => p.enable).length;
-        const off = toFlip.length - on;
+        await ensureRecommended();
         toast(
-          `Strategy selection updated — enabled ${on}, disabled ${off}`,
+          toAdd.length || toEnable.length
+            ? `Added ${toAdd.length}, enabled ${toEnable.length} — current strategies untouched`
+            : "All recommended strategies are already in place",
           "success",
         );
         close();
       } catch (e: any) {
-        toast(e?.message ?? "Couldn't update the selection", "error");
+        toast(e?.message ?? "Couldn't add the strategies", "error");
       }
     });
   }
 
-  if (strategies.length === 0) return null;
+  function applyReplace() {
+    if (!plan) return;
+    const removed = plan.removeOnReplace;
+    if (
+      removed.length > 0 &&
+      !confirm(
+        `Replace your current strategies? This removes ${removed.length} ${
+          removed.length === 1 ? "strategy" : "strategies"
+        } that ${removed.length === 1 ? "isn't" : "aren't"} in the recommendation. This can't be undone.`,
+      )
+    )
+      return;
+    start(async () => {
+      try {
+        await ensureRecommended();
+        for (const s of removed) await removeStrategyAction(s.id);
+        toast(
+          `Strategies replaced — ${plan.recs.length} recommended, ${removed.length} removed`,
+          "success",
+        );
+        close();
+      } catch (e: any) {
+        toast(e?.message ?? "Couldn't replace the strategies", "error");
+      }
+    });
+  }
 
   if (!open) {
     return (
@@ -310,43 +373,47 @@ export function StrategyAutoPick({
       ) : (
         <div className="mt-3">
           <p className="text-xs text-muted">
-            The plan below only flips the enable switches on strategies you
-            already added — review it, then apply.
+            Recommended for your answers — the best-fitting strategy on each of{" "}
+            {plan!.recs.length} {plan!.recs.length === 1 ? "coin" : "coins"},
+            ranked on realized P&amp;L where there is live history and on
+            backtested net return otherwise.
           </p>
           <ul className="mt-2.5 space-y-1">
-            {plan!.map(({ s, enable, changed, reason, evidence }) => {
+            {plan!.recs.map((r) => {
               const def =
-                s.template === "custom" ? parseCustomDef(s.params) : null;
+                r.existing?.template === "custom"
+                  ? parseCustomDef(r.existing.params)
+                  : null;
               return (
                 <li
-                  key={s.id}
+                  key={`${r.template}|${r.market}`}
                   className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md bg-panel px-3 py-2"
                 >
                   <span
                     className={[
-                      "w-16 shrink-0 rounded-sm px-1.5 py-0.5 text-center font-mono text-[10px] font-medium uppercase tracking-wider",
-                      enable
-                        ? "bg-gain/15 text-gain"
-                        : "bg-inset text-faint",
+                      "w-14 shrink-0 rounded-sm px-1.5 py-0.5 text-center font-mono text-[10px] font-medium uppercase tracking-wider",
+                      r.existing ? "bg-inset text-dim" : "bg-gain/15 text-gain",
                     ].join(" ")}
                   >
-                    {enable ? "on" : "off"}
+                    {r.existing ? "have it" : "new"}
                   </span>
                   <span className="flex min-w-0 items-center gap-1.5 text-sm text-fg">
-                    <CoinLogo market={s.market} size={14} />
+                    <CoinLogo market={r.market} size={14} />
                     <span className="truncate">
-                      {def ? def.name : strategyLabel(s.template)}
-                      <span className="text-muted"> · {marketLabel(s.market)}</span>
+                      {def ? def.name : strategyLabel(r.template)}
+                      <span className="text-muted"> · {marketLabel(r.market)}</span>
                     </span>
                   </span>
-                  {evidence && (
+                  {r.evidence && (
                     <span className="font-mono text-[11px] tabular-nums text-dim">
-                      {evidence}
+                      {r.evidence}
                     </span>
                   )}
-                  <span className="min-w-0 flex-1 text-right text-[11px] text-faint">
-                    {changed ? reason : `${reason} · no change`}
-                  </span>
+                  {r.existing && !r.existing.enabled && (
+                    <span className="text-[11px] text-faint">
+                      currently disabled — will be enabled
+                    </span>
+                  )}
                 </li>
               );
             })}
@@ -354,28 +421,61 @@ export function StrategyAutoPick({
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
             <button
               type="button"
-              onClick={reset}
+              onClick={() => setAnswers([])}
               className="font-mono text-[11px] text-faint transition-colors hover:text-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
             >
               ← start over
             </button>
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-[11px] text-faint">
-                {changes.length === 0
-                  ? "already matches your answers"
-                  : `${changes.length} ${changes.length === 1 ? "change" : "changes"}`}
-              </span>
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                disabled={pending || changes.length === 0}
-                onClick={apply}
+                disabled={pending}
+                onClick={applyAdd}
+                title="Add the recommended strategies (and enable recommended ones you already have). Your other strategies are left untouched."
                 className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-1.5 text-sm font-medium text-accent-ink transition-colors hover:bg-accent-hi focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {pending && <Spinner className="h-4 w-4" />}
-                Apply selection
+                Add strategies
+                {toAdd.length > 0 && (
+                  <span className="font-mono text-xs opacity-80">
+                    +{toAdd.length}
+                  </span>
+                )}
               </button>
+              {strategies.length > 0 && (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={applyReplace}
+                  title={
+                    plan!.removeOnReplace.length > 0
+                      ? `Keep only the recommendation: removes ${plan!.removeOnReplace.length} current ${
+                          plan!.removeOnReplace.length === 1
+                            ? "strategy"
+                            : "strategies"
+                        }.`
+                      : "Your current strategies already match the recommendation."
+                  }
+                  className="inline-flex items-center gap-2 rounded-md bg-loss/10 px-4 py-1.5 text-sm font-medium text-loss transition-colors hover:bg-loss/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-loss disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {pending && <Spinner className="h-4 w-4" />}
+                  Replace current strategies
+                  {plan!.removeOnReplace.length > 0 && (
+                    <span className="font-mono text-xs opacity-80">
+                      −{plan!.removeOnReplace.length}
+                    </span>
+                  )}
+                </button>
+              )}
             </div>
           </div>
+          {plan!.removeOnReplace.length > 0 && (
+            <p className="mt-2 text-right text-[11px] leading-relaxed text-faint">
+              Replace removes the {plan!.removeOnReplace.length} current{" "}
+              {plan!.removeOnReplace.length === 1 ? "strategy" : "strategies"}{" "}
+              not in this recommendation; Add leaves them untouched.
+            </p>
+          )}
         </div>
       )}
     </div>
