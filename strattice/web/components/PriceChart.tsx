@@ -8,6 +8,8 @@
 // tape: fixed axes, scrolling line (LiveTape).
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toBinanceSymbol } from "@/lib/binance";
+import { MARKETS, marketLabel } from "@/lib/coins";
+import { CoinLogo } from "@/components/CoinLogo";
 import { Select } from "@/components/Select";
 import { Delta } from "@/components/Delta";
 import { Spinner } from "@/components/Spinner";
@@ -33,38 +35,42 @@ interface Candle {
   v: number;
 }
 
-const DEFAULT_MARKETS = [
-  "I-BTC_INR",
-  "I-ETH_INR",
-  "I-SOL_INR",
-  "I-XRP_INR",
-  "I-DOGE_INR",
-  "I-BNB_INR",
-];
-// Selectable display *windows* (now → now−window), each mapped to the candle
-// granularity + count that fills exactly that span. The label is the window,
-// not the bar width - "15m" shows the last 15 minutes, not 15-min bars for days.
-const WINDOWS: Record<string, { interval: string; limit: number }> = {
-  "15m": { interval: "1m", limit: 15 },
-  "1h": { interval: "1m", limit: 60 },
-  "4h": { interval: "5m", limit: 48 },
-  "1d": { interval: "15m", limit: 96 },
-  "1w": { interval: "1h", limit: 168 },
+// Selectable display *windows* (now → now−window) following the standard
+// timeline vocabulary (lib/timeframes.ts): LIVE, 15M, 1H, 3H, 6H, 12H, 1D,
+// 1W, 1M. Each maps to the candle granularity + count that fills exactly that
+// span - the label is the window, not the bar width ("1H" shows the last hour,
+// with 1-minute bars), so shorter windows are true zooms of the same data.
+const WINDOWS: Record<
+  string,
+  { label: string; interval: string; limit: number }
+> = {
+  "15m": { label: "15M", interval: "1m", limit: 15 },
+  "1h": { label: "1H", interval: "1m", limit: 60 },
+  "3h": { label: "3H", interval: "1m", limit: 180 },
+  "6h": { label: "6H", interval: "5m", limit: 72 },
+  "12h": { label: "12H", interval: "5m", limit: 144 },
+  "1d": { label: "1D", interval: "15m", limit: 96 },
+  "1w": { label: "1W", interval: "1h", limit: 168 },
+  "1mo": { label: "1M", interval: "2h", limit: 360 },
 };
 // "2m" is the live tape - a scrolling last-2-minutes line with fixed axes.
 const LIVE_RANGE = "2m";
-const RANGES = [LIVE_RANGE, ...Object.keys(WINDOWS)];
+const RANGE_OPTIONS = [
+  { value: LIVE_RANGE, label: "LIVE" },
+  ...Object.entries(WINDOWS).map(([value, w]) => ({ value, label: w.label })),
+];
 const POLL_MS = 20000;
 const TAPE_WINDOW_MS = 120_000;
 const TAPE_TICK_MS = 500;
 const TAPE_KEEP = 320; // window (240 pts) + SMA warm-up slack
 const TAPE_CAP = 360; // prune in chunks so the epoch shifts rarely
 
-function label(pair: string) {
-  return pair.replace(/^I-/, "").replace("_", "/");
-}
+const label = marketLabel;
+// Sub-cent coins (SHIB and friends) need more precision than majors.
 const fmt = (n: number) =>
-  n.toLocaleString("en-US", { maximumFractionDigits: n < 10 ? 4 : 2 });
+  n.toLocaleString("en-US", {
+    maximumFractionDigits: n < 0.01 ? 6 : n < 10 ? 4 : 2,
+  });
 
 export function PriceChart({
   markets,
@@ -76,7 +82,7 @@ export function PriceChart({
   fx?: { symbol: string; rate: number };
 }) {
   const pairs = useMemo(
-    () => Array.from(new Set([...(markets ?? []), ...DEFAULT_MARKETS])),
+    () => Array.from(new Set([...(markets ?? []), ...MARKETS])),
     [markets],
   );
   const [pair, setPair] = useState(pairs[0] ?? "I-BTC_INR");
@@ -270,8 +276,8 @@ export function PriceChart({
   const yTicks = dom.ticks;
   const tfmt = (t: number) => {
     const d = new Date(t);
-    // Only the multi-day (1w) window needs dates on the axis; the rest fit in a day.
-    return range === "1w"
+    // Only the multi-day (1W/1M) windows need dates on the axis; the rest fit in a day.
+    return range === "1w" || range === "1mo"
       ? d.toLocaleDateString("en-IN", { month: "2-digit", day: "2-digit" })
       : d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
   };
@@ -326,7 +332,8 @@ export function PriceChart({
       <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-baseline gap-3">
-            <h3 className="font-display text-sm font-semibold tracking-tight text-dim">
+            <h3 className="flex items-center gap-2 font-display text-sm font-semibold tracking-tight text-dim">
+              <CoinLogo market={pair} size={18} />
               {label(pair)}
             </h3>
             {status === "ok" && last > 0 && (
@@ -352,7 +359,7 @@ export function PriceChart({
                     ? "refresh failing · showing the last good data"
                     : live
                       ? "scrolling live tape · last 2 minutes"
-                      : `last ${range} · streaming live from Binance`}
+                      : `last ${WINDOWS[range]?.label ?? range} · streaming live from Binance`}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -367,14 +374,18 @@ export function PriceChart({
             ariaLabel="Market"
             value={pair}
             onChange={setPair}
-            options={pairs.map((p) => ({ value: p, label: label(p) }))}
+            options={pairs.map((p) => ({
+              value: p,
+              label: label(p),
+              icon: <CoinLogo market={p} size={14} />,
+            }))}
           />
           <Select
             size="sm"
             ariaLabel="Range"
             value={range}
             onChange={setRange}
-            options={RANGES.map((r) => ({ value: r, label: r }))}
+            options={RANGE_OPTIONS}
           />
         </div>
       </div>

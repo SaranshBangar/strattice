@@ -1,5 +1,5 @@
 "use client";
-// "Choose the best strategy" - for users who don't know which template/coin to pick.
+// "Compare the strategies" - for users who don't know which template/coin to pick.
 // Backtests every ACTIVE template against every coin over a user-chosen time range
 // (live Binance DAILY candles, the interval the engine actually trades), ranks the
 // combos on net-of-fees performance, then lets the user check off any number of
@@ -9,17 +9,21 @@ import { ACTIVE_TEMPLATES, type ActiveTemplate } from "@/lib/entitlements";
 import { STRATEGY_META } from "@/lib/strategies";
 import { simulate, FRICTION_PCT, type Candle } from "@/lib/strategy-sim";
 import { addStrategiesAction } from "@/app/actions";
+import { marketLabel } from "@/lib/coins";
+import { CoinLogo } from "@/components/CoinLogo";
+import { Select } from "@/components/Select";
 import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Spinner";
 
 const LIMIT = 1000; // Binance max daily bars (~2.7 years)
 const MIN_CLOSED = 3; // fewer closed trades than this = not enough evidence
+// Backtest lookbacks in the standard timeline vocabulary (3M/6M/1Y/2Y/MAX).
 const RANGES = [
-  { label: "3 months", days: 90 },
-  { label: "6 months", days: 180 },
-  { label: "1 year", days: 365 },
-  { label: "2 years", days: 730 },
-  { label: "Max (~2.7y)", days: LIMIT },
+  { label: "3M", days: 90 },
+  { label: "6M", days: 180 },
+  { label: "1Y", days: 365 },
+  { label: "2Y", days: 730 },
+  { label: "MAX (~2.7Y)", days: LIMIT },
 ] as const;
 
 interface Row {
@@ -34,7 +38,6 @@ interface Row {
 }
 
 const pct = (n: number) => `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;
-const marketLabel = (m: string) => m.replace(/^I-/, "").replace("_", "/");
 
 export function BestStrategyFinder({
   markets,
@@ -154,31 +157,25 @@ export function BestStrategyFinder({
         <label className="text-xs text-muted">
           Compare every strategy across all coins over
         </label>
-        <select
-          value={days}
-          onChange={(e) => setDays(Number(e.target.value))}
+        <Select
+          size="sm"
+          ariaLabel="Comparison time range"
           disabled={busy || disabled}
-          aria-label="Comparison time range"
-          className="rounded-md border border-line bg-inset px-2.5 py-1.5 text-sm text-fg focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
-        >
-          {RANGES.map((r) => (
-            <option key={r.days} value={r.days}>
-              {r.label}
-            </option>
-          ))}
-        </select>
+          value={String(days)}
+          onChange={(v) => setDays(Number(v))}
+          options={RANGES.map((r) => ({
+            value: String(r.days),
+            label: r.label,
+          }))}
+        />
         <button
           type="button"
           disabled={busy || disabled}
           onClick={run}
-          className="inline-flex items-center gap-2 rounded-md border border-accent/60 bg-accent/10 px-3 py-1.5 text-sm font-medium text-accent transition-colors hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-md bg-accent/10 px-3 py-1.5 text-sm font-medium text-accent transition-colors hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {busy ? (
-            <Spinner className="h-4 w-4" />
-          ) : (
-            <span aria-hidden="true">✦</span>
-          )}
-          {busy ? "Comparing…" : "Choose the best strategy for me"}
+          {busy ? <Spinner className="h-4 w-4" /> : <span aria-hidden="true">⇄</span>}
+          {busy ? "Comparing…" : "Compare the strategies"}
         </button>
       </div>
 
@@ -189,10 +186,10 @@ export function BestStrategyFinder({
       )}
 
       {rows && (
-        <div className="rounded-lg border border-accent/40 bg-panel p-4">
+        <div className="rounded-lg bg-panel p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="rounded-sm bg-accent/15 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-accent">
-              best fit · {markets.length} coins · {rangeLabel}
+              comparison · {markets.length} coins · {rangeLabel}
             </span>
             <span className="text-xs text-muted">
               Check the ones you want, then add them all.
@@ -252,7 +249,12 @@ export function BestStrategyFinder({
                           </span>
                         )}
                       </td>
-                      <td className="py-1.5 pr-3">{marketLabel(r.market)}</td>
+                      <td className="py-1.5 pr-3">
+                        <span className="inline-flex items-center gap-1.5">
+                          <CoinLogo market={r.market} size={13} />
+                          {marketLabel(r.market)}
+                        </span>
+                      </td>
                       <td
                         className={`py-1.5 pr-3 text-right tnum ${r.net >= 0 ? "text-gain" : "text-loss"}`}
                       >

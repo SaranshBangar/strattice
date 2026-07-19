@@ -31,12 +31,12 @@ import {
   type RuleField,
 } from "@/lib/custom-strategy";
 import { StrategyPreview } from "@/components/StrategyPreview";
-import { MARKETS } from "@/components/StrategyManager";
+import { MARKETS, marketLabel } from "@/lib/coins";
+import { CoinLogo } from "@/components/CoinLogo";
 import { Select } from "@/components/Select";
 import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Spinner";
 
-const marketLabel = (m: string) => m.replace(/^I-/, "").replace("_", "/");
 const pct = (n: number) => `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;
 
 // Exit fields whose stored value is a fraction but whose UI unit is %.
@@ -287,7 +287,11 @@ export function StrategyBuilder() {
           ariaLabel="Market"
           value={market}
           onChange={setMarket}
-          options={MARKETS.map((m) => ({ value: m, label: marketLabel(m) }))}
+          options={MARKETS.map((m) => ({
+            value: m,
+            label: marketLabel(m),
+            icon: <CoinLogo market={m} size={14} />,
+          }))}
         />
         <button
           type="button"
@@ -428,7 +432,7 @@ export function StrategyBuilder() {
 
           {/* plain-English summary */}
           {cleanDef && (
-            <section className="rounded-lg border border-accent/40 bg-panel p-4">
+            <section className="rounded-lg bg-panel p-4">
               <h2 className="font-mono text-[10px] uppercase tracking-wider text-accent">
                 Your strategy, in plain English
               </h2>
@@ -501,7 +505,8 @@ export function StrategyBuilder() {
                   {historic.map(({ iv, span, sim }) => (
                     <tr key={iv}>
                       <td className="px-3 py-1.5 text-dim">
-                        {iv} <span className="text-faint">· {span}</span>
+                        {iv.toUpperCase()}{" "}
+                        <span className="text-faint">· {span}</span>
                       </td>
                       {sim ? (
                         <>
@@ -552,7 +557,7 @@ export function StrategyBuilder() {
                 onChange={setCompareIv}
                 options={Object.keys(WINDOWS).map((k) => ({
                   value: k,
-                  label: `${k} · ${WINDOWS[k]}`,
+                  label: `${k.toUpperCase()} · ${WINDOWS[k]}`,
                 }))}
               />
             </div>

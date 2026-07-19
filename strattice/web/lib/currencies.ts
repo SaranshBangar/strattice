@@ -10,6 +10,23 @@ export const CURRENCIES = [
   { code: "AUD", flag: "🇦🇺", name: "Australian Dollar", symbol: "A$" },
   { code: "SGD", flag: "🇸🇬", name: "Singapore Dollar", symbol: "S$" },
   { code: "AED", flag: "🇦🇪", name: "UAE Dirham", symbol: "AED " },
+  { code: "CAD", flag: "🇨🇦", name: "Canadian Dollar", symbol: "C$" },
+  { code: "CHF", flag: "🇨🇭", name: "Swiss Franc", symbol: "CHF " },
+  { code: "CNY", flag: "🇨🇳", name: "Chinese Yuan", symbol: "CN¥" },
+  { code: "HKD", flag: "🇭🇰", name: "Hong Kong Dollar", symbol: "HK$" },
+  { code: "KRW", flag: "🇰🇷", name: "South Korean Won", symbol: "₩" },
+  { code: "NZD", flag: "🇳🇿", name: "New Zealand Dollar", symbol: "NZ$" },
+  { code: "SEK", flag: "🇸🇪", name: "Swedish Krona", symbol: "kr " },
+  { code: "NOK", flag: "🇳🇴", name: "Norwegian Krone", symbol: "kr " },
+  { code: "DKK", flag: "🇩🇰", name: "Danish Krone", symbol: "kr " },
+  { code: "ZAR", flag: "🇿🇦", name: "South African Rand", symbol: "R " },
+  { code: "BRL", flag: "🇧🇷", name: "Brazilian Real", symbol: "R$" },
+  { code: "MXN", flag: "🇲🇽", name: "Mexican Peso", symbol: "MX$" },
+  { code: "SAR", flag: "🇸🇦", name: "Saudi Riyal", symbol: "SAR " },
+  { code: "THB", flag: "🇹🇭", name: "Thai Baht", symbol: "฿" },
+  { code: "MYR", flag: "🇲🇾", name: "Malaysian Ringgit", symbol: "RM " },
+  { code: "IDR", flag: "🇮🇩", name: "Indonesian Rupiah", symbol: "Rp " },
+  { code: "PHP", flag: "🇵🇭", name: "Philippine Peso", symbol: "₱" },
 ] as const;
 
 export function currencySymbol(code: string): string {

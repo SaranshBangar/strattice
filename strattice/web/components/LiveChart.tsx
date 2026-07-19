@@ -10,9 +10,17 @@ import { useEffect, useState } from "react";
 import { LiveTape, type LiveTapePoint } from "@/components/chart/LiveTape";
 import { useBinanceTradeStream } from "@/components/chart/useBinanceTradeStream";
 import { C } from "@/components/chart/primitives";
+import { CoinLogo } from "@/components/CoinLogo";
 import { useAutoFx } from "@/lib/geo-currency";
 
-const SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"] as const;
+const SYMBOLS = [
+  "BTCUSDT",
+  "ETHUSDT",
+  "SOLUSDT",
+  "XRPUSDT",
+  "BNBUSDT",
+  "DOGEUSDT",
+] as const;
 type Symbol = (typeof SYMBOLS)[number];
 
 const WINDOW_MS = 60_000; // visible span
@@ -124,7 +132,8 @@ export function LiveChart() {
               live
             </span>
           )}
-          <h3 className="font-display text-sm font-semibold tracking-tight text-dim">
+          <h3 className="flex items-center gap-2 font-display text-sm font-semibold tracking-tight text-dim">
+            <CoinLogo market={symbol} size={16} />
             {symbol.replace("USDT", "/USDT")}
           </h3>
           {n > 1 && (
@@ -147,17 +156,18 @@ export function LiveChart() {
             </>
           )}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           {SYMBOLS.map((s) => (
             <button
               key={s}
               onClick={() => setSymbol(s)}
-              className={`rounded-md px-2.5 py-1 font-mono text-[11px] transition-colors ${
+              className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 font-mono text-[11px] transition-colors ${
                 s === symbol
                   ? "bg-white/[0.06] text-fg"
                   : "text-faint hover:text-muted"
               }`}
             >
+              <CoinLogo market={s} size={14} />
               {s.replace("USDT", "")}
             </button>
           ))}

@@ -31,22 +31,14 @@ import {
   describeRule,
   describeExits,
 } from "@/lib/custom-strategy";
+import { MARKETS, marketLabel } from "@/lib/coins";
+import { CoinLogo } from "@/components/CoinLogo";
 import { StrategyPreview } from "@/components/StrategyPreview";
 import { BestStrategyFinder } from "@/components/BestStrategyFinder";
+import { StrategyAutoPick } from "@/components/StrategyAutoPick";
 import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Spinner";
 import { inr } from "@/lib/dashboard-format";
-
-export const MARKETS = [
-  "I-BTC_INR",
-  "I-ETH_INR",
-  "I-SOL_INR",
-  "I-XRP_INR",
-  "I-BNB_INR",
-  "I-DOGE_INR",
-];
-
-const marketLabel = (m: string) => m.replace(/^I-/, "").replace("_", "/");
 
 function ParamInput({
   spec,
@@ -413,12 +405,13 @@ export function StrategyManager({
                 aria-checked={on}
                 onClick={() => toggleMarket(m)}
                 className={[
-                  "rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                  "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                   on
                     ? "bg-accent/15 text-accent ring-1 ring-accent/50"
                     : "bg-white/[0.03] text-dim hover:bg-panel",
                 ].join(" ")}
               >
+                <CoinLogo market={m} size={14} />
                 {marketLabel(m)}
               </button>
             );
@@ -645,6 +638,17 @@ export function StrategyManager({
             {strategies.filter((s) => s.enabled).length} active · no cap
           </span>
         </div>
+        {/* guided auto-selection: answer a few questions, get an enable/disable
+            plan over the strategies already in this list */}
+        {strategies.length > 0 && (
+          <div className="px-4 pb-3">
+            <StrategyAutoPick
+              strategies={strategies}
+              breakdown={breakdown}
+              disabled={pending}
+            />
+          </div>
+        )}
         {strategies.length === 0 ? (
           <div className="px-4 py-10 text-center text-sm text-muted">
             No strategies yet. Pick a template above, preview it, and add it.
@@ -717,8 +721,9 @@ export function StrategyManager({
                         <span className="text-sm font-medium text-fg">
                           {def ? def.name : strategyLabel(s.template)}
                         </span>
-                        <span className="rounded-sm bg-inset px-1.5 py-0.5 font-mono text-[11px] font-medium text-dim">
-                          {s.market}
+                        <span className="inline-flex items-center gap-1.5 rounded-sm bg-inset px-1.5 py-0.5 font-mono text-[11px] font-medium text-dim">
+                          <CoinLogo market={s.market} size={13} />
+                          {marketLabel(s.market)}
                         </span>
                         <span className="rounded-sm bg-inset px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-faint">
                           {STRATEGY_META[s.template as Template]?.kind ??

@@ -272,7 +272,7 @@ export function StrategyPreview({
               ? "loading…"
               : status === "error"
                 ? "no data"
-                : `${n} × ${interval} bars · ${INTERVALS[interval]}`}
+                : `${n} × ${interval.toUpperCase()} bars · ${INTERVALS[interval]}`}
           </span>
         </div>
         <Select
@@ -282,7 +282,7 @@ export function StrategyPreview({
           onChange={setInterval_}
           options={Object.keys(INTERVALS).map((k) => ({
             value: k,
-            label: `${k} bars · ${INTERVALS[k]}`,
+            label: `${k.toUpperCase()} bars · ${INTERVALS[k]}`,
           }))}
         />
       </div>
