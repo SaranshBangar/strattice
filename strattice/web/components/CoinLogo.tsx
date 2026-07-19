@@ -1,10 +1,11 @@
 "use client";
-// Coin logo: the real brand mark from CoinCap's free public icon CDN
-// (lib/coins.ts#coinLogoUrl - keyless, uniform ticker-keyed URLs), falling
-// back to a brand-coloured glyph disc when the coin is unknown (custom market
-// ids) or the image fails to load (offline, CDN gap). Client component only
-// for the onError swap; safe to drop into server-rendered tables - it becomes
-// a tiny client boundary.
+// Coin logo: the real brand mark, loaded through the same-origin
+// /api/coin-logo proxy (lib/coins.ts#coinLogoUrl) - the CSP only allows
+// images from 'self', so external icon CDNs are proxied server-side rather
+// than hit from the browser. Falls back to a brand-coloured glyph disc when
+// the coin is unknown (custom market ids) or every logo source fails
+// (offline, CDN gaps). Client component only for the onError swap; safe to
+// drop into server-rendered tables - it becomes a tiny client boundary.
 import { useState } from "react";
 import { baseSymbol, coinFor, coinLogoUrl } from "@/lib/coins";
 
