@@ -638,17 +638,15 @@ export function StrategyManager({
             {strategies.filter((s) => s.enabled).length} active · no cap
           </span>
         </div>
-        {/* guided auto-selection: answer a few questions, get an enable/disable
-            plan over the strategies already in this list */}
-        {strategies.length > 0 && (
-          <div className="px-4 pb-3">
-            <StrategyAutoPick
-              strategies={strategies}
-              breakdown={breakdown}
-              disabled={pending}
-            />
-          </div>
-        )}
+        {/* guided auto-selection: answer a few questions, get a recommended
+            set to add alongside - or in place of - the current strategies */}
+        <div className="px-4 pb-3">
+          <StrategyAutoPick
+            strategies={strategies}
+            breakdown={breakdown}
+            disabled={pending}
+          />
+        </div>
         {strategies.length === 0 ? (
           <div className="px-4 py-10 text-center text-sm text-muted">
             No strategies yet. Pick a template above, preview it, and add it.
