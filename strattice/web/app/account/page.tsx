@@ -5,6 +5,7 @@ import { BotControls } from "@/components/BotControls";
 import { CredentialsForm } from "@/components/CredentialsForm";
 import { TourButton } from "@/components/TourButton";
 import { GUARDRAILS } from "@/lib/risk";
+import { EXCHANGE_META } from "@/lib/exchanges";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,7 @@ const KEY_FACTS: [string, string][] = [
   ],
   [
     "revocation",
-    "Delete the key on CoinDCX at any time and the bot goes blind instantly.",
+    "Delete the key on your exchange at any time and the bot goes blind instantly.",
   ],
 ];
 
@@ -58,8 +59,12 @@ export default async function AccountPage() {
         <div className="space-y-6">
           <section className="card p-5">
             <h2 className="font-display text-sm font-semibold tracking-tight text-dim">
-              CoinDCX API keys
+              Exchange API keys
             </h2>
+            <p className="mt-1 text-xs text-muted">
+              Your bot trades on the exchange whose keys you link here - CoinDCX
+              (INR pairs) or Binance (USDT pairs).
+            </p>
 
             {bot.last_error?.includes("API keys look invalid") && (
               <p className="mt-3 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-sm text-warn">
@@ -81,46 +86,20 @@ export default async function AccountPage() {
                     clipRule="evenodd"
                   />
                 </svg>
-                Linked ({creds.label}).
+                Linked to {EXCHANGE_META[creds.exchange].label} ({creds.label}) ·
+                trading {EXCHANGE_META[creds.exchange].quote} pairs.
               </p>
             )}
 
-            <ol className="mt-4 space-y-2.5">
-              {(
-                [
-                  [
-                    "Create an API key on CoinDCX",
-                    "Account → API dashboard → create a new key.",
-                  ],
-                  [
-                    "Enable trading, disable withdrawals",
-                    "The bot needs the first and must never have the second.",
-                  ],
-                  [
-                    "Add our server IP to the key's allowlist",
-                    "So the key only works from the machine that runs your bots.",
-                  ],
-                ] as const
-              ).map(([title, hint], i) => (
-                <li key={title} className="flex gap-3">
-                  <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-sm bg-white/5 font-mono text-[10px] text-faint">
-                    {i + 1}
-                  </span>
-                  <div>
-                    <div className="text-sm text-fg">{title}</div>
-                    <div className="text-xs text-muted">{hint}</div>
-                  </div>
-                </li>
-              ))}
-            </ol>
 
-            <CredentialsForm linked={creds.linked} />
+            <CredentialsForm linked={creds.linked} exchange={creds.exchange} />
           </section>
 
           <BotControls
             initial={{ active: !!bot.active, live: !!bot.live }}
             linked={creds.linked}
             enabledStrategies={enabledStrategies}
+            exchangeLabel={EXCHANGE_META[creds.exchange].label}
           />
         </div>
 

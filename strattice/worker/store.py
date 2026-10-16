@@ -50,19 +50,35 @@ def _effective_tier(row: dict) -> str:
     return row["tier"] if (ok and row.get("tier")) else "free"
 
 
+EXCHANGE_COLUMN_DDL = ("alter table exchange_credentials add column exchange "
+                       "text not null default 'coindcx'")
+
+
 def active_users(db: D1) -> list[dict]:
-    """Bot-on users with linked credentials. Each: {user_id, tier, live, strategies[], key, secret}.
+    """Bot-on users with linked credentials.
+    Each: {user_id, exchange, tier, live, strategies[], api_key, secret}.
     Credentials decrypted here (in memory). Users without creds are skipped."""
     import crypto  # local import: only the supervisor path needs the master key
 
-    rows = db.query(
-        """select b.user_id, b.live, s.tier, s.status, s.period_end,
-                  c.api_key_enc, c.secret_enc
-           from bot_state b
-           left join subscriptions s on s.user_id = b.user_id
-           left join exchange_credentials c on c.user_id = b.user_id
-           where b.active = 1"""
-    )
+    sql = """select b.user_id, b.live, s.tier, s.status, s.period_end,
+                    c.api_key_enc, c.secret_enc, c.exchange
+             from bot_state b
+             left join subscriptions s on s.user_id = b.user_id
+             left join exchange_credentials c on c.user_id = b.user_id
+             where b.active = 1"""
+    try:
+        rows = db.query(sql)
+    except RuntimeError as e:
+        # D1 predating migration 0008 (no exchange column yet): add it - every
+        # existing credential is a CoinDCX key - then retry. Mirrors web self-heal.
+        if "no such column" not in str(e) or "exchange" not in str(e):
+            raise
+        try:
+            db.query(EXCHANGE_COLUMN_DDL)
+        except RuntimeError as e2:
+            if "duplicate column" not in str(e2):
+                raise
+        rows = db.query(sql)
     eligible = [r for r in rows if r.get("api_key_enc") and r.get("secret_enc")]
 
     # One batched query for every active user's strategies instead of one D1 REST call
@@ -85,6 +101,7 @@ def active_users(db: D1) -> list[dict]:
         strats = strats_by_uid.get(uid, [])
         out.append({
             "user_id": uid,
+            "exchange": (r.get("exchange") or "coindcx").lower(),
             "tier": _effective_tier(r),
             "live": bool(r["live"]),
             "strategies": [{**s, "enabled": bool(s["enabled"]),

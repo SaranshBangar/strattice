@@ -8,12 +8,7 @@ import { useRouter } from "next/navigation";
 import { addStrategiesAction } from "@/app/actions";
 import { ACTIVE_TEMPLATES } from "@/lib/entitlements";
 import { STRATEGY_META } from "@/lib/strategies";
-import {
-  simulate,
-  FRICTION_PCT,
-  type Candle,
-  type SimResult,
-} from "@/lib/strategy-sim";
+import { simulate, type Candle, type SimResult } from "@/lib/strategy-sim";
 import {
   RULE_CATALOG,
   RULE_SPEC,
@@ -31,7 +26,8 @@ import {
   type RuleField,
 } from "@/lib/custom-strategy";
 import { StrategyPreview } from "@/components/StrategyPreview";
-import { MARKETS, marketLabel } from "@/lib/coins";
+import { marketLabel } from "@/lib/coins";
+import { EXCHANGE_META, marketsFor, type Exchange } from "@/lib/exchanges";
 import { CoinLogo } from "@/components/CoinLogo";
 import { Select } from "@/components/Select";
 import { useToast } from "@/components/Toast";
@@ -184,7 +180,14 @@ function useWindows(market: string) {
   return { windows: data, loading };
 }
 
-export function StrategyBuilder() {
+export function StrategyBuilder({
+  exchange = "coindcx",
+}: {
+  /** Linked exchange: its markets in the picker, its friction in every simulation. */
+  exchange?: Exchange;
+}) {
+  const MARKETS = useMemo(() => marketsFor(exchange), [exchange]);
+  const friction = EXCHANGE_META[exchange].frictionPct;
   const router = useRouter();
   const toast = useToast();
   const [pending, start] = useTransition();
@@ -226,10 +229,10 @@ export function StrategyBuilder() {
       return {
         iv,
         span: WINDOWS[iv],
-        sim: candles ? simulateCustom(cleanDef, candles) : null,
+        sim: candles ? simulateCustom(cleanDef, candles, friction) : null,
       };
     });
-  }, [cleanDef, windows]);
+  }, [cleanDef, windows, friction]);
 
   // Head-to-head: you vs the stock templates, same market + window.
   const compare = useMemo(() => {
@@ -239,15 +242,15 @@ export function StrategyBuilder() {
       {
         name: cleanDef.name,
         you: true,
-        sim: simulateCustom(cleanDef, candles),
+        sim: simulateCustom(cleanDef, candles, friction),
       },
       ...ACTIVE_TEMPLATES.map((t) => ({
         name: STRATEGY_META[t].label,
-        sim: simulate(t, candles),
+        sim: simulate(t, candles, null, friction),
       })),
     ];
     return rows.sort((a, b) => b.sim.totalNetPct - a.sim.totalNetPct);
-  }, [cleanDef, windows, compareIv]);
+  }, [cleanDef, windows, compareIv, friction]);
 
   function save() {
     if (!cleanDef) return;
@@ -461,7 +464,11 @@ export function StrategyBuilder() {
         <div className="space-y-4">
           <section className="card p-4">
             {cleanDef ? (
-              <StrategyPreview custom={cleanDef} market={market} />
+              <StrategyPreview
+                custom={cleanDef}
+                market={market}
+                frictionPct={friction}
+              />
             ) : (
               <div className="grid h-[300px] place-items-center rounded-md border border-dashed border-line px-6 text-center text-sm text-muted">
                 {defErr ?? "Fix the strategy definition to see the preview."}
@@ -620,8 +627,8 @@ export function StrategyBuilder() {
 
           <p className="text-[11px] leading-relaxed text-faint">
             All numbers are simulated on live Binance candles, fills at bar
-            close, long-only, net of ~{FRICTION_PCT}% round-trip friction (fee +
-            GST + TDS). A strategy that only wins on one window is probably fit
+            close, long-only, net of ~{friction}% round-trip friction (fee +
+            GST{friction >= 1 ? " + TDS" : ""}). A strategy that only wins on one window is probably fit
             to noise - look for consistency. Past performance never guarantees
             future results; start in DRY_RUN.
           </p>

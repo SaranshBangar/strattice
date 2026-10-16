@@ -15,12 +15,59 @@ def load(path: str | None = None) -> dict:
     # config.yaml without code changes — sizing/engine/_reconcile all call load() with no path.
     cfg_path = Path(path or os.getenv("CONFIG_PATH") or (ROOT / "config.yaml"))
     with open(cfg_path) as f:
-        return yaml.safe_load(f)
+        cfg = yaml.safe_load(f)
+    if (isinstance(cfg, dict) and exchange(cfg) == "binance"
+            and cfg.get("quote_currency", "INR") == "INR"):
+        cfg = _inr_config_on_binance(cfg)
+    return cfg
+
+
+def _usdt_twin(market):
+    """I-BTC_INR -> B-BTC_USDT (Binance has no INR book). Other ids pass through."""
+    if isinstance(market, str) and market.startswith("I-") and market.endswith("_INR"):
+        return "B-" + market[2:-len("_INR")] + "_USDT"
+    return market
+
+
+def _inr_config_on_binance(cfg: dict) -> dict:
+    """Run the repo's INR (CoinDCX) config on Binance: every INR pair trades its USDT twin,
+    the quote is USDT, and the CoinDCX fee/TDS rates give way to Binance's defaults
+    (bot/costs.EXCHANGE_DEFAULTS). Per-user configs from the worker are already
+    USDT-shaped and never reach here."""
+    cfg = dict(cfg)
+    cfg["quote_currency"] = "USDT"
+    cfg["strategies"] = [{**s, "market": _usdt_twin(s.get("market"))}
+                         for s in cfg.get("strategies") or []]
+    f = (cfg.get("portfolio") or {}).get("btc_regime_filter")
+    if isinstance(f, dict):
+        cfg["portfolio"] = {**cfg["portfolio"],
+                            "btc_regime_filter": {**f, "market": _usdt_twin(f.get("market"))}}
+    c = {k: v for k, v in (cfg.get("costs") or {}).items() if k not in ("fee_rate", "tds_rate")}
+    cfg["costs"] = c
+    return cfg
 
 
 # --- secrets / runtime flags (env only) ---
 API_KEY = os.getenv("COINDCX_API_KEY", "")
 SECRET_KEY = os.getenv("COINDCX_SECRET_KEY", "")
+BINANCE_API_KEY = os.getenv("BINANCE_API_KEY", "")
+BINANCE_SECRET_KEY = os.getenv("BINANCE_SECRET_KEY", "")
+
+
+def exchange(cfg: dict | None = None) -> str:
+    """Which exchange this process trades: config.yaml `exchange:` (coindcx | binance),
+    overridable by the EXCHANGE env var. Defaults to coindcx so existing deployments
+    are unchanged. Market ids keep one spelling on both venues: I-BTC_INR (CoinDCX INR),
+    B-BTC_USDT (USDT pairs - CoinDCX's B- markets, or Binance's BTCUSDT)."""
+    env = os.getenv("EXCHANGE", "").strip().lower()
+    if env:
+        return env
+    if cfg is None:
+        try:
+            cfg = load()
+        except Exception:  # noqa: BLE001 - no config file (tests, tools) -> default
+            cfg = {}
+    return str((cfg or {}).get("exchange") or "coindcx").lower()
 
 # Live trading requires BOTH the flag off-default AND an explicit confirm string.
 DRY_RUN = os.getenv("DRY_RUN", "true").lower() != "false"

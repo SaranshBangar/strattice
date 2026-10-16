@@ -51,6 +51,22 @@ def main() -> None:
         assert n_enabled == expect_active, (tier, "active", n_enabled, expect_active)
         print(f"  {tier}: trades/day={eng.risk.max_trades_per_day} active_strategies={n_enabled} OK")
 
+    # a Binance user's generated config boots the engine on the Binance client, with the
+    # self-referencing feed layer off and every market on the USDT book
+    from bot import costs
+    from bot.binance_client import BinanceClient
+    cfg = config_gen.build_config("free", req, kill_switch_file="data/users/test/KILL",
+                                  exchange="binance")
+    config_gen.write_config(Path(os.environ["CONFIG_PATH"]), cfg)
+    costs._cache = None
+    eng = Engine(config.load())
+    assert isinstance(eng.client, BinanceClient) and eng.exchange == "binance"
+    assert not eng.feed_fallback and eng.feed_crosscheck_pct == 0.0
+    assert all(s.market.startswith("B-") and s.market.endswith("_USDT") for s in eng.strategies)
+    assert costs.params()["fee_rate"] == 0.001
+    print(f"  binance: client={type(eng.client).__name__} markets="
+          f"{sorted({s.market for s in eng.strategies})} OK")
+
     print("selfcheck (config_gen -> real engine) OK")
 
 

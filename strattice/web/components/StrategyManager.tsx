@@ -31,7 +31,13 @@ import {
   describeRule,
   describeExits,
 } from "@/lib/custom-strategy";
-import { MARKETS, marketLabel } from "@/lib/coins";
+import { marketLabel } from "@/lib/coins";
+import {
+  EXCHANGE_META,
+  marketFor,
+  marketsFor,
+  type Exchange,
+} from "@/lib/exchanges";
 import { CoinLogo } from "@/components/CoinLogo";
 import { StrategyPreview } from "@/components/StrategyPreview";
 import { BestStrategyFinder } from "@/components/BestStrategyFinder";
@@ -102,17 +108,23 @@ export function StrategyManager({
   strategies,
   breakdown = [],
   allowShorting = false,
+  exchange = "coindcx",
 }: {
   strategies: StrategyRow[];
   /** Per-strategy, per-market realized P&L (executed orders) for profit ranking. */
   breakdown?: StrategyStat[];
   /** The user's Settings opt-in for short-capable templates; off = those cards lock. */
   allowShorting?: boolean;
+  /** Linked exchange: coin pickers offer its markets (INR pairs on CoinDCX, USDT on Binance). */
+  exchange?: Exchange;
 }) {
+  const MARKETS = useMemo(() => marketsFor(exchange), [exchange]);
+  const defaultMarket = (t: PickableTemplate) =>
+    marketFor(exchange, TEMPLATE_CONFIG[t].market);
   const [pending, start] = useTransition();
   const [tpl, setTpl] = useState<PickableTemplate>(ACTIVE_TEMPLATES[0]);
   const [selectedMarkets, setSelectedMarkets] = useState<string[]>([
-    TEMPLATE_CONFIG[ACTIVE_TEMPLATES[0]].market,
+    defaultMarket(ACTIVE_TEMPLATES[0]),
   ]);
   const [customMarket, setCustomMarket] = useState("");
   const [edits, setEdits] = useState<Record<string, number>>({});
@@ -236,7 +248,7 @@ export function StrategyManager({
   function pickTemplate(t: PickableTemplate) {
     setTpl(t);
     setEdits({});
-    setSelectedMarkets([TEMPLATE_CONFIG[t].market]);
+    setSelectedMarkets([defaultMarket(t)]);
   }
 
   function toggleMarket(m: string) {
@@ -346,7 +358,11 @@ export function StrategyManager({
         {/* not sure which one? compare every template on every coin over a chosen
             range, then add any of the winners in one go */}
         <div className="mt-3">
-          <BestStrategyFinder markets={MARKETS} disabled={pending} />
+          <BestStrategyFinder
+            markets={MARKETS}
+            disabled={pending}
+            frictionPct={EXCHANGE_META[exchange].frictionPct}
+          />
         </div>
       </section>
 
@@ -441,7 +457,7 @@ export function StrategyManager({
                 addCustomMarket();
               }
             }}
-            placeholder="I-BTC_INR"
+            placeholder={exchange === "binance" ? "B-BTC_USDT" : "I-BTC_INR"}
             aria-label="Custom market id"
             className="w-32 rounded-md border border-line bg-inset px-2.5 py-1 font-mono text-xs uppercase text-fg placeholder-faint focus:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           />
@@ -615,10 +631,12 @@ export function StrategyManager({
                 template={tpl as BuiltinTemplate}
                 market={market}
                 params={ruleErr ? null : diffs}
+                frictionPct={EXCHANGE_META[exchange].frictionPct}
               />
             ) : (
               <div className="grid h-[300px] place-items-center rounded-md border border-dashed border-line text-sm text-muted">
-                Enter a market id (e.g. I-BTC_INR) to preview.
+                Enter a market id (e.g.{" "}
+                {exchange === "binance" ? "B-BTC_USDT" : "I-BTC_INR"}) to preview.
               </div>
             )}
           </div>
@@ -645,6 +663,7 @@ export function StrategyManager({
             strategies={strategies}
             breakdown={breakdown}
             disabled={pending}
+            exchange={exchange}
           />
         </div>
         {strategies.length === 0 ? (

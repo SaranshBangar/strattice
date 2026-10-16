@@ -11,6 +11,17 @@ export function fmt(n: number) {
 export function inr(n: number) {
   return `₹${fmt(n)}`;
 }
+/** Book-currency money: CoinDCX books are INR (₹, Indian grouping), Binance books are
+ *  USDT ($, western grouping). Negative values keep the sign before the symbol. */
+export type Quote = "INR" | "USDT";
+export function money(n: number, quote: Quote = "INR") {
+  if (quote === "INR") return inr(n);
+  const s = Math.abs(n).toLocaleString("en-US", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  });
+  return `${n < 0 ? "-" : ""}$${s}`;
+}
 export function shortDay(d: string) {
   return d?.slice(5) ?? d;
 } // MM-DD

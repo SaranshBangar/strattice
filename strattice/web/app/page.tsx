@@ -11,12 +11,12 @@ import { STRATEGY_META } from "@/lib/strategies";
 import { faqPageSchema, softwareApplicationSchema } from "@/lib/seo";
 
 export const metadata: Metadata = {
-  title: "Strattice · Algorithmic trading on your own CoinDCX account",
+  title: "Strattice · Algorithmic trading on your own CoinDCX or Binance account",
   description:
-    "Fully automated buying AND selling on your own CoinDCX account: backtest-proven strategy templates, a visual strategy builder and a paper-trading-first bot. Non-custodial - your keys, your exchange, your money.",
+    "Fully automated buying AND selling on your own CoinDCX or Binance account: backtest-proven strategy templates, a visual strategy builder and a paper-trading-first bot. Non-custodial - your keys, your exchange, your money.",
   alternates: { canonical: "/" },
   openGraph: {
-    title: "Strattice · Algorithmic trading on your own CoinDCX account",
+    title: "Strattice · Algorithmic trading on your own CoinDCX or Binance account",
     description:
       "Fully automated buying AND selling: backtest-proven strategy templates, a visual strategy builder and a paper-trading-first bot. Non-custodial - your keys, your exchange, your money.",
     url: "/",
@@ -24,30 +24,29 @@ export const metadata: Metadata = {
 };
 
 // The strategy templates that actually ship - shown as a terminal-style ledger.
-// The ACTIVE daily lineup (research/FINDINGS.md v6), each on its venue-robust market.
+// The ACTIVE catalog (research/FINDINGS.md v9) in picker order, each on its default
+// coin - the pair is INR on CoinDCX and USDT on Binance, so only the coin is shown.
 const STRATS: [keyof typeof STRATEGY_META, string][] = [
-  ["sharpe_mom", "ETH/INR"],
-  ["macd_trend", "BNB/INR"],
-  ["trend_regime", "DOGE/INR"],
-  ["tsmom", "ETH/INR"],
-  ["ma_crossover", "XRP/INR"],
-  ["vol_expansion", "BNB/INR"],
-  ["squeeze_breakout", "DOGE/INR"],
-  ["momentum", "BTC/INR"],
-  ["supertrend", "BTC/INR"],
-  ["ichimoku", "ADA/INR"],
-  ["hf_forecast", "BTC/INR"],
+  ["bb_breakout", "XRP"],
+  ["donchian_trend", "BNB"],
+  ["vol_expansion", "BNB"],
+  ["momentum", "BTC"],
+  ["tsmom", "ETH"],
+  ["trend_regime", "DOGE"],
+  ["supertrend", "BTC"],
+  ["macd_trend", "BNB"],
+  ["hf_forecast", "BTC"],
 ];
 
 const NUMBERS: [string, string][] = [
-  ["10", "backtest-proven daily templates, plus an experimental AI forecaster"],
+  ["8", "daily templates that survived 9 years of two-exchange backtests"],
   ["4", "risk checks in front of every single order"],
-  ["~1.5%", "real round-trip cost, modeled in every simulation"],
+  ["0.24–1.5%", "real round-trip cost (Binance – CoinDCX), modeled in every simulation"],
   ["₹0", "per month while we're in early access"],
 ];
 
 const STEPS: [string, string][] = [
-  ["Connect your exchange", "Add a CoinDCX API key with withdrawals off - the bot can trade for you, never take money out."],
+  ["Connect your exchange", "Add a CoinDCX or Binance API key with withdrawals off - the bot can trade for you, never take money out."],
   ["Pick a ready-made strategy", "Every entry and exit marked on real market data before you commit to anything."],
   ["Let it do the rest", "Paper mode first: real prices, fake money. Flip to live when the numbers earn it - from then on the bot does the buying AND the selling on its own."],
 ];
@@ -70,7 +69,7 @@ const PIPELINE: [string, string, string[]][] = [
     "One order path for everything. Idempotent order ids survive restarts; protective exits override the strategy's own signal.",
     ["hard stop-loss", "take-profit / ATR trail", "DRY_RUN honored"],
   ],
-  ["your exchange", "The order lands on your own CoinDCX account, placed with your key. Fills, P&L and TDS are persisted per trade.", []],
+  ["your exchange", "The order lands on your own CoinDCX or Binance account, placed with your key. Fills, fees, P&L and TDS are persisted per trade.", []],
 ];
 
 // One ₹10,000 round trip on an INR pair. These are the numbers most bots
@@ -84,7 +83,7 @@ const COST_ROWS: [string, string, string][] = [
 ];
 
 const FEATURES: [string, string][] = [
-  ["Every strategy template", "Ten trend, momentum, breakout and volatility systems that survived six rounds of real-data cost studies."],
+  ["Every strategy template", "Eight trend, breakout and volatility systems, re-tested on 2017-2026 Binance and 2021-2026 CoinDCX history at each exchange's real costs."],
   ["Entry / exit previews", "Simulated on real candles, entries and exits on the chart, before you add it."],
   ["Build your own", "Compose entry rules from indicator blocks and backtest while you design."],
   ["Full analytics dashboard", "Equity curve, drawdown, daily P&L, win rate, per-strategy breakdown."],
@@ -103,7 +102,7 @@ const FAQ: [string, string][] = [
   ],
   [
     "Where does my money actually sit?",
-    "In your own CoinDCX account, the whole time. Strattice holds an API key you create, with withdrawals disabled, and uses it only to read balances and place orders. We cannot move funds out, and we never touch custody.",
+    "In your own CoinDCX or Binance account, the whole time. Strattice holds an API key you create, with withdrawals disabled, and uses it only to read balances and place orders. We cannot move funds out, and we never touch custody.",
   ],
   [
     "Can a strategy lose money?",
@@ -136,7 +135,7 @@ export default function Home() {
         <div>
           <div className="eyebrow flex items-center gap-2">
             <span className="h-1.5 w-1.5 rounded-[1px] bg-gain" />
-            Non-custodial · CoinDCX · Free during early access
+            Non-custodial · CoinDCX + Binance · Free during early access
           </div>
           <h1 className="mt-5 font-display text-4xl font-bold leading-[1.05] tracking-tight sm:text-5xl">
             Algorithmic trading that runs on your <span className="text-accent">own</span> account.
@@ -312,6 +311,11 @@ export default function Home() {
             Fees on both legs, GST on those fees, 1% TDS on every sell - every number on Strattice is{" "}
             <span className="text-fg">net of the full friction stack</span>, which is why the engine trades slow{" "}
             <span className="text-fg">daily bars</span>.
+          </p>
+          <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted">
+            On <span className="text-fg">Binance</span> the same round trip is about{" "}
+            <span className="text-fg">0.24%</span>: a 0.1% fee plus GST each side and no TDS withheld (the tax is still yours to file).
+            Simulations charge whichever exchange you link.
           </p>
         </Reveal>
         <Reveal>

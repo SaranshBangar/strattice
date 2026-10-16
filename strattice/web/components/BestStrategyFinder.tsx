@@ -42,9 +42,12 @@ const pct = (n: number) => `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;
 export function BestStrategyFinder({
   markets,
   disabled,
+  frictionPct = FRICTION_PCT,
 }: {
   markets: string[];
   disabled?: boolean;
+  /** Round-trip friction charged per trade (the linked exchange's; CoinDCX default). */
+  frictionPct?: number;
 }) {
   const [days, setDays] = useState<number>(730);
   const [busy, setBusy] = useState(false);
@@ -81,7 +84,7 @@ export function BestStrategyFinder({
               100
             : 0;
         for (const t of ACTIVE_TEMPLATES) {
-          const s = simulate(t, candles);
+          const s = simulate(t, candles, null, frictionPct);
           out.push({
             key: `${t}|${market}`,
             template: t,
@@ -276,7 +279,7 @@ export function BestStrategyFinder({
 
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
             <p className="max-w-lg text-[10px] leading-relaxed text-faint">
-              Ranked by net return after ~{FRICTION_PCT}% round-trip friction on
+              Ranked by net return after ~{frictionPct}% round-trip friction on
               daily candles over {rangeLabel}, the interval the engine trades;
               templates need {MIN_CLOSED}+ closed trades to qualify. Small sample
               - a good score here is a starting point, not a promise of future

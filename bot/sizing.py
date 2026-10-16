@@ -12,7 +12,7 @@ Two sources of truth for money:
 import math
 
 from . import audit, config, costs
-from .client import Client
+from .client import Client, make_client
 
 _cfg_cache: dict | None = None
 _client: Client | None = None
@@ -30,7 +30,7 @@ def _live_client(client: Client | None) -> Client:
     if client is not None:
         return client
     if _client is None:
-        _client = Client()
+        _client = make_client(config.exchange(_cfg()))
     return _client
 
 

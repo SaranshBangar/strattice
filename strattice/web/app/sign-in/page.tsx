@@ -6,7 +6,7 @@ import { googleConfigured } from "@/lib/auth";
 export const metadata: Metadata = {
   title: "Sign in",
   description:
-    "Sign in to Strattice to manage your algorithmic trading strategies on your own CoinDCX account.",
+    "Sign in to Strattice to manage your algorithmic trading strategies on your own CoinDCX or Binance account.",
   alternates: { canonical: "/sign-in" },
 };
 

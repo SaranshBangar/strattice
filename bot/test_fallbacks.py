@@ -132,7 +132,7 @@ class FakeClient:
         self.orders_placed.append(kw)
         return self.create_response
 
-    def order_status(self, *, client_order_id):
+    def order_status(self, *, client_order_id, market=None):
         return self.status_by_coid.get(client_order_id)
 
     def balances(self):

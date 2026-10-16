@@ -1,6 +1,7 @@
-# CoinDCX Trading Bot
+# Strattice Trading Bot (CoinDCX + Binance)
 
-Deterministic, multi-strategy crypto trading bot for [CoinDCX](https://coindcx.com).
+Deterministic, multi-strategy crypto trading bot for [CoinDCX](https://coindcx.com)
+(INR pairs) and [Binance](https://www.binance.com) (USDT spot pairs).
 No LLM in the execution path — every trade decision is plain algorithm code.
 **Safety first: DRY_RUN is the default and live trading takes two explicit switches.**
 
@@ -8,25 +9,28 @@ No LLM in the execution path — every trade decision is plain algorithm code.
 
 - Polls candles on a schedule, runs each enabled strategy, routes signals through one
   risk-managed executor.
-- Strategies (each its own module, own config, own position): daily Time-Series
-  Momentum, fast + slow (turtle) Donchian Breakouts, MACD Continuation, a Faber-style
-  Trend-Regime holder and an Ichimoku Kumo Breakout — the survivors of six rounds of
-  full real-data backtest studies ([research/FINDINGS.md](research/FINDINGS.md));
-  validated Supertrend, MA Crossover, Volatility Expansion, Squeeze Breakout and
-  risk-adjusted momentum modules plus an experimental Chronos-2 AI forecaster are
-  available but not in the default lineup. Mean-reversion and all intraday variants
-  are retired: they lose net of India friction. A v8 study measured the "profit in
+- Strategies (each its own module, own config, own position): a daily Bollinger-band
+  breakout, a Turtle-style Donchian channel and Time-Series Momentum make up the
+  default lineup. They survived the v9 study, which replayed every template on 9 years
+  of Binance history and 5 years of clean CoinDCX INR history at each venue's own
+  friction ([research/FINDINGS.md](research/FINDINGS.md) v9). Volatility Expansion,
+  Donchian Breakout, Trend-Regime, Supertrend and MACD Continuation are validated
+  alternatives. An experimental Chronos-2 AI forecaster is also available. Ichimoku, MA
+  Crossover, Squeeze Breakout and risk-adjusted momentum were retired in v9 after
+  failing on at least one venue. Mean reversion and all intraday variants are retired
+  because they lose money after fees and taxes. A v8 study measured the "profit in
   any market" bot families head-on — grid bots, martingale/DCA bots, symmetric
   long/short trend and extremely tight SL/TP exits — and rejected every one on
   real-data evidence (win-rate illusions and friction, not edges); see
   [research/FINDINGS.md](research/FINDINGS.md).
 - Every signal + order persisted to SQLite (`data/bot.db`). Idempotent orders.
-- Backtester with realistic India costs (0.1% fee + 1% TDS), plus a research-only
+- Backtester with realistic per-venue costs (CoinDCX: 0.2% fee + 18% GST + 1% TDS;
+  Binance: 0.1% fee + 18% GST), plus a research-only
   long/short mode (`--allow-short`) and a derivatives cost profile (`--venue
   derivatives`) so short-side and low-friction hypotheses can be measured without
   ever touching the live spot-only path.
 - Telegram alerts on trades, blocks, kill switch, and errors.
-- Multi-source data layer (v8): Binance public klines serve as a fallback feed for
+- Multi-source data layer (v8, CoinDCX only): Binance public klines serve as a fallback feed for
   USDT markets and as an independent cross-check for every market with a USDT twin —
   a closed bar whose return diverges >10pp from the global reference is treated as a
   bad print and held, not traded. Both layers fail open. Adaptive polling checks
@@ -43,19 +47,34 @@ cp .env.example .env        # fill in keys later; DRY_RUN works with no keys
 
 Tune everything in `config.yaml` (strategies, params, capital, **risk limits**).
 Secrets live only in `.env` (gitignored) — never in config or code.
-**Filling in `.env`:** step-by-step (CoinDCX keys, live switches, Telegram) → [ENV.md](ENV.md).
+**Filling in `.env`:** step-by-step (exchange keys, live switches, Telegram) → [ENV.md](ENV.md).
 
-### The daily-trend profile (v6)
+### Choosing an exchange
 
-`config.yaml` ships with **daily candles and 7 trend strategies — one per INR pair**
-(tsmom @ ETH, Donchian 20 @ BTC, turtle-55 @ XRP, MACD @ BNB + SOL, 100-day
-trend-regime @ DOGE, Ichimoku @ ADA), each in its own equity sleeve. Burst-entry
-engines carry a 7% hard stop + ATR chandelier trail; the regime-holding engines
-(trend_regime, ichimoku) exit on their own signal with a wider disaster stop.
-Expect a handful of trades per year per strategy — that is the point: at ~1.5-1.7%
-round-trip friction, holding winners for weeks is the only backtested way to stay
-net-positive. Evidence, methodology and the retirement list:
-[research/FINDINGS.md](research/FINDINGS.md).
+Set `EXCHANGE=coindcx` (default) or `EXCHANGE=binance` in `.env`, or `exchange:` in
+`config.yaml`. Each venue reads its own keys: `COINDCX_API_KEY`/`COINDCX_SECRET_KEY`
+or `BINANCE_API_KEY`/`BINANCE_SECRET_KEY`. On Binance, the INR markets in `config.yaml`
+(`I-BTC_INR`) automatically trade their USDT twins (`B-BTC_USDT` = `BTCUSDT`), the
+wallet currency becomes USDT, and Binance fees replace CoinDCX's fee and TDS rates.
+Binance API keys need **Enable Spot & Margin Trading** only. Never enable withdrawals,
+and restrict the key to your server's IP. Public market data uses
+`data-api.binance.vision`, so candles keep working in regions where `api.binance.com`
+is blocked, but signed trading calls still need `api.binance.com`.
+
+### The daily-trend profile (v9 "bb-core")
+
+`config.yaml` ships with **daily candles and 7 trend strategies, one per pair**:
+Bollinger breakout @ BTC, XRP, SOL, DOGE and ADA, Donchian channel @ BNB and tsmom @ ETH,
+each in its own equity sleeve. The breakout and channel engines exit on their own signal
+(close back under the 20-day mid-band, or under the prior 10-day low) with a 10%
+disaster stop. tsmom carries a 7% hard stop plus an ATR chandelier trail. Joint
+backtest with the BTC overlay on: **CoinDCX 37.6% CAGR, 25.4% max drawdown
+(2021-08..2026-10); Binance 87.2% CAGR, 30.9% max drawdown (2020-08..2026-10)**. The
+v6 lineup it replaced scored 29.3%/32.1% and 79.2%/70.3% on the same data. The lineup
+was picked after seeing the results; the unbiased "bb_breakout on all 7" reference
+scored 31.5%/24.0% and 81.6%/29.1%. Expect a handful of trades per year per
+strategy. Evidence, caveats and the retirement list:
+[research/FINDINGS.md](research/FINDINGS.md) v9.
 
 ## Run (DRY_RUN — safe, places nothing)
 
@@ -66,16 +85,17 @@ python -m bot.status     # quick summary: mode, limits, positions, P&L today
 
 ## Manual buy/sell test (LIVE — places real orders)
 
-Smoke-tests `Client.create_order` directly, bypassing the bot/executor — **DRY_RUN is
-NOT honored, real money.** Needs `COINDCX_API_KEY`/`COINDCX_SECRET_KEY` in `.env`.
+Smoke-tests the exchange client's `create_order` directly, bypassing the bot/executor — **DRY_RUN is
+NOT honored, real money.** Needs the chosen exchange's API keys in `.env`.
 
 ```bash
-python -m scripts.test_trade --asset BTC --inr 200 --side both   # buy then sell same qty
-python -m scripts.test_trade --asset ETH --inr 200 --side buy
+python -m scripts.test_trade --asset BTC --quote 200 --side both   # ₹200: buy then sell same qty
+python -m scripts.test_trade --asset ETH --quote 200 --side buy
 python -m scripts.test_trade --asset BTC --qty 0.0005 --side sell
+python -m scripts.test_trade --exchange binance --asset BTC --quote 10 --side both  # $10 on Binance
 ```
 
-`--inr` converts to base qty at the live ticker price; `--qty` sets base amount directly
+`--quote` (alias `--inr`) converts to base qty at the latest 1-minute close; `--qty` sets base amount directly
 (overrides `--inr`). Rounds to pair precision, checks `min_quantity`, prompts `YES` before
 sending. Run from project root with `-m` (the `bot` import needs it).
 
@@ -93,8 +113,13 @@ python -m bot.test_decision_window     # bounded-window parity over real data
 python -m bot.test_reliability         # rate limit / breaker / retry / clock / scrubbing
 python -m bot.test_fallbacks           # failure-scenario behaviors (see below)
 python -m bot.test_portfolio_features  # v7 overlays/knobs (BTC filter, caps, ladder)
+python -m bot.test_feeds               # v8 feed fallback / crosscheck / adaptive poll
+python -m bot.test_exchanges           # Binance client + venue routing (stubbed HTTP)
 python -m research.run_backtests       # full research grid over research/data/
 python -m research.portfolio_study     # joint 7-sleeve portfolio study (v7 evidence)
+python scripts/fetch_history.py --deep # deep two-venue dailies -> research/data/deep/
+python -m research.v9_study            # every template, both venues, 2017-2026 (v9)
+python -m research.v9_portfolio        # candidate 7-sleeve lineups, both venues (v9)
 ```
 
 Reports (all after fee + TDS): net P&L, return %, trades, win rate, **profit factor,
@@ -104,8 +129,9 @@ the same protective exits the live engine runs.
 
 ### Cost drag (read this before going live)
 
-Every round trip costs **~1.5-1.7%**: 0.2% fee + 18% GST on each side, plus 1% TDS on
-the sell. A strategy must clear that _before_ it makes a rupee. The backtest study in
+On CoinDCX every round trip costs **~1.5-1.7%**: 0.2% fee + 18% GST on each side, plus 1% TDS on
+the sell. On Binance it is **~0.34%** (0.1% fee + 18% GST on each side, no TDS withheld
+by the venue; you still owe the tax yourself). A strategy must clear that _before_ it makes a rupee. The backtest study in
 [research/FINDINGS.md](research/FINDINGS.md) showed intraday configurations paying
 87-125% of starting capital in fees+TDS on multi-year windows — that is why v3 trades
 daily bars, holds winners for weeks, and never uses take-profits. **Always check
@@ -118,8 +144,8 @@ Live trading needs **both** of these in `.env` — either one alone stays in DRY
 ```ini
 DRY_RUN=false
 LIVE_TRADING_CONFIRM=I_UNDERSTAND_LIVE_TRADING
-COINDCX_API_KEY=...
-COINDCX_SECRET_KEY=...
+COINDCX_API_KEY=...        # or, with EXCHANGE=binance:
+COINDCX_SECRET_KEY=...     #   BINANCE_API_KEY=... / BINANCE_SECRET_KEY=...
 ```
 
 Recommended ramp: backtest → run DRY_RUN against live candles for a few days →
@@ -341,7 +367,8 @@ per invocation.
 ```
 bot/
   config.py     YAML tunables + env secrets, live-mode double-lock
-  client.py     signed CoinDCX REST + public candles/markets
+  client.py     signed CoinDCX REST + public candles/markets; make_client() picks the venue
+  binance_client.py  Binance spot client with the same interface (USDT pairs)
   audit.py      SQLite: signals, orders (idempotent), positions
   risk.py       global risk gate
   executor.py   single order path: DRY_RUN, idempotency, risk, P&L accounting
@@ -349,8 +376,9 @@ bot/
   engine.py     poll loop
   status.py     /status summary
   backtest.py   historical replay with fee + TDS
-  strategies/   base + tsmom, momentum, macd_trend, trend_regime, ichimoku, ma_crossover,
-                vol_expansion, squeeze_breakout, supertrend, sharpe_mom, kama_trend,
+  strategies/   base + bb_breakout, donchian_trend, tsmom, momentum, macd_trend,
+                trend_regime, vol_expansion, supertrend, retired ichimoku/ma_crossover/
+                squeeze_breakout/sharpe_mom, research abs_momentum, kama_trend,
                 adx_trend, hf_forecast (Chronos-2), custom, retired mean-reversion
 config.yaml  .env.example  requirements.txt
 ```

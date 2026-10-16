@@ -31,15 +31,17 @@ import { marketLabel } from "@/lib/coins";
 import { CoinLogo } from "@/components/CoinLogo";
 import { useToast } from "@/components/Toast";
 import { Spinner } from "@/components/Spinner";
-import { inr } from "@/lib/dashboard-format";
+import { money } from "@/lib/dashboard-format";
+import { EXCHANGE_META, marketFor, type Exchange } from "@/lib/exchanges";
 
 // Template temperament, mirroring the descriptions in lib/strategies.ts:
 // SLOW = patient regime/trend holders (a handful of trades a year);
 // ACTIVE = event-driven engines that fire on breakouts and expansions;
 // STEADY = engines with their own tighter exit line (shallower swings).
-const SLOW = new Set(["trend_regime", "tsmom", "ma_crossover", "sharpe_mom", "ichimoku"]);
-const ACTIVE = new Set(["momentum", "squeeze_breakout", "vol_expansion", "macd_trend", "supertrend"]);
-const STEADY = new Set(["supertrend", "ichimoku", "ma_crossover", "trend_regime"]);
+// (Retired templates are never candidates, so only the active catalog is listed.)
+const SLOW = new Set(["trend_regime", "tsmom", "donchian_trend"]);
+const ACTIVE = new Set(["momentum", "vol_expansion", "macd_trend", "supertrend", "bb_breakout"]);
+const STEADY = new Set(["supertrend", "trend_regime", "bb_breakout"]);
 
 const MIN_CLOSED = 3; // same live-history bar the ranked list uses
 
@@ -93,6 +95,7 @@ function buildPlan(
   strategies: StrategyRow[],
   breakdown: StrategyStat[],
   answers: number[],
+  exchange: Exchange,
 ): Plan {
   const [freq, optimize, coins] = answers;
   const cap = COIN_CAPS[coins] ?? 3;
@@ -142,7 +145,7 @@ function buildPlan(
     });
   }
   for (const t of ACTIVE_TEMPLATES) {
-    const m = TEMPLATE_CONFIG[t].market;
+    const m = marketFor(exchange, TEMPLATE_CONFIG[t].market);
     const key = `${t}|${m}`;
     if (!byKey.has(key))
       byKey.set(key, {
@@ -193,7 +196,7 @@ function buildPlan(
         market: c.market,
         existing: c.existing,
         evidence: c.hasData
-          ? `${c.pnl >= 0 ? "+" : ""}${inr(c.pnl)} realized`
+          ? `${c.pnl >= 0 ? "+" : ""}${money(c.pnl, EXCHANGE_META[exchange].quote)} realized`
           : c.backtest !== undefined
             ? `${c.backtest >= 0 ? "+" : ""}${c.backtest.toFixed(1)}% backtest`
             : null,
@@ -211,10 +214,13 @@ export function StrategyAutoPick({
   strategies,
   breakdown = [],
   disabled,
+  exchange = "coindcx",
 }: {
   strategies: StrategyRow[];
   breakdown?: StrategyStat[];
   disabled?: boolean;
+  /** Linked exchange: recommendations use its markets and quote currency. */
+  exchange?: Exchange;
 }) {
   const [open, setOpen] = useState(false);
   const [answers, setAnswers] = useState<number[]>([]);
@@ -224,8 +230,8 @@ export function StrategyAutoPick({
   const done = step >= QUESTIONS.length;
 
   const plan = useMemo(
-    () => (done ? buildPlan(strategies, breakdown, answers) : null),
-    [done, strategies, breakdown, answers],
+    () => (done ? buildPlan(strategies, breakdown, answers, exchange) : null),
+    [done, strategies, breakdown, answers, exchange],
   );
   const toAdd = plan?.recs.filter((r) => !r.existing) ?? [];
   const toEnable =

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   sma,
   ema,
+  bollinger,
   niceStep,
   niceDomain,
   linePath,
@@ -22,6 +23,18 @@ describe("sma", () => {
   });
   it("period longer than the series is all nulls", () => {
     expect(sma([1, 2], 5)).toEqual([null, null]);
+  });
+});
+
+describe("bollinger", () => {
+  it("uses the population stdev, like the bb_breakout strategy", () => {
+    // mean 5, population sd 2 (sample sd would be ~2.14)
+    const b = bollinger([2, 4, 4, 4, 5, 5, 7, 9], 8, 2);
+    expect(b.mid[6]).toBeNull();
+    expect(b.upper[6]).toBeNull();
+    expect(b.mid[7]).toBe(5);
+    expect(b.upper[7]).toBeCloseTo(9, 12);
+    expect(b.lower[7]).toBeCloseTo(1, 12);
   });
 });
 

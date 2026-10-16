@@ -20,6 +20,26 @@ import entitlements  # flat import: run with strattice/worker on sys.path (not a
 # 7% hard stop — the fat right tail of trend winners is what pays India's ~1.5-1.7%
 # round-trip friction.
 TEMPLATE_DEFAULTS: dict[str, dict] = {
+    # ---- v9 promotions (research/v9_study.py; FINDINGS v9). Both are regime holders:
+    # their own SELL is the exit, a 10% disaster stop, no chandelier. ----
+    # Bollinger breakout: 12/12 Binance coins (median CAGR +35%, 2017-2026) and 7/7 INR
+    # pairs (+30%, 2021-2026) with the BTC overlay; all 18 tested combos positive.
+    "bb_breakout": {
+        "market": "I-XRP_INR",
+        "stop_loss_pct": 0.10, "take_profit_pct": 0.0, "chandelier_k": 0.0,
+        "atr_period": 14, "max_hold_bars": 0,
+        "params": {"period": 20, "k": 2.0, "exit_k": 0.0, "regime_period": 0,
+                   "expected_move_pct": 0.08},
+    },
+    # Turtle-style channel: 11/12 Binance coins (+33%) and 7/7 INR pairs (+24%);
+    # every tested entry/exit window pair positive on both venues.
+    "donchian_trend": {
+        "market": "I-BNB_INR",
+        "stop_loss_pct": 0.10, "take_profit_pct": 0.0, "chandelier_k": 0.0,
+        "atr_period": 14, "max_hold_bars": 0,
+        "params": {"entry_lookback": 20, "exit_lookback": 10, "regime_period": 0,
+                   "expected_move_pct": 0.10},
+    },
     # +207.6% net (PF 2.58) on I-ETH_INR 2023-09..2026-07; 17/21 walk-forward folds.
     "tsmom": {
         "market": "I-ETH_INR",
@@ -266,7 +286,7 @@ _BASE = {
 }
 
 
-def _strategy_spec(idx: int, s: dict) -> dict:
+def _strategy_spec(idx: int, s: dict, exchange: str = "coindcx") -> dict:
     """One desired-strategy row -> a config.yaml strategy block (defaults merged, params
     overridable only because entitlements already nulled params for non-custom tiers)."""
     tpl = s["template"]
@@ -278,6 +298,7 @@ def _strategy_spec(idx: int, s: dict) -> dict:
     market = s.get("market")
     if not (isinstance(market, str) and _MARKET_RE.match(market)):
         market = d["market"]  # malformed/non-spot market id -> template's proven default
+    market = market_for(exchange, market)
     spec = {
         "name": name,
         "module": tpl,
@@ -310,16 +331,61 @@ def _strategy_spec(idx: int, s: dict) -> dict:
     return spec
 
 
-def build_config(tier: str, requested: list[dict], *, kill_switch_file: str) -> dict:
-    """Full config dict for a user. Applies tier caps via entitlements, sets trades/day."""
+# Per-exchange account profile. Binance is USDT-quoted (no INR book), trades at
+# Binance spot friction (bot/costs.py EXCHANGE_DEFAULTS: 0.1% fee + 18% GST, no TDS
+# withheld by the venue), and needs no Binance-reference feed layer (it IS the
+# reference). The DRY_RUN paper wallet is sized so seven sleeves each clear the
+# venue's minimum order (CoinDCX ~INR 100, Binance 5 USDT).
+EXCHANGE_PROFILE: dict[str, dict] = {
+    "coindcx": {"quote_currency": "INR", "starting_equity": 1000.0,
+                "btc_market": "I-BTC_INR",
+                "costs": {"fee_rate": 0.002, "gst_on_fee": 0.18, "tds_rate": 0.01,
+                          "slippage_bps": 5.0, "edge_margin_pct": 0.002}},
+    "binance": {"quote_currency": "USDT", "starting_equity": 100.0,
+                "btc_market": "B-BTC_USDT",
+                "costs": {"fee_rate": 0.001, "gst_on_fee": 0.18, "tds_rate": 0.0,
+                          "slippage_bps": 5.0, "edge_margin_pct": 0.002}},
+}
+EXCHANGES = tuple(EXCHANGE_PROFILE)
+
+
+def normalize_exchange(exchange: str | None) -> str:
+    ex = str(exchange or "coindcx").lower()
+    return ex if ex in EXCHANGE_PROFILE else "coindcx"
+
+
+def market_for(exchange: str, market: str) -> str:
+    """A stored market id expressed on the user's exchange. Binance has no INR book, so
+    an INR pair (e.g. saved before the user switched exchange) maps to its USDT twin:
+    I-BTC_INR -> B-BTC_USDT. CoinDCX lists both I-*_INR and B-*_USDT, so ids pass."""
+    if exchange == "binance" and market.startswith("I-") and market.endswith("_INR"):
+        return "B-" + market[2:-len("_INR")] + "_USDT"
+    return market
+
+
+def build_config(tier: str, requested: list[dict], *, kill_switch_file: str,
+                 exchange: str = "coindcx") -> dict:
+    """Full config dict for a user. Applies tier caps via entitlements, sets trades/day,
+    and the exchange profile (quote currency, friction, BTC overlay market)."""
+    ex = normalize_exchange(exchange)
+    prof = EXCHANGE_PROFILE[ex]
     t = entitlements.resolve(tier)
     allowed = entitlements.allowed_strategies(tier, requested)
     cfg = {k: (v.copy() if isinstance(v, dict) else v) for k, v in _BASE.items()}
+    cfg = {"exchange": ex, **cfg}
+    cfg["quote_currency"] = prof["quote_currency"]
+    cfg["starting_equity"] = prof["starting_equity"]
+    cfg["costs"] = dict(prof["costs"])
+    cfg["portfolio"] = {"btc_regime_filter": {**_BASE["portfolio"]["btc_regime_filter"],
+                                              "market": prof["btc_market"]}}
+    if ex == "binance":
+        cfg["engine"] = {**_BASE["engine"], "feeds": {"binance_fallback": False,
+                                                      "crosscheck": False}}
     cfg["risk"] = {**_BASE["risk"], "max_trades_per_day": t.trades_per_day,
                    "kill_switch_file": kill_switch_file}
-    cfg["strategies"] = [_strategy_spec(i, s) for i, s in enumerate(allowed)] or [
+    cfg["strategies"] = [_strategy_spec(i, s, ex) for i, s in enumerate(allowed)] or [
         # never emit an empty strategies list (engine would idle but log oddly): give the default off.
-        _strategy_spec(0, {"template": entitlements.DEFAULT_TEMPLATE, "enabled": False})
+        _strategy_spec(0, {"template": entitlements.DEFAULT_TEMPLATE, "enabled": False}, ex)
     ]
     return cfg
 
@@ -389,4 +455,21 @@ if __name__ == "__main__":
     small = _strategy_spec(0, {"template": "custom", "params": ok_rules})
     assert small["params"]["rules"] == ok_rules["rules"]
     assert small["stop_loss_pct"] == 0.2, "custom exits stay clamped to the sanitizer bounds"
-    print("config_gen self-check OK (incl. web->worker boundary hardening)")
+    # exchange profiles: a Binance user gets a USDT book, Binance friction, the USDT BTC
+    # overlay, no self-referencing feed layer, and INR pairs mapped to their USDT twins.
+    bn = build_config("free", req + [{"template": "tsmom", "market": "B-SOL_USDT"}],
+                      kill_switch_file="k", exchange="binance")
+    assert bn["exchange"] == "binance" and bn["quote_currency"] == "USDT"
+    assert bn["costs"]["fee_rate"] == 0.001 and bn["costs"]["tds_rate"] == 0.0
+    assert bn["portfolio"]["btc_regime_filter"]["market"] == "B-BTC_USDT"
+    assert bn["engine"]["feeds"]["crosscheck"] is False
+    assert [s["market"] for s in bn["strategies"]] == [
+        "B-ETH_USDT", "B-BTC_USDT", "B-BTC_USDT", "B-ETH_USDT", "B-SOL_USDT"], bn["strategies"]
+    dcx = build_config("free", req, kill_switch_file="k")
+    assert dcx["exchange"] == "coindcx" and dcx["quote_currency"] == "INR"
+    assert dcx["strategies"][0]["market"] == "I-ETH_INR", "CoinDCX keeps INR pairs"
+    assert dcx["portfolio"]["btc_regime_filter"]["market"] == "I-BTC_INR"
+    assert build_config("free", req, kill_switch_file="k", exchange="ftx")["exchange"] == \
+        "coindcx", "unknown exchange falls back to the default venue"
+    assert _BASE["portfolio"]["btc_regime_filter"]["market"] == "I-BTC_INR", "no aliasing"
+    print("config_gen self-check OK (incl. web->worker boundary hardening + exchanges)")

@@ -1,18 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { QUIZ, recommend, type QuizKey } from "@/lib/quiz";
+import { ACTIVE_TEMPLATES } from "@/lib/entitlements";
 
-const VALID_KEYS: QuizKey[] = [
-  "tsmom",
-  "momentum",
-  "squeeze_breakout",
-  "ma_crossover",
-  "vol_expansion",
-  "supertrend",
-  "macd_trend",
-  "trend_regime",
-  "ichimoku",
-  "sharpe_mom",
-];
+// The quiz may only ever recommend ACTIVE templates (retired ones can't be added).
+const VALID_KEYS: QuizKey[] = [...ACTIVE_TEMPLATES];
 
 describe("quiz data", () => {
   it("has five questions of three options each", () => {
@@ -48,16 +39,16 @@ describe("recommend", () => {
   });
 
   it("all-first answers land on a slow trend template", () => {
-    // Hand-scored: trend_regime 10, ma_crossover 9, tsmom 8.
+    // Hand-scored: trend_regime 10, donchian_trend 10 (tie -> trend_regime first), tsmom 8.
     const r = recommend([0, 0, 0, 0, 0]);
     expect(r.key).toBe("trend_regime");
-    expect(r.runnerUp).toBe("ma_crossover");
+    expect(r.runnerUp).toBe("donchian_trend");
   });
 
   it("breakout-leaning answers land on a breakout template", () => {
     // Trade on decisive moves, bank quickly, explosive breakouts.
     const r = recommend([1, 2, 2, 1, 2]);
-    expect(["squeeze_breakout", "vol_expansion", "momentum"]).toContain(r.key);
+    expect(["bb_breakout", "vol_expansion", "momentum"]).toContain(r.key);
   });
 
   it("patience + big-winner answers land on a patient trend rider", () => {

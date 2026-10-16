@@ -9,11 +9,15 @@ import type {
   BuiltinTemplate,
   ExperimentalTemplate,
   PickableTemplate,
+  RetiredExperimentalTemplate,
 } from "./entitlements";
 
 /** Every template this module holds a config for: simulable builtins (active +
  *  retired-legacy) plus the experimental config-display-only entries. */
-export type SimTemplate = BuiltinTemplate | ExperimentalTemplate;
+export type SimTemplate =
+  | BuiltinTemplate
+  | ExperimentalTemplate
+  | RetiredExperimentalTemplate;
 
 export interface Candle {
   t: number;
@@ -44,7 +48,9 @@ export interface SimResult {
   exposurePct: number; // % of bars spent in a position
 }
 
-// Round-trip friction: 0.2% fee + 18% GST each side (0.236% x2) + 1% TDS on the sell.
+// Round-trip friction on CoinDCX: 0.2% fee + 18% GST each side (0.236% x2) + 1% TDS on
+// the sell. The default for every simulation; Binance users pass their venue's figure
+// (lib/exchanges.ts EXCHANGE_META.frictionPct) as `frictionPct`.
 export const FRICTION_PCT = 1.47;
 // The same friction split per side, for flows that don't round-trip (e.g. DCA buys).
 export const BUY_FRICTION_PCT = 0.236; // fee + GST on a buy
@@ -328,6 +334,86 @@ export const TEMPLATE_CONFIG: Record<SimTemplate, TemplateConfig> = {
   },
   // Trend-regime holder @ DOGE: +209.8% net (PF 3.76) on I-DOGE_INR (twin +167.5%).
   // The strategy's own SELL (close under the line - band) is the exit; no trail (v6).
+  // v9 (research/v9_study.py): Bollinger-band breakout holder. The most robust engine
+  // of the deep multi-cycle study: positive on 12/12 Binance coins (2017-2026, median
+  // CAGR +35%) and 7/7 CoinDCX INR pairs (2021-2026, +30%) with the shallowest median
+  // drawdown of any template; every one of the 18 tested period/k/exit combinations was
+  // positive on every market. Own SELL at the middle band, 10% disaster stop, no trail.
+  bb_breakout: {
+    market: "I-XRP_INR",
+    exits: {
+      stopLossPct: 0.1,
+      takeProfitPct: 0,
+      chandelierK: 0,
+      atrPeriod: 14,
+      maxHoldBars: 0,
+    },
+    params: {
+      period: 20,
+      k: 2.0,
+      exit_k: 0,
+      regime_period: 0,
+      expected_move_pct: 0.08,
+    },
+    editable: [
+      { key: "period", label: "Band period (bars)", min: 10, max: 60, step: 1, int: true },
+      { key: "k", label: "Entry band width (σ)", min: 1, max: 3.5, step: 0.1 },
+      { key: "exit_k", label: "Exit band (σ from middle)", min: -2, max: 1, step: 0.25 },
+      {
+        key: "regime_period",
+        label: "Regime SMA period (0 = off)",
+        min: 0,
+        max: 300,
+        step: 1,
+        int: true,
+      },
+    ],
+  },
+  // v9: Turtle-style Donchian channel holder - enter on a fresh 20-day high, exit on a
+  // fresh 10-day low. 11/12 Binance coins (+33% median CAGR) and 7/7 INR pairs (+24%);
+  // all six tested entry/exit window pairs positive on both venues.
+  donchian_trend: {
+    market: "I-BNB_INR",
+    exits: {
+      stopLossPct: 0.1,
+      takeProfitPct: 0,
+      chandelierK: 0,
+      atrPeriod: 14,
+      maxHoldBars: 0,
+    },
+    params: {
+      entry_lookback: 20,
+      exit_lookback: 10,
+      regime_period: 0,
+      expected_move_pct: 0.1,
+    },
+    editable: [
+      {
+        key: "entry_lookback",
+        label: "Entry channel (bars)",
+        min: 5,
+        max: 120,
+        step: 1,
+        int: true,
+      },
+      {
+        key: "exit_lookback",
+        label: "Exit channel (bars)",
+        min: 3,
+        max: 60,
+        step: 1,
+        int: true,
+      },
+      {
+        key: "regime_period",
+        label: "Regime SMA period (0 = off)",
+        min: 0,
+        max: 300,
+        step: 1,
+        int: true,
+      },
+    ],
+  },
   trend_regime: {
     market: "I-DOGE_INR",
     exits: {
@@ -1265,6 +1351,66 @@ const trendRegimeExit: EntryFn = (candles, closes, end, p) => {
   return closes[end] < maNow * (1 - band); // regime broken -> step aside
 };
 
+// bot/strategies/bb_breakout.py: close above SMA + k*sd (and the optional regime SMA)
+// buys; a close under SMA + exit_k*sd is the strategy's own exit.
+const bbBreakoutEntry: EntryFn = (candles, closes, end, p) => {
+  const { period, k, regime_period } = p;
+  if (end + 1 < Math.max(period, regime_period) + 1) return false;
+  const mid = sma(closes, end, period);
+  const sd = stdev(closes, end, period);
+  if (mid === null || sd === null || sd <= 0) return false;
+  if (closes[end] <= mid + k * sd) return false;
+  if (regime_period > 0) {
+    const ma = sma(closes, end, regime_period);
+    if (ma === null || closes[end] <= ma) return false;
+  }
+  return true;
+};
+
+const bbBreakoutExit: EntryFn = (candles, closes, end, p) => {
+  const { period, exit_k } = p;
+  const mid = sma(closes, end, period);
+  const sd = stdev(closes, end, period);
+  if (mid === null || sd === null) return false;
+  return closes[end] < mid + exit_k * sd;
+};
+
+/** Highest high / lowest low of the `n` bars BEFORE `end` (current bar excluded). */
+function priorExtreme(
+  candles: Candle[],
+  end: number,
+  n: number,
+  side: "h" | "l",
+): number | null {
+  if (end < n) return null;
+  let v = side === "h" ? -Infinity : Infinity;
+  for (let i = end - n; i < end; i++)
+    v = side === "h" ? Math.max(v, candles[i].h) : Math.min(v, candles[i].l);
+  return v;
+}
+
+// bot/strategies/donchian_trend.py: a close above the prior entry-window high buys
+// (optionally above the regime SMA); a close under the prior exit-window low exits.
+const donchianTrendEntry: EntryFn = (candles, closes, end, p) => {
+  const { entry_lookback, exit_lookback, regime_period } = p;
+  if (end + 1 < Math.max(entry_lookback, exit_lookback, regime_period) + 1)
+    return false;
+  const hi = priorExtreme(candles, end, entry_lookback, "h");
+  const lo = priorExtreme(candles, end, exit_lookback, "l");
+  if (hi === null || lo === null) return false;
+  if (closes[end] < lo || closes[end] <= hi) return false;
+  if (regime_period > 0) {
+    const ma = sma(closes, end, regime_period);
+    if (ma === null || closes[end] <= ma) return false;
+  }
+  return true;
+};
+
+const donchianTrendExit: EntryFn = (candles, closes, end, p) => {
+  const lo = priorExtreme(candles, end, p.exit_lookback, "l");
+  return lo !== null && closes[end] < lo;
+};
+
 /** Midpoint of the highest high / lowest low of the n bars ending at `end` (inclusive). */
 function ichiMid(candles: Candle[], end: number, n: number): number | null {
   if (end + 1 < n) return null;
@@ -1341,6 +1487,8 @@ const sharpeMomEntry: EntryFn = (candles, closes, end, p) => {
 
 // Exported so signal-level parity against bot/strategies/*.py can be scripted.
 export const ENTRY: Record<BuiltinTemplate, EntryFn> = {
+  bb_breakout: bbBreakoutEntry,
+  donchian_trend: donchianTrendEntry,
   tsmom: tsmomEntry,
   supertrend: supertrendEntry,
   ma_crossover: maCrossoverEntry,
@@ -1360,6 +1508,8 @@ export const ENTRY: Record<BuiltinTemplate, EntryFn> = {
  *  edge (bot decide() emits SELL), unlike the entry-only engines whose exits are all
  *  protective. Checked after the protective layer, same precedence as the live engine. */
 export const EXIT_SIGNAL: Partial<Record<BuiltinTemplate, EntryFn>> = {
+  bb_breakout: bbBreakoutExit,
+  donchian_trend: donchianTrendExit,
   trend_regime: trendRegimeExit,
   ichimoku: ichimokuExit,
 };
@@ -1396,6 +1546,8 @@ export function paramRuleError(
     return "Tenkan period must be below the kijun period.";
   if (template === "ichimoku" && params.kijun > params.senkou_b)
     return "Kijun period must not exceed the senkou B period.";
+  if (template === "bb_breakout" && params.exit_k >= params.k)
+    return "The exit band must sit below the entry band.";
   return null;
 }
 
@@ -1437,6 +1589,7 @@ export function simulate(
   template: BuiltinTemplate,
   candles: Candle[],
   overrides?: Record<string, number> | null,
+  frictionPct: number = FRICTION_PCT,
 ): SimResult {
   const cfg = TEMPLATE_CONFIG[template];
   const entryFn = ENTRY[template];
@@ -1447,6 +1600,7 @@ export function simulate(
     (cs, closes, i) => entryFn(cs, closes, i, params),
     cfg.exits,
     exitFn ? (cs, closes, i) => exitFn(cs, closes, i, params) : undefined,
+    frictionPct,
   );
 }
 
@@ -1457,6 +1611,7 @@ export function runSim(
   canEnter: (candles: Candle[], closes: number[], end: number) => boolean,
   exits: ExitConfig,
   canExitSignal?: (candles: Candle[], closes: number[], end: number) => boolean,
+  frictionPct: number = FRICTION_PCT,
 ): SimResult {
   const closes = candles.map((c) => c.c);
   const { stopLossPct, takeProfitPct, chandelierK, atrPeriod, maxHoldBars } =
@@ -1495,7 +1650,7 @@ export function runSim(
           entryPrice,
           exitPrice: close,
           grossPct,
-          netPct: grossPct - FRICTION_PCT,
+          netPct: grossPct - frictionPct,
           reason,
         });
         inPos = false;
@@ -1520,7 +1675,7 @@ export function runSim(
       entryPrice,
       exitPrice: last,
       grossPct,
-      netPct: grossPct - FRICTION_PCT,
+      netPct: grossPct - frictionPct,
       reason: "open",
     });
   }
@@ -1761,6 +1916,33 @@ export function overlays(
     role: "secondary",
   };
   switch (template) {
+    case "bb_breakout": {
+      const mid = smaSeries(closes, p.period);
+      const sd = closes.map((_, i) => stdev(closes, i, p.period));
+      const band = (k: number) =>
+        mid.map((m, i) => (m === null || sd[i] === null ? null : m + k * sd[i]!));
+      return [
+        { name: `Upper band (${p.period}, ${p.k}σ)`, points: band(p.k), role: "primary" },
+        {
+          name: p.exit_k === 0 ? `Middle band SMA(${p.period})` : `Exit band (${p.exit_k}σ)`,
+          points: band(p.exit_k),
+          role: "secondary",
+        },
+      ];
+    }
+    case "donchian_trend":
+      return [
+        {
+          name: `${p.entry_lookback}-bar high`,
+          points: candles.map((_, i) => priorExtreme(candles, i, p.entry_lookback, "h")),
+          role: "primary",
+        },
+        {
+          name: `${p.exit_lookback}-bar low`,
+          points: candles.map((_, i) => priorExtreme(candles, i, p.exit_lookback, "l")),
+          role: "secondary",
+        },
+      ];
     case "tsmom":
       return [
         {

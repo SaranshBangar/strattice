@@ -1,9 +1,12 @@
 """Strategy registry. Maps config `module` name -> Strategy subclass."""
+from .abs_momentum import AbsMomentum
 from .acceleration import AccelerationMomentum
 from .adx_trend import AdxTrend
+from .bb_breakout import BBBreakout
 from .bb_reversion import BBReversion
 from .capitulation import CapitulationReversal
 from .custom import CustomRules
+from .donchian_trend import DonchianTrend
 from .donchian_ls import DonchianLS
 from .ensemble_ls import EnsembleLS
 from .fast_rsi import FastRSIReversion
@@ -23,6 +26,9 @@ from .tsmom import TSMomentum
 from .vol_expansion import VolExpansion
 
 REGISTRY = {
+    "abs_momentum": AbsMomentum,
+    "bb_breakout": BBBreakout,
+    "donchian_trend": DonchianTrend,
     "acceleration": AccelerationMomentum,
     "adx_trend": AdxTrend,
     "capitulation": CapitulationReversal,

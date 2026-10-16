@@ -17,7 +17,7 @@ import math
 import time
 
 from . import config, costs
-from .client import Client
+from .client import make_client
 from .strategies import REGISTRY
 from .strategies.base import atr
 
@@ -60,7 +60,8 @@ def run(strategy, candles: list[dict], capital: float,
         chandelier_k: float = 0.0, atr_period: int = 14, max_hold_bars: int = 0,
         trade_from: int = 0, reentry_cooldown_bars: int = 0,
         exit_ladder_frac: float = 0.0, exit_ladder_k: float = 3.5,
-        allow_short: bool = False, cost_profile: dict | None = None) -> dict:
+        allow_short: bool = False, cost_profile: dict | None = None,
+        curve: bool = False) -> dict:
     """All friction (fee+GST per side, TDS per sell, slippage on fills) comes from costs.py
     so the backtest, DRY_RUN, and live accounting can never diverge. slippage=None uses the
     configured slippage_bps; pass an explicit fraction to override.
@@ -329,6 +330,9 @@ def run(strategy, candles: list[dict], capital: float,
         "sell_notional": round(sell_notional, 4),
         "fees_pct_of_capital": round(fees_paid / capital * 100, 2) if capital else 0.0,
         "exposure_pct": round(bars_in_market / max(len(equity_curve), 1) * 100, 1),
+        # research hook: (bar time, equity) per scored bar, for calendar-period stats
+        **({"curve": [(candles[start + j]["time"], e) for j, e in enumerate(equity_curve)]}
+           if curve else {}),
     }
 
 
@@ -848,9 +852,9 @@ def main() -> None:
                        for r in _csv.DictReader(f)]
     elif a.years and a.years > 0:
         since = int((time.time() - a.years * 365.25 * 86400) * 1000)
-        candles = Client().candles(a.market, a.interval, since_ms=since)
+        candles = make_client().candles(a.market, a.interval, since_ms=since)
     else:
-        candles = Client().candles(a.market, a.interval, a.limit)
+        candles = make_client().candles(a.market, a.interval, a.limit)
     strat = REGISTRY[a.module]("backtest", a.market, json.loads(a.params))
     kw = dict(stop_loss_pct=a.stop_loss, take_profit_pct=a.take_profit, slippage=a.slippage,
               interval=a.interval, chandelier_k=a.chandelier_k, atr_period=a.atr_period,

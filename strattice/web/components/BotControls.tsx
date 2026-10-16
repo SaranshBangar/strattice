@@ -8,10 +8,13 @@ export function BotControls({
   initial,
   linked = true,
   enabledStrategies = 0,
+  exchangeLabel = "exchange",
 }: {
   initial: { active: boolean; live: boolean };
   linked?: boolean;
   enabledStrategies?: number;
+  /** Display name of the linked exchange (CoinDCX / Binance). */
+  exchangeLabel?: string;
 }) {
   const [active, setActive] = useState(initial.active);
   const [live, setLive] = useState(initial.live);
@@ -80,7 +83,7 @@ export function BotControls({
 
       {!linked && (
         <p className="mt-3 rounded-md bg-inset px-3 py-2 text-sm text-muted">
-          Link your CoinDCX API keys above to enable the bot.
+          Link your exchange API keys above to enable the bot.
         </p>
       )}
 
@@ -144,7 +147,7 @@ export function BotControls({
                 <span className="font-semibold text-warn">
                   You are about to trade real money.
                 </span>{" "}
-                Bots will place real buy/sell orders against your CoinDCX
+                Bots will place real buy/sell orders against your {exchangeLabel}
                 balance from the next poll. Simulated results never guarantee
                 live ones.
               </p>
@@ -168,7 +171,7 @@ export function BotControls({
                 <p className="rounded-md bg-inset px-3 py-2 text-xs text-muted">
                   {linked
                     ? "Enable at least one strategy before going live - there is nothing to run yet."
-                    : "Link your CoinDCX API keys before going live."}
+                    : "Link your exchange API keys before going live."}
                 </p>
               )}
               <div className="flex flex-wrap items-center gap-2">
@@ -218,7 +221,7 @@ export function BotControls({
               className="mt-3 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-sm text-warn"
             >
               <span className="font-semibold">Live mode is on.</span> Bots will
-              place real buy/sell orders using your CoinDCX balance. Turning
+              place real buy/sell orders using your {exchangeLabel} balance. Turning
               live off is instant and never asks questions.
             </p>
           )}

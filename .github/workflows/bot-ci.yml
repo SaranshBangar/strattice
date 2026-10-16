@@ -1,0 +1,58 @@
+# Python side: the trading bot (both exchange clients, executor, risk, feeds,
+# backtester) and the SaaS worker (config generation, entitlements, supervisor boot).
+# Every suite stubs the network, so the runner needs no exchange access or keys.
+# bot.test_decision_window (long real-data parity replay) stays a manual run.
+name: bot-ci
+
+on:
+  pull_request:
+    paths:
+      - "bot/**"
+      - "strattice/worker/**"
+      - "strattice/db/**"
+      - "config.yaml"
+      - "requirements.txt"
+      - ".github/workflows/bot-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "bot/**"
+      - "strattice/worker/**"
+      - "strattice/db/**"
+      - "config.yaml"
+      - "requirements.txt"
+      - ".github/workflows/bot-ci.yml"
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DRY_RUN: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt cryptography numpy
+
+      - name: Bot suites
+        run: |
+          python -m bot.backtest --selftest
+          python -m bot.test_exchanges
+          python -m bot.test_reliability
+          python -m bot.test_fallbacks
+          python -m bot.test_portfolio_features
+          python -m bot.test_feeds
+
+      - name: Worker self-checks
+        working-directory: strattice/worker
+        run: |
+          python config_gen.py
+          python entitlements.py
+
+      - name: Worker -> engine boot (both exchanges)
+        run: python strattice/worker/selfcheck.py

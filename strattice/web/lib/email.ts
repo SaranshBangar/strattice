@@ -205,7 +205,7 @@ function layout(opts: {
         </td></tr>
         <tr><td style="padding:18px 32px;border-top:1px solid #232838;">
           <p style="margin:0;color:#5A6379;font-size:11px;line-height:1.6;">
-            ${BRAND} · automated crypto strategies on CoinDCX.<br>
+            ${BRAND} · automated crypto strategies on CoinDCX and Binance.<br>
             You get this because you have a ${BRAND} account.
           </p>
         </td></tr>
@@ -226,7 +226,7 @@ export function sendSignUpEmail(to: string, name?: string | null) {
     `Welcome to ${BRAND}`,
     layout({
       heading: `Welcome, ${first(name)}.`,
-      lead: `Your ${BRAND} account is ready. Link your CoinDCX API keys and pick a strategy to get the bot running.`,
+      lead: `Your ${BRAND} account is ready. Link your CoinDCX or Binance API keys and pick a strategy to get the bot running.`,
       cta: { label: "Open dashboard", href: `${appUrl()}/dashboard` },
     }),
   );
@@ -240,7 +240,7 @@ export function sendSignInEmail(to: string, name?: string | null) {
       heading: "New sign-in",
       lead: `Hi ${first(name)}, your ${BRAND} account was just signed in.`,
       rows: [["Time", new Date().toUTCString()]],
-      note: `If this wasn't you, change your password and remove your CoinDCX keys immediately.`,
+      note: `If this wasn't you, change your password and remove your exchange API keys immediately.`,
     }),
   );
 }
@@ -271,16 +271,16 @@ export function sendResetEmail(to: string, url: string, name?: string | null) {
   );
 }
 
-export function sendApiKeyEmail(to: string, label: string) {
+export function sendApiKeyEmail(to: string, label: string, exchange = "CoinDCX") {
   return send(
     to,
-    `CoinDCX keys linked`,
+    `${exchange} keys linked`,
     layout({
       heading: "API keys linked",
-      lead: `New CoinDCX API keys were added to your ${BRAND} account. They're encrypted at rest and used only to run your strategies.`,
-      rows: [["Label", label]],
+      lead: `New ${exchange} API keys were added to your ${BRAND} account. They're encrypted at rest and used only to run your strategies.`,
+      rows: [["Exchange", exchange], ["Label", label]],
       cta: { label: "Review account", href: `${appUrl()}/account` },
-      note: `If you didn't do this, remove the keys and revoke them in CoinDCX.`,
+      note: `If you didn't do this, remove the keys and revoke them in ${exchange}.`,
     }),
   );
 }

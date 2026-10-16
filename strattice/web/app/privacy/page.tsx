@@ -37,7 +37,7 @@ export default function PrivacyPage() {
           if you sign in with Google).
         </LI>
         <LI>
-          <span className="text-dim">Exchange API keys</span> — the CoinDCX API key and secret you choose to link, stored encrypted at rest and never
+          <span className="text-dim">Exchange API keys</span> — the CoinDCX or Binance API key and secret you choose to link, stored encrypted at rest and never
           displayed back.
         </LI>
         <LI>
@@ -60,14 +60,14 @@ export default function PrivacyPage() {
 
       <H>Security</H>
       <P>
-        Data is stored in Cloudflare D1. CoinDCX API keys are encrypted with AES-256-GCM and are never shown back to you or visible in any admin view.
+        Data is stored in Cloudflare D1. Exchange API keys are encrypted with AES-256-GCM and are never shown back to you or visible in any admin view.
         We recommend keys with withdrawals disabled so funds cannot leave your exchange account through Strattice. No system is perfectly secure, but
         we take reasonable measures to protect your data.
       </P>
 
       <H>Third parties</H>
       <P>
-        We share data only as needed to run the Service, with providers including: CoinDCX (order execution, using your keys), public market-data
+        We share data only as needed to run the Service, with providers including: CoinDCX or Binance (order execution, using your keys), public market-data
         providers, an email provider for transactional email, Google (only if you use Google sign-in), Telegram (only if you enable Telegram alerts),
         and our authentication provider. Each processes data under its own terms.
       </P>

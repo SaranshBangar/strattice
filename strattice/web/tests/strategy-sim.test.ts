@@ -99,9 +99,13 @@ describe("sanitizeParams", () => {
 
   it("enforces cross-field rules (fast < slow)", () => {
     expect(() =>
-      sanitizeParams("ma_crossover", { fast: 50, slow: 10 }),
-    ).toThrow(/Fast SMA/);
-    expect(paramRuleError("ma_crossover", { fast: 5, slow: 20 })).toBeNull();
+      sanitizeParams("macd_trend", { fast: 30, slow: 20 }),
+    ).toThrow(/Fast EMA/);
+    expect(paramRuleError("macd_trend", { fast: 12, slow: 26 })).toBeNull();
+    // a Bollinger exit band at/above the entry band could never hold a position
+    expect(() => sanitizeParams("bb_breakout", { k: 1, exit_k: 1 })).toThrow(
+      /exit band/,
+    );
   });
 
   it("mergedParams overlays only editable keys", () => {
@@ -156,6 +160,20 @@ describe("runSim exits", () => {
     });
     expect(r.trades[0].reason).toBe("target");
     expect(r.trades[0].netPct).toBeCloseTo(10 - FRICTION_PCT, 10);
+  });
+
+  it("charges the venue's friction when one is passed (Binance)", () => {
+    const fx = fixtureCandles(500, 42);
+    const dcx = simulate("bb_breakout", fx);
+    const bin = simulate("bb_breakout", fx, null, 0.24);
+    expect(dcx.trades.length).toBeGreaterThan(0);
+    expect(bin.trades.map((t) => t.exitIdx)).toEqual(
+      dcx.trades.map((t) => t.exitIdx),
+    );
+    bin.trades.forEach((t, i) => {
+      expect(t.netPct).toBeCloseTo(t.grossPct - 0.24, 10);
+      expect(t.netPct - dcx.trades[i].netPct).toBeCloseTo(FRICTION_PCT - 0.24, 10);
+    });
   });
 
   it("time-stop closes a going-nowhere position", () => {

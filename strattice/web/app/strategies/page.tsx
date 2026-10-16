@@ -12,11 +12,12 @@ export default async function StrategiesPage() {
   const user = await getUser();
   if (!user) redirect("/sign-in");
 
-  const [tier, strategies, breakdown, allowShorting] = await Promise.all([
+  const [tier, strategies, breakdown, allowShorting, creds] = await Promise.all([
     q.effectiveTier(user.id),
     q.listStrategies(user.id),
     q.strategyBreakdown(user.id),
     q.getAllowShorting(user.id),
+    q.credentialsLinked(user.id),
   ]);
 
   return (
@@ -53,6 +54,7 @@ export default async function StrategiesPage() {
         strategies={strategies}
         breakdown={breakdown}
         allowShorting={allowShorting}
+        exchange={creds.exchange}
       />
 
       {/* Recurring buy (DCA): simulator only until the engine can run it live. */}

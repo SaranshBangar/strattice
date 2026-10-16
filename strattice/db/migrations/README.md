@@ -34,3 +34,4 @@ wrangler d1 execute coindcx --file strattice/db/migrations/0001_rate_limit.sql -
 | ---------------------- | ---------------------------------------------------------------------- |
 | `0001_rate_limit.sql`  | `rateLimit` table for Better Auth's DB-backed limiter (see lib/auth.ts) |
 | `0002_perf_indexes.sql` | Indexes on `subscriptions.cashfree_sub_id`, `account.userId`, `session.userId`, `user_strategies(user_id, position)` |
+| `0008_exchange.sql`    | `exchange_credentials.exchange` (coindcx \| binance) - which venue the linked keys trade on |

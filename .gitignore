@@ -17,3 +17,5 @@ node_modules/
 .next/
 next-env.d.ts
 *.tsbuildinfo
+# research snapshots are versioned (the studies must reproduce byte-for-byte)
+!research/data/
