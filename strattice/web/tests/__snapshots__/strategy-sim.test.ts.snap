@@ -1,5 +1,41 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`simulate snapshots (fixtureCandles(500, seed 42)) > bb_breakout trades are stable 1`] = `
+{
+  "buyHoldPct": "144.56",
+  "closed": 4,
+  "exposurePct": "58.7",
+  "totalNetPct": "232.34",
+  "trades": [
+    {
+      "entry": 22,
+      "exit": 121,
+      "netPct": "40.98",
+      "reason": "signal",
+    },
+    {
+      "entry": 206,
+      "exit": 303,
+      "netPct": "56.69",
+      "reason": "signal",
+    },
+    {
+      "entry": 382,
+      "exit": 451,
+      "netPct": "42.13",
+      "reason": "signal",
+    },
+    {
+      "entry": 456,
+      "exit": 484,
+      "netPct": "5.85",
+      "reason": "signal",
+    },
+  ],
+  "wins": 4,
+}
+`;
+
 exports[`simulate snapshots (fixtureCandles(500, seed 42)) > bb_reversion trades are stable 1`] = `
 {
   "buyHoldPct": "144.56",
@@ -33,6 +69,36 @@ exports[`simulate snapshots (fixtureCandles(500, seed 42)) > bb_reversion trades
     },
   ],
   "wins": 0,
+}
+`;
+
+exports[`simulate snapshots (fixtureCandles(500, seed 42)) > donchian_trend trades are stable 1`] = `
+{
+  "buyHoldPct": "144.56",
+  "closed": 3,
+  "exposurePct": "60.3",
+  "totalNetPct": "226.59",
+  "trades": [
+    {
+      "entry": 22,
+      "exit": 122,
+      "netPct": "37.53",
+      "reason": "signal",
+    },
+    {
+      "entry": 209,
+      "exit": 303,
+      "netPct": "54.92",
+      "reason": "signal",
+    },
+    {
+      "entry": 382,
+      "exit": 489,
+      "netPct": "53.28",
+      "reason": "signal",
+    },
+  ],
+  "wins": 3,
 }
 `;
 

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getUser } from "@/lib/session";
+import * as q from "@/lib/queries";
 import { StrategyBuilder } from "@/components/StrategyBuilder";
 
 export const dynamic = "force-dynamic";
@@ -8,6 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function BuildStrategyPage() {
   const user = await getUser();
   if (!user) redirect("/sign-in");
+  const creds = await q.credentialsLinked(user.id);
 
   return (
     <div className="space-y-6">
@@ -28,7 +30,7 @@ export default async function BuildStrategyPage() {
           risk-managed engine as the stock templates.
         </p>
       </div>
-      <StrategyBuilder />
+      <StrategyBuilder exchange={creds.exchange} />
     </div>
   );
 }

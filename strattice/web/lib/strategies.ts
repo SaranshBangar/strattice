@@ -22,17 +22,54 @@ export interface StrategyMeta {
 }
 
 export const STRATEGY_META: Record<Template, StrategyMeta> = {
-  sharpe_mom: {
-    label: "Risk-Adjusted Momentum",
-    backtestNetPct: 272.2,
+  bb_breakout: {
+    label: "Bollinger Breakout",
+    backtestNetPct: 599.4,
     kind: "TREND",
     blurb:
-      "Momentum divided by its own volatility - buys clean, persistent thrust, skips lottery spikes.",
+      "Buys a close above the upper Bollinger band and rides it until price falls back to the middle - the most robust engine in the v9 study.",
+    entry:
+      "The close breaks above the upper Bollinger band (20-day SMA + 2 standard deviations): price has moved further than its own recent noise explains.",
+    exit: "Its own signal: a close back under the 20-day middle band. Plus a 10% disaster stop. No trail - the middle band already trails the move.",
+    style:
+      "Volatility-adjusted breakout holder. ~4-6 round trips a year; holds while the move keeps pressing the bands.",
+    explain: [
+      "Bollinger bands draw an envelope two standard deviations either side of a 20-day average. Mean-reversion traders read a close above the top band as \"overbought\" and fade it - and that reading loses money net of India's friction (Bollinger Reversion is retired for exactly that reason). This template takes the opposite, trend-following reading: a close above the upper band is a volatility-adjusted breakout. Price has moved further than its own recent noise can explain, which is what the start of a real trend looks like.",
+      "The band width adapts by itself: in a quiet market a small push clears it, in a wild one it takes a large move - so the entry threshold scales with the regime instead of being a fixed percentage. The exit is just as adaptive: the position rides until a close slips back under the 20-day middle band, which trails the move at the pace the market sets. A 10% hard stop is the disaster brake for a gap through the band.",
+      "Why this one leads the catalog: in the v9 deep re-test - Binance USDT 2017-2026 at Binance friction and CoinDCX INR 2021-2026 at India friction, BTC overlay on, both windows including the 2022 bear market - it was positive on 12/12 Binance coins (median CAGR +35%) and 7/7 INR pairs (+30%), with the shallowest median drawdown of any template and the best return-per-drawdown versus buy-and-hold on 11/12 coins. It also held up before 2023, the window no earlier study had seen.",
+      "It is not a lucky parameter: all 18 tested combinations of band period (15/20/30), width (1.5/2/2.5σ) and exit band were positive on every market of both venues. The default is the middle of that plateau, not its best cell. Expect a modest win rate and more round trips than the slow regime holders - the exit is quick by design, which is what keeps the drawdowns shallow.",
+    ],
+  },
+  donchian_trend: {
+    label: "Donchian Trend",
+    backtestNetPct: 339.9,
+    kind: "TREND",
+    blurb:
+      "The Turtle traders' channel system: buy a fresh 20-day high, sell a fresh 10-day low.",
+    entry:
+      "The close breaks above the highest high of the previous 20 days.",
+    exit: "Its own signal: a close below the lowest low of the previous 10 days. Plus a 10% disaster stop. No trail.",
+    style:
+      "Classic channel breakout holder. ~3-4 round trips a year; sits through chop inside the channel.",
+    explain: [
+      "This is the system the Turtle traders made famous: enter when price makes a new N-day high, exit when it makes a new M-day low. The asymmetry between the two windows is the whole anti-whipsaw defense - the entry needs a fresh 20-day high, the exit waits for a fresh 10-day low, so price wandering around inside the channel costs nothing.",
+      "Unlike Momentum Breakout (which is entry-only and hands the exit to an ATR trail, with volume and volatility gates on the way in), Donchian Trend owns its exit: the channel low trails the trend at the market's own pace. It needs no indicators beyond highs and lows, which makes it one of the most transparent strategies you can run.",
+      "v9 deep re-test (Binance USDT 2017-2026, CoinDCX INR 2021-2026, BTC overlay on): positive on 11/12 Binance coins (median CAGR +33%) and 7/7 INR pairs (+24%), beating buy-and-hold on return-per-drawdown on every INR pair. All six tested entry/exit window pairs (15/7 through 40/20) were positive on both venues; 20/10 is the textbook setting and the middle of that plateau.",
+    ],
+  },
+  sharpe_mom: {
+    label: "Risk-Adjusted Momentum",
+    backtestNetPct: 148.9,
+    kind: "TREND",
+    blurb:
+      "Retired: Momentum divided by its own volatility - buys clean, persistent thrust, skips lottery spikes.",
     entry:
       "The 30-day return is ≥ 6% AND its volatility-normalized score (return ÷ realized vol × √30) is ≥ 1.5, with the close within 3% of the 30-day high and above the 50-day regime SMA.",
     exit: "ATR chandelier trail (3.5×ATR(14) off the peak) plus a 7% hard stop. No take-profit - winners are left to run.",
     style:
       "The vol-scaled refinement of time-series momentum. A handful of trades per year.",
+    warning:
+      "Retired in the v9 deep re-test (research/FINDINGS.md v9): replayed on Binance USDT 2017-2026 and CoinDCX INR 2021-2026 - windows that include the 2022 bear market the original 2023-2026 study never saw - it failed the bar every active template clears on BOTH venues. Median CAGR was ~11% on Binance and ~10% on CoinDCX - half of plain Time-Series Momentum on the same coins, so the volatility scaling costs more than it saves. Existing copies keep running and keep their exits managed, but it is no longer offered for new adds; Bollinger Breakout or Donchian Trend are the closest active replacements.",
     explain: [
       "Raw momentum has a known weakness: a +20% month made of violent 8% daily swings is statistically fragile - that is where momentum crashes live. The published fix (the risk-managed momentum literature) is to normalize the return by its own realized volatility, so only clean, persistent trends score high.",
       "This template applies that fix directly: the 30-day return must clear 6% on its own AND clear a risk-adjusted score of 1.5 after dividing by realized volatility. A grind-up on low noise qualifies; a lottery spike on huge noise does not. The usual gates stack on top - close within 3% of the 30-day high (not rolling over) and the 50-day regime filter.",
@@ -42,10 +79,10 @@ export const STRATEGY_META: Record<Template, StrategyMeta> = {
   },
   macd_trend: {
     label: "MACD Continuation",
-    backtestNetPct: 264.9,
+    backtestNetPct: 271.4,
     kind: "TREND",
     blurb:
-      "Buys fresh MACD crossovers inside an uptrend - the best walk-forward record we have ever measured.",
+      "Buys fresh MACD crossovers inside an uptrend - a steady continuation rider, mid-pack in the v9 deep re-test.",
     entry:
       "The MACD line (EMA12 − EMA26) crosses above its 9-day signal line within the last 3 days, with MACD above zero, the histogram expanding, and price above its 50-day regime SMA.",
     exit: "ATR chandelier trail (3.5×ATR(14) off the peak) plus a 7% hard stop. No take-profit.",
@@ -56,11 +93,12 @@ export const STRATEGY_META: Record<Template, StrategyMeta> = {
       "This template refuses the counter-trend versions of that signal: MACD itself must be above zero (the 12-day average is above the 26-day - real uptrend, not a bear-market bounce), the cross must be fresh (within 3 days), the histogram must still be expanding (momentum building, not fading), and the 50-day regime filter must agree.",
       "Exits are the shared trend-following layer: 3.5×ATR chandelier trail, 7% hard stop, no target.",
       "Backtested on real CoinDCX daily data (2023-2026): +264.9% net on BNB/INR (USDT twin +188.8%) and positive in 8 of 8 rolling out-of-sample folds across both venues - the best walk-forward record of any strategy we have ever tested. Every one of the 12 parameter combinations in the study was profitable on both venues.",
+      "v9 deep re-test (Binance USDT 2017-2026 at Binance friction, CoinDCX INR 2021-2026 at India friction, BTC overlay on - both windows include the 2022 bear market): median CAGR 18.8% on Binance (9/12 coins positive) and 17.3% on CoinDCX (6/7 INR pairs positive). That tempers the earlier claim: it is still positive on most markets, but it sits at the bottom of the active catalog and was flat-to-negative on Binance before 2023 - it stays offered, it no longer anchors the default lineup.",
     ],
   },
   trend_regime: {
     label: "Trend Regime",
-    backtestNetPct: 209.8,
+    backtestNetPct: 60.0,
     kind: "TREND",
     blurb:
       "The oldest edge in trend-following: long above the 100-day line, flat below it.",
@@ -74,19 +112,22 @@ export const STRATEGY_META: Record<Template, StrategyMeta> = {
       "The naive version churns when price hovers at the line. This template adds a hysteresis band: buy only ≥ 2% ABOVE the line (and only while the line is rising), sell only ≥ 2% BELOW it. Entries and exits happen at different prices, so chop costs one round trip, not ten - the friction-minimal expression of trend following.",
       "Unlike the burst-entry engines it holds through the whole regime: fewer, much longer trades, higher exposure. The exit is the strategy's own signal rather than a trail, because a trail would cut exactly the multi-month holds the edge depends on. A 10% hard stop is the disaster brake.",
       "Backtested on real CoinDCX daily data (2023-2026): +209.8% net on DOGE/INR (USDT twin +167.5%), with every tested 100-120-day variant positive on both venues. Its INR out-of-sample record is +308% compounded across folds; the USDT fold record is thinner (1 of 4 positive, though still +24.8% compounded) - judge it over quarters, not weeks.",
+      "v9 deep re-test (Binance USDT 2017-2026 at Binance friction, CoinDCX INR 2021-2026 at India friction, BTC overlay on - both windows include the 2022 bear market): median CAGR 35.9% on Binance (10/12 coins positive) and 19.7% on CoinDCX (6/7 INR pairs positive). Strong across the Binance coins; on DOGE/INR itself the 2021-22 top cost it most of its edge (+60% net over 2021-2026), so the v9 default lineup holds DOGE with Bollinger Breakout instead.",
     ],
   },
   ichimoku: {
     label: "Ichimoku Breakout",
-    backtestNetPct: 83.3,
+    backtestNetPct: 40.3,
     kind: "TREND",
     blurb:
-      "The classic Japanese cloud system: buys fresh breaks above the kumo, exits under the kijun.",
+      "Retired: The classic Japanese cloud system: buys fresh breaks above the kumo, exits under the kijun.",
     entry:
       "The close breaks above the Ichimoku cloud (9/26/52) freshly - within the last 3 days - with tenkan above kijun and the lagging-span check clear.",
     exit: "Its own signal: the close dropping below the 26-day kijun line. Plus a 7% hard stop. No trail.",
     style:
       "Structured trend rider with a built-in exit line; holds while price stays above the kijun.",
+    warning:
+      "Retired in the v9 deep re-test (research/FINDINGS.md v9): replayed on Binance USDT 2017-2026 and CoinDCX INR 2021-2026 - windows that include the 2022 bear market the original 2023-2026 study never saw - it failed the bar every active template clears on BOTH venues. Median CAGR was ~8% on Binance with only 6/12 coins beating buy-and-hold on return-per-drawdown, and on its own ADA/INR sleeve it made +40% over five years. Existing copies keep running and keep their exits managed, but it is no longer offered for new adds; Bollinger Breakout or Donchian Trend are the closest active replacements.",
     explain: [
       "Ichimoku Kinko Hyo draws a 'cloud' (kumo) from two projected midlines; trading above the cloud is its definition of an uptrend, and the cloud's thickness reflects how much volatility that judgment has absorbed. It is one of the most widely used trend systems in crypto.",
       "This template trades only the highest-conviction version of the classic long signal: a FRESH close above the cloud top (within 3 days - no chasing a market that has been above the cloud for weeks), with the 9-day tenkan above the 26-day kijun (short-term momentum agrees) and the chikou-span check (price above its own level 26 days ago).",
@@ -96,7 +137,7 @@ export const STRATEGY_META: Record<Template, StrategyMeta> = {
   },
   tsmom: {
     label: "Time-Series Momentum",
-    backtestNetPct: 207.6,
+    backtestNetPct: 228.8,
     kind: "TREND",
     blurb:
       "Buys strength near recent highs - the most robust documented crypto edge.",
@@ -110,11 +151,12 @@ export const STRATEGY_META: Record<Template, StrategyMeta> = {
       "Three gates keep it honest. The 30-day return must exceed 10% (real momentum, not drift). The close must sit within 2% of the 30-day high - if price is already rolling over, the move is fading and you'd be buying someone else's exit. And the regime filter (price above its 50-day average) confirms the uptrend context.",
       "There is deliberately no take-profit. The whole edge is the fat right tail: a few large winners pay for everything, including India's ~1.5-1.7% round-trip friction. The exit is a chandelier trail 3.5×ATR below the highest close since entry, plus a 7% disaster stop.",
       "Backtested on real CoinDCX daily data (2023-2026): +207.6% net of all fees and TDS on ETH/INR, profit factor 2.58, positive in 17 of 21 rolling out-of-sample folds. It goes quiet in bear markets and choppy ranges - that silence is the regime filter doing its job.",
+      "v9 deep re-test (Binance USDT 2017-2026 at Binance friction, CoinDCX INR 2021-2026 at India friction, BTC overlay on - both windows include the 2022 bear market): median CAGR 28.1% on Binance (11/12 coins positive) and 22.5% on CoinDCX (7/7 INR pairs positive).",
     ],
   },
   momentum: {
     label: "Momentum Breakout",
-    backtestNetPct: 108.7,
+    backtestNetPct: 145.3,
     kind: "MOMENTUM",
     blurb: "Buys fresh breakouts of the 20-day high on real volume.",
     entry:
@@ -126,19 +168,22 @@ export const STRATEGY_META: Record<Template, StrategyMeta> = {
       "Most breakouts fail, so the template demands proof before committing: volume at least equal to its 20-day average (real participation), ATR above 1% of price (dead tape produces fake breakouts), a 0.2% buffer over the old high, and a 5% chase cap so you never buy the top of a spike - daily gaps are bigger than intraday ones, hence the wider cap.",
       "Exits are pure trend-following: no target, a 3.5×ATR chandelier trail, and a 7% hard stop sized for daily-bar noise.",
       "Backtested on real CoinDCX daily data (2023-2026): +108.7% net on BTC/INR, profit factor 2.75, positive in 16 of 21 rolling out-of-sample folds. Expect a modest win rate - the few breakouts that run for weeks pay for the many that stall out.",
+      "v9 deep re-test (Binance USDT 2017-2026 at Binance friction, CoinDCX INR 2021-2026 at India friction, BTC overlay on - both windows include the 2022 bear market): median CAGR 32.2% on Binance (11/12 coins positive) and 22.8% on CoinDCX (7/7 INR pairs positive).",
     ],
   },
   squeeze_breakout: {
     label: "Squeeze Breakout",
-    backtestNetPct: 138.9,
+    backtestNetPct: 230.5,
     kind: "BREAKOUT",
     blurb:
-      "Waits for a volatility squeeze, then trades the breakout with volume.",
+      "Retired: Waits for a volatility squeeze, then trades the breakout with volume.",
     entry:
       "Bollinger bands compress inside the Keltner channel (squeeze) within the last 6 days, then price breaks the prior 20-day high by ≥ 0.2% on ≥ 1× average volume, in an uptrend.",
     exit: "ATR chandelier trail (3.5×ATR(14) off the peak) plus a 7% hard stop. No take-profit.",
     style:
       "Coil-and-release on daily bars. The best walk-forward record of the backtest study.",
+    warning:
+      "Retired in the v9 deep re-test (research/FINDINGS.md v9): replayed on Binance USDT 2017-2026 and CoinDCX INR 2021-2026 - windows that include the 2022 bear market the original 2023-2026 study never saw - it failed the bar every active template clears on BOTH venues. It did well on INR pairs but fell apart on Binance (median CAGR ~10%, and negative before 2023 without the BTC overlay) - a venue-specific result, not a robust edge. Existing copies keep running and keep their exits managed, but it is no longer offered for new adds; Bollinger Breakout or Donchian Trend are the closest active replacements.",
     explain: [
       "Volatility is cyclical: quiet periods are compressed springs. The TTM-squeeze idea detects the compression by comparing two envelopes - when the Bollinger bands (driven by close-to-close variance) squeeze inside the Keltner channel (driven by true range), the market is unusually coiled.",
       "The squeeze itself has no direction; it only says a move is loading. Direction comes from the breakout: within 6 days of a squeeze, price must clear the prior 20-day high with the same discipline as the Momentum template - 0.2% buffer, 5% chase cap, volume at least average, ATR floor.",
@@ -148,15 +193,17 @@ export const STRATEGY_META: Record<Template, StrategyMeta> = {
   },
   ma_crossover: {
     label: "MA Crossover",
-    backtestNetPct: 187.7,
+    backtestNetPct: 84.3,
     kind: "TREND",
     blurb:
-      "Buys when the 8-day average crosses above the 25-day; the trail takes care of the exit.",
+      "Retired: Buys when the 8-day average crosses above the 25-day; the trail takes care of the exit.",
     entry:
       "Fast SMA(8) crosses above slow SMA(25) within the last 3 days with the gap ≥ 0.2×ATR, the slow MA rising, and price above its 100-day regime SMA.",
     exit: "ATR chandelier trail (3.5×ATR(14) off the peak) plus a 7% hard stop. No take-profit - winners are left to run.",
     style:
       "Patient trend-follower. Few entries; holds winners for weeks to months.",
+    warning:
+      "Retired in the v9 deep re-test (research/FINDINGS.md v9): replayed on Binance USDT 2017-2026 and CoinDCX INR 2021-2026 - windows that include the 2022 bear market the original 2023-2026 study never saw - it failed the bar every active template clears on BOTH venues. Median CAGR was ~8% on Binance, where only 3/12 coins beat buy-and-hold on return-per-drawdown, and it lost money on XRP/USDT outright. Existing copies keep running and keep their exits managed, but it is no longer offered for new adds; Bollinger Breakout or Donchian Trend are the closest active replacements.",
     explain: [
       "A moving average smooths price over a window: the 8-day average reacts quickly, the 25-day average slowly. When the fast average climbs above the slow one, recent prices are decisively higher than older prices - the classic definition of a new uptrend.",
       "The naive version of this strategy gets destroyed by whipsaws: in sideways chop the averages cross back and forth and every crossing pays fees. This template kills the churn three ways - the fast average must clear the slow one by at least 0.2×ATR (a real gap, not a graze), the slow average itself must be rising, and price must sit above its 100-day regime average so you only ever buy into strength.",
@@ -166,7 +213,7 @@ export const STRATEGY_META: Record<Template, StrategyMeta> = {
   },
   vol_expansion: {
     label: "Volatility Expansion",
-    backtestNetPct: 143.6,
+    backtestNetPct: 212.4,
     kind: "VOLATILITY",
     blurb:
       "Enters when volatility pops out of a quiet range at a new local high.",
@@ -179,11 +226,12 @@ export const STRATEGY_META: Record<Template, StrategyMeta> = {
       "Direction comes from the second condition: the expansion must coincide with a new 10-day closing high, in an uptrend. Volatility with an upward resolution is an entry; volatility alone is just noise.",
       "The ATR that widened to trigger the entry also widens the chandelier trail, so the exit automatically gives a violent move more room - then the 7% hard stop is the disaster brake.",
       "Backtested on real CoinDCX daily data (2023-2026): +143.6% net on BNB/INR, profit factor 2.75 (USDT twin +171.9%), with 78 of 81 tested parameter combinations positive - the widest, most forgiving parameter plateau of the study.",
+      "v9 deep re-test (Binance USDT 2017-2026 at Binance friction, CoinDCX INR 2021-2026 at India friction, BTC overlay on - both windows include the 2022 bear market): median CAGR 37.9% on Binance (12/12 coins positive) and 21.0% on CoinDCX (7/7 INR pairs positive).",
     ],
   },
   supertrend: {
     label: "Supertrend",
-    backtestNetPct: 94.6,
+    backtestNetPct: 210.4,
     kind: "TREND",
     blurb:
       "Rides the classic ATR-band trend indicator; buys fresh flips from down to up.",
@@ -196,6 +244,7 @@ export const STRATEGY_META: Record<Template, StrategyMeta> = {
       "This template buys only a FRESH flip to up - within the last 2 days - so it fires once per trend leg. Buying a stale up-state weeks into a move would just be chasing; the freshness rule and the 50-day regime filter keep entries at the start of legs, where the trail has the most room to work.",
       "Because the band is ATR-scaled, the entry automatically adapts: a volatile market needs a bigger reversal to flip the state, a quiet one a smaller one. Exits are the shared trend-following layer - 3.5×ATR chandelier, 7% hard stop, no target.",
       "Backtested on real CoinDCX daily data (2023-2026): positive on 7 of 7 INR pairs (BTC/INR +94.6%, twin +21.8%), positive median across the entire tested parameter plateau, and 15 of 21 rolling out-of-sample folds positive.",
+      "v9 deep re-test (Binance USDT 2017-2026 at Binance friction, CoinDCX INR 2021-2026 at India friction, BTC overlay on - both windows include the 2022 bear market): median CAGR 26.8% on Binance (10/12 coins positive) and 24.7% on CoinDCX (7/7 INR pairs positive).",
     ],
   },
   rsi: {
@@ -295,7 +344,7 @@ export const STRATEGY_META: Record<Template, StrategyMeta> = {
     style:
       "Slow consensus machine holding a position most of the time, long or short.",
     warning:
-      "Short/leverage-style strategy - advanced, opt-in, and the weakest performer we have ever measured: the v8 study found this ensemble NEGATIVE on most markets in every mode (its published edge needs continuous position sizing that a full-allocation sleeve cannot express, and the churn pays 40-87% of capital in fees at spot friction). Shorts lose when price rises, with no natural cap. A stop-loss AND take-profit are mandatory and enforced on every add. Spot markets cannot short: the live engine executes the LONG side only; short signals are paper/research. This template is in the catalog so the rejection is reproducible on your own account in DRY_RUN - do not fund it expecting the paper's numbers.",
+      "Retired from new adds in v9 (negative on 5/7 INR pairs even long-only over 2021-2026). Short/leverage-style strategy - advanced, opt-in, and the weakest performer we have ever measured: the v8 study found this ensemble NEGATIVE on most markets in every mode (its published edge needs continuous position sizing that a full-allocation sleeve cannot express, and the churn pays 40-87% of capital in fees at spot friction). Shorts lose when price rises, with no natural cap. A stop-loss AND take-profit are mandatory and enforced on every add. Spot markets cannot short: the live engine executes the LONG side only; short signals are paper/research. This template is in the catalog so the rejection is reproducible on your own account in DRY_RUN - do not fund it expecting the paper's numbers.",
     explain: [
       "The idea comes from published research (Zarattini, Pagani & Barbon 2025, 'Catching Crypto Trends'): instead of one lookback, run an ensemble of Donchian channels from fast (10 days) to slow (160 days) and size a long/short position by how many agree. It is the academically honest 'profit in any direction' trend design.",
       "Our v4 study rejected the long-only spot adaptation; v8 added true short support to the backtester and re-tested the symmetric form. It failed again - the paper's edge rides on continuous vol-targeted sizing (position proportional to consensus and inverse to volatility), while this engine is all-in-or-flat. Expressed that way the ensemble churns: 26-49 round trips over 2.8 years, 40-87% of capital paid in fees on spot.",

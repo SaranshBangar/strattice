@@ -65,12 +65,14 @@ create table if not exists rateLimit (
 
 -- ───────────── App tables (FK -> Better Auth user) ─────────────
 
--- CoinDCX API keys, encrypted at rest (AES-256-GCM, worker/crypto.py == web/lib/crypto.ts).
+-- Exchange API keys, encrypted at rest (AES-256-GCM, worker/crypto.py == web/lib/crypto.ts).
+-- exchange = which venue the keys (and so the user's bot) trade on: coindcx | binance.
 create table if not exists exchange_credentials (
   user_id     text primary key references user(id) on delete cascade,
   api_key_enc text not null,
   secret_enc  text not null,
   key_label   text,
+  exchange    text not null default 'coindcx',
   created_at  text not null default (datetime('now'))
 );
 

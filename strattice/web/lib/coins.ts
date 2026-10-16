@@ -65,9 +65,9 @@ export function coinFor(market: string): Coin | undefined {
   return BY_SYMBOL.get(baseSymbol(market));
 }
 
-/** Human label for a market id: "I-BTC_INR" -> "BTC/INR". */
+/** Human label for a market id: "I-BTC_INR" -> "BTC/INR", "B-BTC_USDT" -> "BTC/USDT". */
 export function marketLabel(market: string): string {
-  return market.replace(/^I-/, "").replace("_", "/");
+  return market.replace(/^[IB]-/, "").replace("_", "/");
 }
 
 /** Same-origin logo URL for a known coin. The CSP only allows images from

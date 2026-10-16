@@ -6,7 +6,7 @@ import { ImageResponse } from "next/og";
 // signal that actually moves rankings.
 export const runtime = "edge";
 export const alt =
-  "Strattice — algorithmic trading on your own CoinDCX account";
+  "Strattice — algorithmic trading on your own CoinDCX or Binance account";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -73,7 +73,7 @@ export default function OgImage() {
                 background: GAIN,
               }}
             />
-            Non-custodial · CoinDCX
+            Non-custodial · CoinDCX · Binance
           </div>
         </div>
 

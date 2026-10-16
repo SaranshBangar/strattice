@@ -6,7 +6,7 @@ import { googleConfigured } from "@/lib/auth";
 export const metadata: Metadata = {
   title: "Create your account",
   description:
-    "Sign up free for Strattice and run algorithmic trading strategies on your own CoinDCX account. Paper-trading first, no card, non-custodial.",
+    "Sign up free for Strattice and run algorithmic trading strategies on your own CoinDCX or Binance account. Paper-trading first, no card, non-custodial.",
   alternates: { canonical: "/sign-up" },
 };
 

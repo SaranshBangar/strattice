@@ -13,7 +13,7 @@ import hashlib
 import logging
 
 from . import audit, config, costs, notify
-from .client import Client, CoinDCXError
+from .client import Client, ExchangeError
 from .risk import RiskManager
 
 log = logging.getLogger("executor")
@@ -144,7 +144,7 @@ class Executor:
                 exchange_order_id = (orders[0] or {}).get("id")
                 status = "placed"
                 self.client.invalidate_balance_cache()  # wallet just changed - next read must be fresh
-            except CoinDCXError as e:
+            except ExchangeError as e:
                 self._record({
                     "client_order_id": coid, "strategy": strategy, "market": market,
                     "side": side, "qty": qty, "price": price, "notional": notional,
@@ -242,7 +242,7 @@ class Executor:
         if config.LIVE:
             try:
                 self.client.cancel_all()  # no market => cancel every open order
-            except CoinDCXError as e:
+            except ExchangeError as e:
                 log.error("cancel_all failed: %s", e)
             except Exception as e:  # noqa: BLE001 - halting must not depend on the API
                 log.error("cancel_all failed (%s); halting anyway", e)

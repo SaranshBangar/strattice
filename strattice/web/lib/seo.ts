@@ -10,7 +10,7 @@ export const SITE_NAME = "Strattice";
 // high-intent phrase people search ("automated/auto crypto trading in India")
 // and stays under ~160 chars so Google shows it whole in the SERP snippet.
 export const SITE_DESCRIPTION =
-  "Automated crypto trading in India, on your own CoinDCX account. Backtest-proven algo strategies, non-custodial, paper-trading first — net of fees, GST & TDS.";
+  "Automated crypto trading on your own CoinDCX or Binance account. Backtest-proven algo strategies, non-custodial, paper-trading first — net of fees and taxes.";
 
 // High-intent terms an Indian crypto trader actually types, ordered by intent
 // strength and led by the exact-match queries we most want to rank for.
@@ -25,6 +25,8 @@ export const SITE_KEYWORDS = [
   "algo trading crypto India",
   "CoinDCX trading bot",
   "CoinDCX API trading",
+  "Binance trading bot",
+  "Binance API trading",
   "automated crypto trading platform",
   "backtesting crypto strategies",
   "paper trading crypto India",
@@ -83,6 +85,7 @@ export function softwareApplicationSchema() {
     alternateName: [
       "Strattice — Automated Crypto Trading India",
       "Strattice CoinDCX Trading Bot",
+      "Strattice Binance Trading Bot",
     ],
     applicationCategory: "FinanceApplication",
     applicationSubCategory: "Automated Crypto Trading Platform",
@@ -102,8 +105,8 @@ export function softwareApplicationSchema() {
       "Visual strategy builder",
       "Paper trading (DRY_RUN) with real prices",
       "Risk-managed executor with hard stops and kill switch",
-      "Costs modeled net of exchange fees, GST and TDS",
-      "Non-custodial execution on your own CoinDCX account",
+      "Costs modeled per exchange: fees, GST and TDS",
+      "Non-custodial execution on your own CoinDCX or Binance account",
     ],
   } as const;
 }

@@ -5,7 +5,7 @@
 // Rendering is the fixed-axis LiveTape engine: still gridlines and tick
 // labels, a gold 20-tick average, a dashed "open" reference and a green/red
 // wash for time spent above/below it.
-// Display-only: the bot itself still trades INR pairs on CoinDCX.
+// Display-only: the bot trades on the user's linked exchange (CoinDCX or Binance).
 import { useEffect, useState } from "react";
 import { LiveTape, type LiveTapePoint } from "@/components/chart/LiveTape";
 import { useBinanceTradeStream } from "@/components/chart/useBinanceTradeStream";
@@ -210,7 +210,7 @@ export function LiveChart() {
       <div className="flex flex-col gap-1 bg-white/[0.03] px-4 py-2 font-mono text-[11px] text-faint sm:flex-row sm:items-center sm:justify-between">
         <span>strategies act on lines like the gold average</span>
         <span className="shrink-0">
-          Binance stream · display only, bots trade on CoinDCX
+          Binance stream · display only, bots trade on your linked exchange
         </span>
       </div>
     </section>

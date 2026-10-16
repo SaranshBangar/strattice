@@ -2,7 +2,7 @@
 // CoinDCX). Accepts legacy CoinDCX pair names (I-BTC_INR / B-BTC_USDT) and maps
 // them to Binance USDT symbols, so existing callers keep working unchanged.
 // Caches upstream for 5s so many pollers cost one fetch. Display/analysis only;
-// order execution still happens on CoinDCX.
+// orders execute on the user's linked exchange (bot side, not here).
 import { NextResponse } from "next/server";
 import { toBinanceSymbol } from "@/lib/binance";
 import { rateLimit, clientIp } from "@/lib/rate-limit";

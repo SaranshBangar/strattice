@@ -5,24 +5,35 @@
 // everything, and the paid tiers are kept only so legacy subscription rows still
 // resolve. Checkout is not offered anywhere in the UI.
 
-/** The ACTIVE stock templates: the daily trend engines that survived the real-data
- *  backtest study (research/FINDINGS.md). Order = picker order, strongest first. */
+/** The ACTIVE stock templates: the daily trend engines that clear the v9 bar on BOTH
+ *  venues - median CAGR >= 15% with the BTC overlay on, >= 75% of markets positive and
+ *  a better return/drawdown than buy-and-hold on >= 2/3 of them, on Binance 2017-2026
+ *  AND CoinDCX INR 2021-2026 (research/FINDINGS.md v9). Order = picker order, strongest
+ *  first. */
 export const ACTIVE_TEMPLATES = [
-  "sharpe_mom",
-  "macd_trend",
-  "trend_regime",
-  "tsmom",
-  "ma_crossover",
+  "bb_breakout",
+  "donchian_trend",
   "vol_expansion",
-  "squeeze_breakout",
   "momentum",
+  "tsmom",
+  "trend_regime",
   "supertrend",
-  "ichimoku",
+  "macd_trend",
 ] as const;
-/** RETIRED templates: mean reversion loses net of India friction at EVERY tested
- *  altitude (research/FINDINGS.md). Not offered for new adds; kept so legacy rows
- *  still resolve, render, and keep their exits managed until removed by the user. */
-export const RETIRED_TEMPLATES = ["rsi", "fast_rsi", "bb_reversion"] as const;
+/** RETIRED templates. Mean reversion loses net of India friction at EVERY tested
+ *  altitude; v9 retired four trend templates that failed the deep multi-cycle,
+ *  two-venue bar (ichimoku, ma_crossover, squeeze_breakout, sharpe_mom). Not offered
+ *  for new adds; kept so legacy rows still resolve, render, and keep their exits
+ *  managed until removed by the user. */
+export const RETIRED_TEMPLATES = [
+  "rsi",
+  "fast_rsi",
+  "bb_reversion",
+  "ichimoku",
+  "ma_crossover",
+  "squeeze_breakout",
+  "sharpe_mom",
+] as const;
 /** Everything the TS sim can simulate (active + retired). */
 export const BUILTIN_TEMPLATES = [
   ...ACTIVE_TEMPLATES,
@@ -35,7 +46,10 @@ export const BUILTIN_TEMPLATES = [
  *  stop-loss + take-profit on every add (server-enforced in actions.ts). The v8
  *  study found the short side SUBTRACTS on this venue's history - the risk warning
  *  on each template says so. */
-export const SHORT_CAPABLE_TEMPLATES = ["donchian_ls", "ensemble_ls"] as const;
+export const SHORT_CAPABLE_TEMPLATES = ["donchian_ls"] as const;
+/** Experimental templates retired from new adds: ensemble_ls was negative on 5/7 INR
+ *  pairs even long-only in the v9 deep study. Resolves for legacy rows only. */
+export const RETIRED_EXPERIMENTAL_TEMPLATES = ["ensemble_ls"] as const;
 /** Experimental templates: run in the bot's Python engine only (ML inference or
  *  long/short behavior the long-only browser sim cannot express), so there is no
  *  browser preview. Kept out of BUILTIN_TEMPLATES so the TS sim never tries. */
@@ -49,6 +63,7 @@ export const EXPERIMENTAL_TEMPLATES = [
 export const ALL_TEMPLATES = [
   ...BUILTIN_TEMPLATES,
   ...EXPERIMENTAL_TEMPLATES,
+  ...RETIRED_EXPERIMENTAL_TEMPLATES,
   "custom",
 ] as const;
 export type Template = (typeof ALL_TEMPLATES)[number];
@@ -57,6 +72,8 @@ export type RetiredTemplate = (typeof RETIRED_TEMPLATES)[number];
 export type BuiltinTemplate = (typeof BUILTIN_TEMPLATES)[number];
 export type ExperimentalTemplate = (typeof EXPERIMENTAL_TEMPLATES)[number];
 export type ShortCapableTemplate = (typeof SHORT_CAPABLE_TEMPLATES)[number];
+export type RetiredExperimentalTemplate =
+  (typeof RETIRED_EXPERIMENTAL_TEMPLATES)[number];
 export const isShortCapable = (t: string): t is ShortCapableTemplate =>
   (SHORT_CAPABLE_TEMPLATES as readonly string[]).includes(t);
 /** Templates pickable from the template cards (active + experimental; retired and

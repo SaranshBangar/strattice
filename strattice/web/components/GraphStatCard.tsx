@@ -2,7 +2,7 @@
 import { useId, useRef, useState } from "react";
 import { InfoHint } from "@/components/InfoHint";
 import { C } from "@/components/chart/primitives";
-import { inr } from "@/lib/dashboard-format";
+import { money, type Quote } from "@/lib/dashboard-format";
 
 // A stat card whose whole bottom edge is a full-bleed sparkline: gradient fill (the tone's
 // colour at the line, fading to transparent at the card's bottom) and a hover tooltip that
@@ -31,7 +31,8 @@ export function GraphStatCard({
   labels,
   xs,
   height = 56,
-  fmt = inr,
+  quote = "INR",
+  fmt = (n: number) => money(n, quote),
 }: {
   label: string;
   value: string;
@@ -45,7 +46,9 @@ export function GraphStatCard({
   /** Per-point 0..1 x positions (time-proportional). Omit for even index spacing. */
   xs?: number[];
   height?: number;
-  /** Formats a point's value in the tooltip. Defaults to INR; the demo passes its
+  /** Book currency for the default tooltip formatter (USDT on Binance). */
+  quote?: Quote;
+  /** Formats a point's value in the tooltip. Defaults to the book currency; the demo passes its
    *  currency-localized formatter (safe here - both caller and card are client-side). */
   fmt?: (n: number) => string;
 }) {

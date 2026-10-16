@@ -19,18 +19,29 @@ _DEFAULTS = {
     "edge_margin_pct": 0.002, # extra move a signal must clear beyond round-trip fee+gst
 }
 
+# Per-venue defaults (used when config.yaml's `costs:` block omits a key). Binance spot:
+# 0.1% maker/taker for regular accounts, 18% GST on the fee for Indian users (since July
+# 2025), and NO TDS withheld by the venue on spot trades (an Indian resident still owes
+# VDA tax - it's just not a per-trade cash drag on the account). Override per deployment.
+EXCHANGE_DEFAULTS = {
+    "coindcx": _DEFAULTS,
+    "binance": {**_DEFAULTS, "fee_rate": 0.001, "tds_rate": 0.0},
+}
+
 _cache: dict | None = None
 
 
 def params() -> dict:
-    """Cached costs config (file read once). Defaults fill any missing key."""
+    """Cached costs config (file read once). The exchange's defaults fill any missing key."""
     global _cache
     if _cache is None:
         try:
-            c = config.load().get("costs", {}) or {}
+            cfg = config.load() or {}
         except Exception:  # noqa: BLE001 - never let config IO break a fee calc
-            c = {}
-        _cache = {**_DEFAULTS, **c}
+            cfg = {}
+        c = cfg.get("costs", {}) or {}
+        base = EXCHANGE_DEFAULTS.get(config.exchange(cfg), _DEFAULTS)
+        _cache = {**base, **c}
     return _cache
 
 

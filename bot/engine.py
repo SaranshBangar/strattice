@@ -11,7 +11,7 @@ import sys
 import time
 
 from . import audit, candles as candlemod, config, feeds, notify, reconcile, sizing
-from .client import Client
+from .client import make_client
 from .executor import Executor
 from .reliability import CircuitOpen
 from .risk import RiskManager
@@ -48,7 +48,8 @@ class Engine:
         self.interval = cfg["engine"]["candle_interval"]
         self.limit = int(cfg["engine"]["candle_limit"])
         self.poll = int(cfg["engine"]["poll_seconds"])
-        self.client = Client()
+        self.exchange = config.exchange(cfg)
+        self.client = make_client(self.exchange)
         self.risk = RiskManager(cfg)
         self.executor = Executor(cfg, self.client, self.risk)
         self.strategies = self._build_strategies(cfg)
@@ -77,6 +78,10 @@ class Engine:
         self.feed_fallback = bool(fcfg.get("binance_fallback", True))
         self.feed_crosscheck_pct = float(fcfg.get("max_divergence_pct", 10.0)) \
             if fcfg.get("crosscheck", True) else 0.0
+        if self.exchange == "binance":
+            # the reference feed IS the primary venue here: a fallback/crosscheck against
+            # itself would add requests and prove nothing
+            self.feed_fallback, self.feed_crosscheck_pct = False, 0.0
         self._crosschecked: dict[str, int] = {}  # market -> last closed-bar ts verified
         # Adaptive polling (v8): poll fast for the first window after each bar close -
         # the only stretch where a fresh closed bar can be waiting - then relax. Signals
@@ -508,8 +513,9 @@ class Engine:
     def run(self) -> None:
         _setup_logging()
         audit.init()
-        log.info("Engine start | mode=%s | strategies=%s | interval=%s poll=%ss",
-                 config.mode_str(), [s.name for s in self.strategies], self.interval, self.poll)
+        log.info("Engine start | exchange=%s | mode=%s | strategies=%s | interval=%s poll=%ss",
+                 self.exchange, config.mode_str(), [s.name for s in self.strategies],
+                 self.interval, self.poll)
         self._crash_loop_guard()
         self._startup_recovery()
         self._sanity_check()
@@ -519,6 +525,7 @@ class Engine:
         if not config.SUPPRESS_START_ALERT:
             notify.send(notify.bullets("Bot started", [
                 ("Mode", config.mode_str()),
+                ("Exchange", self.exchange),
                 ("Strategies", ", ".join(s.name for s in self.strategies)),
             ]))
         while True:

@@ -32,7 +32,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
     default:
-      "Strattice · Automated Crypto Trading in India on Your Own CoinDCX Account",
+      "Strattice · Automated Crypto Trading on Your Own CoinDCX or Binance Account",
     template: "%s · Strattice",
   },
   description: SITE_DESCRIPTION,
@@ -71,7 +71,7 @@ export const metadata: Metadata = {
     locale: "en_IN",
     url: SITE_URL,
     title:
-      "Strattice · Automated Crypto Trading in India on Your Own CoinDCX Account",
+      "Strattice · Automated Crypto Trading on Your Own CoinDCX or Binance Account",
     description: SITE_DESCRIPTION,
     // 1200x630 branded card generated at /opengraph-image (see opengraph-image.tsx).
     images: [
@@ -79,14 +79,14 @@ export const metadata: Metadata = {
         url: "/opengraph-image",
         width: 1200,
         height: 630,
-        alt: "Strattice — algorithmic trading on your own CoinDCX account",
+        alt: "Strattice — algorithmic trading on your own CoinDCX or Binance account",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
     title:
-      "Strattice · Automated Crypto Trading in India on Your Own CoinDCX Account",
+      "Strattice · Automated Crypto Trading on Your Own CoinDCX or Binance Account",
     description: SITE_DESCRIPTION,
     images: ["/opengraph-image"],
   },
@@ -142,8 +142,8 @@ export default function RootLayout({
                     stra<span className="text-accent">tt</span>ice
                   </span>
                   <p className="mt-1 max-w-xs text-xs leading-relaxed text-muted">
-                    Algorithmic strategies, executed on your own CoinDCX account
-                    with keys you control.
+                    Algorithmic strategies, executed on your own CoinDCX or
+                    Binance account with keys you control.
                   </p>
                 </div>
                 <dl className="grid grid-cols-1 gap-x-10 gap-y-2 font-mono text-[11px] sm:grid-cols-3">
@@ -172,8 +172,9 @@ export default function RootLayout({
                   jurisdictions; algorithmic strategies can and do lose money.
                   Simulated or historical performance never guarantees future
                   results. Strattice never holds your funds - trades execute on
-                  your own CoinDCX account with keys you control, and every
-                  round trip pays exchange fees, GST and TDS. Start in DRY_RUN,
+                  your own CoinDCX or Binance account with keys you control,
+                  and every round trip pays exchange fees, GST and (on CoinDCX)
+                  TDS. Start in DRY_RUN,
                   size positions you can afford to lose.
                 </p>
                 <nav className="flex flex-wrap gap-x-5 gap-y-1 font-mono text-[11px]">

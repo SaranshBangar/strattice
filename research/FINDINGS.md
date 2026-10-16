@@ -1,4 +1,103 @@
-# Strategy review: backtest findings (July 2026)
+# Strategy review: backtest findings (July – October 2026)
+
+> **v9 (October 2026): deep multi-cycle, two-venue re-validation.** Every verdict in
+> v3–v8 was measured on ~2.8 years of daily bars (2023-09 .. 2026-07), a window that is
+> mostly one bull market, on CoinDCX only. Strattice now also trades Binance, so v9
+> replays **every** template through the same engine (`bot/backtest.run`, same exits,
+> same cost model) on much longer history, at each venue's own friction:
+>
+> | Venue | Data | Span | Friction (round trip) |
+> | --- | --- | --- | --- |
+> | Binance | 12 USDT pairs from listing: BTC ETH XRP SOL DOGE BNB ADA AVAX LINK DOT LTC TRX | 2017-08 .. 2026-10 (2018 + 2022 bears, 2019/2023 chop) | 0.1% fee + 18% GST per side, no TDS, 5 bps slip ≈ 0.34% |
+> | CoinDCX | the 7 INR pairs | ~2020-12 .. 2026-10 (XRP from 2019-05; 2022 bear) | 0.2% fee + 18% GST per side, 1% TDS on sells, 5 bps slip ≈ 1.67% |
+>
+> Reproduce: `python scripts/fetch_history.py --deep` (writes `research/data/deep/`),
+> then `python -m research.v9_study` (~25 s) and `python -m research.v9_portfolio` (~5 s).
+>
+> **Data cleaning.** CoinDCX INR candles before ~2020-12 are corrupt for several pairs
+> (ETH/INR closes of 0.22, other pairs' prices mixed in) and the feed carries stray
+> duplicate bars stamped 23:59:59. `fetch_history --deep` keeps only day-aligned bars
+> and cross-checks every INR daily return against its Binance USDT twin (returns are
+> quote-free), dropping everything up to the last bar that diverges by >15 pp. Every
+> earlier study used post-2023 INR data and is unaffected.
+>
+> **Method.** One candidate = one template at its shipped default, run independently on
+> every market of a venue, flat from a common bar after a 250-bar warm-up, ₹/$1000
+> start. Each candidate also runs with the shipped BTC 100d overlay (`+btc`, default ON
+> in production). Scored on cross-market medians — CAGR, max drawdown, years positive,
+> median 2018/2022 bear-year return, CAGR/maxDD vs buy-and-hold — and split at 2023-09
+> (pre = never seen by any earlier study). Two new modules, `bb_breakout` and
+> `donchian_trend`, and one rejected module, `abs_momentum`, were tested on a small
+> pre-declared grid (`research/v9_study.py:candidates`).
+>
+> **Result 1: two promotions.** Cross-market medians with the BTC overlay on (the
+> production setting):
+>
+> | Template (+btc) | Binance med CAGR | coins + | med maxDD | bear yr | CoinDCX med CAGR | pairs + | med maxDD | Verdict |
+> | --- | ---: | :-: | ---: | ---: | ---: | :-: | ---: | --- |
+> | **bb_breakout** (20, 2σ in, mid-band out) | **35.0%** | **12/12** | **47.4%** | −9.6 | **30.1%** | **7/7** | **36.6%** | **PROMOTED** |
+> | **donchian_trend** (20 high in, 10 low out) | 32.8% | 11/12 | 61.4% | −14.6 | 24.0% | 7/7 | 47.5% | **PROMOTED** |
+> | vol_expansion | 37.9% | 12/12 | 60.5% | −7.8 | 21.0% | 7/7 | 47.5% | keep |
+> | trend_regime | 35.9% | 10/12 | 69.7% | −13.4 | 19.7% | 6/7 | 41.6% | keep |
+> | momentum (Donchian 20 + filters) | 32.2% | 11/12 | 58.2% | −11.6 | 22.8% | 7/7 | 49.4% | keep |
+> | tsmom | 28.1% | 11/12 | 59.7% | −9.1 | 22.5% | 7/7 | 43.9% | keep |
+> | supertrend | 26.8% | 10/12 | 50.8% | −7.3 | 24.7% | 7/7 | 36.9% | keep |
+> | macd_trend | 18.8% | 9/12 | 67.3% | 0.0 | 17.3% | 6/7 | 51.8% | keep (weakest survivor) |
+> | squeeze_breakout | 9.9% | 9/12 | 60.6% | −0.4 | 21.9% | 7/7 | 43.3% | **RETIRED** |
+> | ma_crossover | 8.5% | 7/12 | 51.5% | 0.0 | 15.5% | 6/7 | 49.0% | **RETIRED** |
+> | ichimoku | 8.3% | 8/12 | 52.0% | −11.9 | 16.8% | 5/7 | 39.8% | **RETIRED** |
+> | sharpe_mom | 11.3% | 9/12 | 63.1% | −3.9 | 9.8% | 7/7 | 45.6% | **RETIRED** |
+>
+> Buy-and-hold medians over the same spans: Binance +23.9% CAGR at 90.0% max drawdown,
+> CoinDCX +8.9% at 82.5%. The retirement bar: median CAGR under ~12% on either venue,
+> or fewer than 9/12 Binance coins positive. The four retired templates stay runnable
+> for existing users (the bot still manages their exits); the app no longer offers
+> them for new adds. Mean reversion (rsi, fast_rsi, bb_reversion) and capitulation
+> re-confirmed their v3 retirement: flat to negative on both venues.
+>
+> **Result 2: the promotions are plateaus, not peaks.** Every one of the 18
+> `bb_breakout` combos (period 15/20/30 × k 1.5/2/2.5 × exit at mid or −0.5σ) has a
+> positive median on both venues, with ≥11/12 Binance coins and 7/7 INR pairs
+> positive; the shipped 20/2/mid sits mid-pack, not at the top (best: 30/1.5, +43% /
+> +28%). All 6 `donchian_trend` window pairs (15/7 .. 40/20) are positive on both
+> venues (≥10/12, 7/7). Stop-loss sensitivity (7% / 10% / 15% / none) moves either
+> template by at most 4 CAGR points. `abs_momentum` (60d return) topped the
+> Binance table at +44.9% but fell to +15.8% on INR and to ~+8% (90d) / −6% (180d)
+> on its neighbours, so it was **rejected as parameter-fragile**. `ensemble_ls`
+> long-only lost on INR (−5.7%, 2/7) and is retired from new adds.
+>
+> **Result 3: portfolio.** Joint 7-sleeve replay (`research/v9_portfolio.py`: shared
+> cash, the v7 portfolio model, BTC overlay on), common span where all seven coins
+> trade:
+>
+> | Lineup | CoinDCX CAGR | maxDD | PF | Binance CAGR | maxDD | PF |
+> | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+> | v6 shipped (tsmom ETH, breakout BTC, turtle55 XRP, macd BNB+SOL, regime DOGE, ichimoku ADA) | 29.3% | 32.1% | 3.33 | 79.2% | 70.3% | 3.20 |
+> | bb_breakout × 7 (no per-coin choice) | 31.5% | 24.0% | 2.87 | 81.6% | 29.1% | 2.63 |
+> | donchian_trend × 7 | 31.9% | 28.2% | 2.68 | 76.0% | 41.5% | 2.26 |
+> | **v9 bb-core (shipped)**: tsmom ETH, donchian_trend BNB, bb_breakout BTC XRP SOL DOGE ADA | **37.6%** | **25.4%** | **3.51** | **87.2%** | **30.9%** | **2.82** |
+>
+> CoinDCX span 2021-08 .. 2026-10, Binance 2020-08 .. 2026-10. With the book restarted
+> flat each calendar year, bb-core beat v6 in 9 of 11 venue-years (it lost CoinDCX 2022
+> by 1 pt and Binance 2024 by 9 pts). The headline gain is the drawdown: 70.3% → 30.9%
+> on Binance and 32.1% → 25.4% on CoinDCX.
+>
+> **Caveats.**
+> - **Selection bias:** bb-core was chosen *after* seeing the bb_breakout × 7 row.
+>   Its margin over × 7 (+6 pts CAGR on INR) is partly selection; × 7 is the unbiased
+>   reference, and it still beats v6 on both venues.
+> - bb-core trades ~1.7× as often as v6 (fees ≈ 75% vs 35% of starting capital over 5
+>   years on INR). Net numbers already include this, but it is a real cost.
+> - Binance friction assumes no TDS is withheld on the venue. Indian residents still
+>   owe the tax themselves, so Binance after-tax returns are lower than shown.
+> - Median per-market drawdowns are still 35–60%. This is a trend book: it gives back
+>   a lot in a crash before its exits trigger. The overlay and stops reduce that
+>   drawdown; they do not remove it.
+> - The browser strategy simulator (`strattice/web/lib/strategy-sim.ts`) charges the
+>   linked venue's fees and taxes per closed trade (CoinDCX 1.47%, Binance 0.24%) but
+>   no slippage, so it is slightly kinder than these Python backtests.
+
+
 
 > **v8 addendum (mid-July 2026, `crypto-trader-profit-strategies`)** — the brief:
 > "analyze how other auto-crypto traders turn a profit regardless of how the market

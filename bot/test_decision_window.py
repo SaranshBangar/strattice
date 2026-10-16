@@ -62,6 +62,12 @@ PARAM_SETS: dict[str, dict] = {
                    "near_high_frac": 0.05, "regime_period": 80, "expected_move_pct": 0.01},
     "macd_trend": {"fast": 12, "slow": 26, "signal": 9, "confirm_bars": 3,
                    "require_positive": True, "regime_period": 80, "expected_move_pct": 0.01},
+    "bb_breakout": {"period": 20, "k": 2.0, "exit_k": 0.0, "regime_period": 80,
+                    "expected_move_pct": 0.01},
+    "donchian_trend": {"entry_lookback": 20, "exit_lookback": 10, "regime_period": 80,
+                       "expected_move_pct": 0.01},
+    "abs_momentum": {"lookback": 60, "fast": 20, "entry_return": 0.02, "exit_return": 0.0,
+                     "expected_move_pct": 0.01},
     "custom": {"rules": [
         {"kind": "trend", "op": "above", "period": 50},
         {"kind": "sma_cross", "fast": 10, "slow": 30, "within": 3},

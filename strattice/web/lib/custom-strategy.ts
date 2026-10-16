@@ -544,11 +544,17 @@ export function toExitConfig(e: CustomExits): ExitConfig {
   };
 }
 
-export function simulateCustom(def: CustomDef, candles: Candle[]): SimResult {
+export function simulateCustom(
+  def: CustomDef,
+  candles: Candle[],
+  frictionPct?: number,
+): SimResult {
   return runSim(
     candles,
     (cs, closes, i) => customEntryAt(def, cs, closes, i),
     toExitConfig(def.exits),
+    undefined,
+    frictionPct,
   );
 }
 

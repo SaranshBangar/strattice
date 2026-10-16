@@ -161,48 +161,37 @@ risk:
 #                              -1.2pts USDT, net neutral) — fires once per position
 #   exit_ladder_k: 3.5         ATR multiple for that ladder trail
 #
-# WEIGHT PRESETS (v7 joint replay; equal weights stay the DEFAULT because preset tilts
-# are fitted on the same history they're scored on — treat these as options, not truth):
-#   balanced (default): all 1.0                 -> +216.7% | maxDD 22.5% | WF 3/4, worst -6.2%
-#   conservative: tsmom_eth 1.2, breakout_btc 1.2, turtle55_xrp 0.8, macd_bnb 1.4,
-#                 regime_doge 0.8, ichimoku_ada 0.8, macd_sol 0.8
-#                                               -> +229.9% | maxDD 22.8% | WF 3/4, worst -4.1%
-#   aggressive:   tsmom_eth 1.2, breakout_btc 0.6, turtle55_xrp 1.4, macd_bnb 1.4,
-#                 regime_doge 1.2, ichimoku_ada 0.6, macd_sol 0.6
-#                                               -> +269.5% | maxDD 23.5% | WF 3/4, worst -2.4%
+# WEIGHT PRESETS: equal weights (all 1.0) are the default. The v7 conservative /
+# aggressive tilts were fitted to the v6 lineup and no longer apply; v9 did not refit
+# weights (a tilt fitted on the history it is scored on is not evidence).
 #
-# THE LINEUP (v6, all 1d bars). Seven engines, one per market — all seven INR pairs held —
-# so all can hold concurrently (no-dup-asset rule). Markets were assigned where each strategy
-# was profitable on BOTH the INR pair AND its USDT twin (venue robustness, not pair lottery —
-# see FINDINGS v6), with the incumbents defending their asset in a same-protocol bake-off.
-# Take-profits are OFF everywhere: the fat right tail of trend winners is the whole edge.
-# Exits per family: burst-entry engines (tsmom/breakouts/macd) trail a chandelier
-# (peak - 3.5*ATR14) + 7% hard stop; regime-holding engines (trend_regime/ichimoku) exit on
-# their OWN signal (close under the regime line / kijun) + a wider disaster stop, because a
-# trail would cut the multi-month holds their edge depends on. Stops are evaluated on DAILY
-# CLOSES (matching the backtest): a violent single-day move can close beyond the line, and
-# the backtested max-drawdowns already include those events.
-# Backtest (₹1000/sleeve, 2023-09 .. 2026-07, net of ALL friction; WF = 200-bar OOS folds):
-#   tsmom @ ETH    +207.6% (PF 2.58) | twin  +18.3% | WF 3/4 INR, 3/4 USDT   (v3, kept)
-#   breakout @ BTC +108.7% (PF 2.75) | twin   +9.2% | WF 3/4 INR, 3/4 USDT   (v3, kept)
-#   turtle55 @ XRP +274.4% (PF 14.4) | twin +101.9% | WF 2/4 INR, 2/4 USDT   (v6, replaces ma_cross)
-#   macd @ BNB     +264.9% (PF 6.85) | twin +188.8% | WF 4/4 INR, 4/4 USDT   (v6, replaces volexp)
-#   regime @ DOGE  +209.8% (PF 3.76) | twin +167.5% | WF 3/4 INR, 1/4 USDT   (v6, replaces squeeze)
-#   ichimoku @ ADA  +83.3% (PF 1.87) | twin  +42.6% | WF 2/4 INR, 1/4 USDT   (v6, replaces accel)
-#   macd @ SOL      +47.8% (PF 1.59) | twin  +14.8% | WF 3/4 INR, 3/4 USDT   (v6, new 7th sleeve)
-# v6 notes (evidence + caveats in research/FINDINGS.md v6):
-#   * macd@BNB posted the best walk-forward record ever recorded in this repo (8/8 folds
-#     across both venues, OOS +224%/+129%) and beats the volexp incumbent on every metric.
-#   * regime@DOGE dominates squeeze on full history on BOTH venues and its p>=100-day
-#     plateau is 6/6 positive on the USDT twin; caveat: only 1/4 USDT folds (OOS still +24.8%).
-#   * ichimoku@ADA beats the retired accel sleeve on every metric (accel twin was +1.7%,
-#     USDT OOS -10.5%); its own plateau is 6/6 positive on both venues.
-#   * turtle55@XRP (Donchian 55, turtle S2) doubles ma_cross's INR net with a better fold
-#     record (2/4 vs 1/4); trade count is low — judge it over months.
-#   * macd appears twice (BNB + SOL) — SOL was the one asset with NO venue-robust engine in
-#     five studies; macd is the first (3/4 + 3/4 folds), so the clone is accepted there.
-#   * 7 sleeves dilute each to ~0.139 of equity — keep total capital >= ~₹1000 so every
-#     sleeve clears the ₹100 exchange min-notional.
+# THE LINEUP (v9 "bb-core", all 1d bars). Seven engines, one per INR pair, so all can hold
+# concurrently (no-dup-asset rule). The v9 study (research/v9_study.py,
+# research/v9_portfolio.py, FINDINGS v9) replayed every template on DEEP history — Binance
+# USDT dailies from listing (2017-2026, two full bear markets) and the cleaned CoinDCX INR
+# series (2021-2026) — at each venue's own friction, with the BTC overlay ON. The Bollinger
+# breakout (bb_breakout) was positive on 12/12 Binance coins AND 7/7 INR pairs with the
+# lowest median drawdown of any template that managed both, so it now holds five sleeves;
+# tsmom keeps ETH and the Turtle-style donchian_trend takes BNB (three distinct engines).
+# Joint portfolio replay (₹1000 start, net of ALL friction, BTC overlay ON):
+#                     CoinDCX 2021-08..2026-10      Binance 2020-08..2026-10
+#   v6 lineup         CAGR 29.3% | maxDD 32.1%       CAGR 79.2% | maxDD 70.3%
+#   v9 bb-core        CAGR 37.6% | maxDD 25.4%       CAGR 87.2% | maxDD 30.9%
+#   bb_breakout x7    CAGR 31.5% | maxDD 24.0%       CAGR 81.6% | maxDD 29.1%  (no per-coin picks)
+# Yearly folds (book restarted flat each calendar year): bb-core beat v6 in 9 of 11
+# venue-years (lost CoinDCX 2022 by 1pt and Binance 2024 by 9pts). CAVEATS: bb-core was chosen AFTER seeing the "bb_breakout x7" row, so
+# its margin over x7 is partly selection — x7 is the unbiased reference. bb-core trades
+# ~1.7x as often as v6 (fees ~75% vs ~35% of start capital over the span), which the net
+# numbers already include. Take-profits stay OFF everywhere.
+# Exits per family: burst-entry engines (tsmom) trail a chandelier (peak - 3.5*ATR14) + 7%
+# hard stop; regime-holding engines (bb_breakout/donchian_trend) exit on their OWN signal
+# plus a 10% disaster stop. Stops are evaluated on DAILY CLOSES (matching the backtest).
+# 7 sleeves dilute each to ~0.139 of equity — keep total capital >= ~₹1000 so every sleeve
+# clears the ₹100 exchange min-notional.
+#
+# Previous lineup (v6, 2023-09..2026-07 replay) for reference:
+#   tsmom@ETH, breakout@BTC, turtle55@XRP, macd@BNB, regime@DOGE, ichimoku@ADA, macd@SOL.
+#   ichimoku is now RETIRED (failed on Binance); the others remain selectable templates.
 strategies:
   - name: "tsmom_eth" # time-series momentum: buy strength near its highs
     module: "tsmom"
@@ -221,9 +210,113 @@ strategies:
       regime_period: 50 # 50d SMA uptrend gate
       expected_move_pct: 0.08
 
-  - name: "breakout_btc" # Donchian breakout with volume + volatility confirmation
-    module: "momentum"
+  - name: "bb_btc" # Bollinger breakout (v9): ride closes above the 2-sigma band
+    module: "bb_breakout"
     enabled: true
+    weight: 1.0
+    market: "I-BTC_INR"
+    stop_loss_pct: 0.10 # disaster stop only: this engine holds through daily noise
+    take_profit_pct: 0.0
+    chandelier_k: 0.0 # NO trail — the strategy's own SELL (close < 20d mid-band) is the exit
+    atr_period: 14
+    max_hold_bars: 0
+    params:
+      period: 20 # 20d Bollinger band (plateau: all 18 tested period/k/exit combos positive)
+      k: 2.0 # BUY on a close above mid + 2 sigma
+      exit_k: 0.0 # SELL on a close back under the mid-band (k=0)
+      regime_period: 0 # no SMA gate: the band break IS the trend filter (gate cost CAGR)
+      expected_move_pct: 0.08
+
+  - name: "bb_xrp" # Bollinger breakout (v9)
+    module: "bb_breakout"
+    enabled: true
+    weight: 1.0
+    market: "I-XRP_INR"
+    stop_loss_pct: 0.10 # disaster stop only: this engine holds through daily noise
+    take_profit_pct: 0.0
+    chandelier_k: 0.0 # NO trail — the strategy's own SELL (close < 20d mid-band) is the exit
+    atr_period: 14
+    max_hold_bars: 0
+    params:
+      period: 20 # 20d Bollinger band (plateau: all 18 tested period/k/exit combos positive)
+      k: 2.0 # BUY on a close above mid + 2 sigma
+      exit_k: 0.0 # SELL on a close back under the mid-band (k=0)
+      regime_period: 0 # no SMA gate: the band break IS the trend filter (gate cost CAGR)
+      expected_move_pct: 0.08
+
+  - name: "donchian_bnb" # Turtle-style channel (v9): 20d high in, 10d low out
+    module: "donchian_trend"
+    enabled: true
+    weight: 1.0
+    market: "I-BNB_INR"
+    stop_loss_pct: 0.10
+    take_profit_pct: 0.0
+    chandelier_k: 0.0 # NO trail — the strategy's own SELL (close < prior 10d low) is the exit
+    atr_period: 14
+    max_hold_bars: 0
+    params:
+      entry_lookback: 20 # BUY on a close above the prior 20-day high
+      exit_lookback: 10 # SELL on a close below the prior 10-day low (every tested pair positive)
+      regime_period: 0
+      expected_move_pct: 0.10
+
+  - name: "bb_doge" # Bollinger breakout (v9)
+    module: "bb_breakout"
+    enabled: true
+    weight: 1.0
+    market: "I-DOGE_INR"
+    stop_loss_pct: 0.10 # disaster stop only: this engine holds through daily noise
+    take_profit_pct: 0.0
+    chandelier_k: 0.0 # NO trail — the strategy's own SELL (close < 20d mid-band) is the exit
+    atr_period: 14
+    max_hold_bars: 0
+    params:
+      period: 20 # 20d Bollinger band (plateau: all 18 tested period/k/exit combos positive)
+      k: 2.0 # BUY on a close above mid + 2 sigma
+      exit_k: 0.0 # SELL on a close back under the mid-band (k=0)
+      regime_period: 0 # no SMA gate: the band break IS the trend filter (gate cost CAGR)
+      expected_move_pct: 0.08
+
+  - name: "bb_ada" # Bollinger breakout (v9)
+    module: "bb_breakout"
+    enabled: true
+    weight: 1.0
+    market: "I-ADA_INR"
+    stop_loss_pct: 0.10 # disaster stop only: this engine holds through daily noise
+    take_profit_pct: 0.0
+    chandelier_k: 0.0 # NO trail — the strategy's own SELL (close < 20d mid-band) is the exit
+    atr_period: 14
+    max_hold_bars: 0
+    params:
+      period: 20 # 20d Bollinger band (plateau: all 18 tested period/k/exit combos positive)
+      k: 2.0 # BUY on a close above mid + 2 sigma
+      exit_k: 0.0 # SELL on a close back under the mid-band (k=0)
+      regime_period: 0 # no SMA gate: the band break IS the trend filter (gate cost CAGR)
+      expected_move_pct: 0.08
+
+  - name: "bb_sol" # Bollinger breakout (v9)
+    module: "bb_breakout"
+    enabled: true
+    weight: 1.0
+    market: "I-SOL_INR"
+    stop_loss_pct: 0.10 # disaster stop only: this engine holds through daily noise
+    take_profit_pct: 0.0
+    chandelier_k: 0.0 # NO trail — the strategy's own SELL (close < 20d mid-band) is the exit
+    atr_period: 14
+    max_hold_bars: 0
+    params:
+      period: 20 # 20d Bollinger band (plateau: all 18 tested period/k/exit combos positive)
+      k: 2.0 # BUY on a close above mid + 2 sigma
+      exit_k: 0.0 # SELL on a close back under the mid-band (k=0)
+      regime_period: 0 # no SMA gate: the band break IS the trend filter (gate cost CAGR)
+      expected_move_pct: 0.08
+
+  # --- MIGRATION (v6 -> v9): replaced sleeves kept as DISABLED stubs so an engine that
+  #     still holds one of their positions keeps managing its EXITS until flat. Delete
+  #     each block once `python -m bot.status` shows it flat.
+  - name: "breakout_btc" # v6-v8 sleeve, replaced by bb_btc (FINDINGS v9)
+    module: "momentum"
+    enabled: false
     weight: 1.0
     market: "I-BTC_INR"
     stop_loss_pct: 0.07
@@ -242,9 +335,9 @@ strategies:
       regime_period: 50
       expected_move_pct: 0.08
 
-  - name: "turtle55_xrp" # slow Donchian (turtle S2): break of the prior 55-DAY high (v6)
+  - name: "turtle55_xrp" # v6-v8 sleeve, replaced by bb_xrp (FINDINGS v9)
     module: "momentum"
-    enabled: true
+    enabled: false
     weight: 1.0
     market: "I-XRP_INR"
     stop_loss_pct: 0.07
@@ -263,9 +356,9 @@ strategies:
       regime_period: 100 # slower regime gate to match the slower signal
       expected_move_pct: 0.08
 
-  - name: "macd_bnb" # MACD fresh-cross trend continuation (v6): 8/8 WF folds across venues
+  - name: "macd_bnb" # v6-v8 sleeve, replaced by donchian_bnb (FINDINGS v9)
     module: "macd_trend"
-    enabled: true
+    enabled: false
     weight: 1.0
     market: "I-BNB_INR"
     stop_loss_pct: 0.07
@@ -282,9 +375,9 @@ strategies:
       regime_period: 50
       expected_move_pct: 0.08
 
-  - name: "regime_doge" # Faber-style 100d trend-regime holder (v6): long above, flat below
+  - name: "regime_doge" # v6-v8 sleeve, replaced by bb_doge (FINDINGS v9)
     module: "trend_regime"
-    enabled: true
+    enabled: false
     weight: 1.0
     market: "I-DOGE_INR"
     stop_loss_pct: 0.10 # wider disaster stop: this engine holds through daily noise
@@ -299,9 +392,9 @@ strategies:
       slope_bars: 5 # the line itself must be rising
       expected_move_pct: 0.10
 
-  - name: "ichimoku_ada" # Ichimoku kumo breakout (v6): cloud break in, kijun break out
+  - name: "ichimoku_ada" # v6-v8 sleeve, replaced by bb_ada (FINDINGS v9)
     module: "ichimoku"
-    enabled: true
+    enabled: false
     weight: 1.0
     market: "I-ADA_INR"
     stop_loss_pct: 0.07
@@ -316,9 +409,9 @@ strategies:
       confirm_bars: 3 # only FRESH cloud breaks — no chasing a market long above the cloud
       expected_move_pct: 0.08
 
-  - name: "macd_sol" # MACD continuation on SOL (v6): the first venue-robust engine for SOL
+  - name: "macd_sol" # v6-v8 sleeve, replaced by bb_sol (FINDINGS v9)
     module: "macd_trend"
-    enabled: true
+    enabled: false
     weight: 1.0
     market: "I-SOL_INR"
     stop_loss_pct: 0.07

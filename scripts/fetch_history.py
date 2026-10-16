@@ -145,12 +145,113 @@ def write_csv_gz(path: str, rows: list[dict]) -> None:
             w.writerow([int(c["time"]), c["open"], c["high"], c["low"], c["close"], c["volume"]])
 
 
+BINANCE_KLINES = "https://data-api.binance.vision/api/v3/klines"
+# v9 deep-history universe: every coin the platform offers that has a long Binance
+# USDT listing. Daily bars from listing day cover the 2018 and 2022 bear markets,
+# which the 2.8-year CoinDCX window (2023-09 onward, mostly bull) never saw.
+DEEP_SYMBOLS = ["BTC", "ETH", "XRP", "SOL", "DOGE", "BNB", "ADA",
+                "AVAX", "LINK", "DOT", "LTC", "TRX"]
+DEEP_INR = ["I-BTC_INR", "I-ETH_INR", "I-XRP_INR", "I-SOL_INR", "I-DOGE_INR",
+            "I-BNB_INR", "I-ADA_INR"]
+
+
+def fetch_binance_daily(symbol: str) -> list[dict]:
+    """Every daily kline since listing, paged forward with startTime (1000 per call)."""
+    out: dict[int, dict] = {}
+    start = 0
+    while True:
+        r = _get(BINANCE_KLINES, symbol=symbol, interval="1d", startTime=start, limit=1000)
+        if r.status_code != 200:
+            print(f"  {symbol}: HTTP {r.status_code}, stopping")
+            break
+        batch = r.json()
+        if not batch:
+            break
+        for k in batch:
+            out[int(k[0])] = {"time": int(k[0]), "open": float(k[1]), "high": float(k[2]),
+                              "low": float(k[3]), "close": float(k[4]),
+                              "volume": float(k[5])}
+        if len(batch) < 1000:
+            break
+        start = int(batch[-1][0]) + 1
+        _time.sleep(0.2)
+    rows = [out[t] for t in sorted(out)]
+    # drop the in-progress bar: research only ever scores closed days
+    if rows and rows[-1]["time"] + 86_400_000 > _time.time() * 1000:
+        rows = rows[:-1]
+    if rows:
+        print(f"  binance {symbol} 1d: {len(rows)} bars "
+              f"({_dt(rows[0]['time'])} .. {_dt(rows[-1]['time'])})")
+    return rows
+
+
+def fetch_deep(out_dir: str) -> None:
+    """research/data/deep/: Binance USDT dailies since listing + the full CoinDCX INR
+    daily history. Used by research/v9_study.py (multi-cycle, two-venue study)."""
+    import os
+    os.makedirs(out_dir, exist_ok=True)
+    for base in DEEP_SYMBOLS:
+        rows = fetch_binance_daily(f"{base}USDT")
+        if rows:
+            write_csv_gz(f"{out_dir}/BN-{base}_USDT_1d.csv.gz", rows)
+    # CoinDCX ignores endTime unless startTime bounds the window - the bot's client
+    # already pages it correctly, so reuse that instead of fetch_coindcx's endTime walk.
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from bot.client import Client
+    since = int(datetime(2017, 1, 1, tzinfo=timezone.utc).timestamp() * 1000)
+    for pair in DEEP_INR:
+        rows = Client().candles(pair, "1d", since_ms=since)
+        print(f"  coindcx {pair} 1d: {len(rows)} bars"
+              + (f" ({_dt(rows[0]['time'])} .. {_dt(rows[-1]['time'])})" if rows else ""))
+        # The INR feed carries stray duplicate bars stamped 23:59:59 (and a few other
+        # odd offsets) next to the real midnight-UTC bar - keep the day-aligned ones.
+        rows = [r for r in rows if int(r["time"]) % 86_400_000 == 0]
+        if rows and rows[-1]["time"] + 86_400_000 > _time.time() * 1000:
+            rows = rows[:-1]
+        rows = _trim_corrupt_prefix(rows, f"{out_dir}/BN-{pair[2:].replace('_INR', '')}"
+                                    "_USDT_1d.csv.gz")
+        if rows:
+            print(f"    kept {len(rows)} clean bars from {_dt(rows[0]['time'])}")
+            write_csv_gz(f"{out_dir}/{pair}_1d.csv.gz", rows)
+
+
+def _trim_corrupt_prefix(rows: list[dict], twin_path: str, tol: float = 0.15) -> list[dict]:
+    """CoinDCX's INR candles before ~2021 are corrupt for several pairs (closes of 0.22
+    on ETH/INR, other coins' prices mixed in). Cross-check every bar's daily return
+    against the Binance USDT twin on the same UTC day (returns are quote-free, so INR
+    vs USDT levels cancel) and drop everything up to the LAST bar that diverges by
+    more than `tol` - the kept series is clean end to end."""
+    import os
+    if not rows or not os.path.exists(twin_path):
+        return rows
+    with gzip.open(twin_path, "rt", newline="") as f:
+        twin = {int(r["time"]): float(r["close"]) for r in csv.DictReader(f)}
+    last_bad = -1
+    for i in range(1, len(rows)):
+        a, b = rows[i - 1], rows[i]
+        if a["close"] <= 0 or b["close"] <= 0:
+            last_bad = i
+            continue
+        r = b["close"] / a["close"] - 1
+        u0, u1 = twin.get(int(a["time"])), twin.get(int(b["time"]))
+        ref = (u1 / u0 - 1) if u0 and u1 else 0.0
+        if abs(r - ref) > (tol if u0 and u1 else 0.4):
+            last_bad = i
+    return rows[last_bad + 1:]
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="research/data")
+    ap.add_argument("--deep", action="store_true",
+                    help="fetch the v9 deep daily universe into <out>/deep and exit")
     a = ap.parse_args()
     import os
     os.makedirs(a.out, exist_ok=True)
+    if a.deep:
+        fetch_deep(os.path.join(a.out, "deep"))
+        return
 
     # markets snapshot (min_notional, precision, listed pairs)
     r = _get(MARKETS)

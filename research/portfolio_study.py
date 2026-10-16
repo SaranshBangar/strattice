@@ -129,6 +129,8 @@ def simulate(days: list[int], by_market: dict[str, dict[int, dict]], *,
              max_consec_losses: int = 0,             # halt new entries after N straight losses
              ladder_frac: float = 0.0,               # regime engines: sell this frac at a
                                                      # 3.5xATR chandelier, rest on own signal
+             score_from: int = 0,                    # day ts: no entries before it (warm-up
+                                                     # bars feed indicators only - v9 folds)
              ) -> dict:
     """One joint pass over the aligned daily history. Portfolio cash is shared; each
     sleeve sizes entries as weight_frac * marked equity (capped by cash), exactly like
@@ -259,7 +261,7 @@ def simulate(days: list[int], by_market: dict[str, dict[int, dict]], *,
                 buys.append(s)
 
         # 3) entries, with the portfolio-level intelligence under study
-        if not buys:
+        if not buys or day < score_from:
             equity_curve.append(_mark())
             continue
         if max_consec_losses and consec_losses >= max_consec_losses:

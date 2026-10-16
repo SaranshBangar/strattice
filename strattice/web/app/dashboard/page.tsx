@@ -20,7 +20,8 @@ import { usdRate } from "@/lib/fx";
 import { currencySymbol } from "@/lib/currencies";
 import { marketLabel } from "@/lib/coins";
 import { CoinLogo } from "@/components/CoinLogo";
-import { fmt, inr, shortTs, tsMs, xFractions } from "@/lib/dashboard-format";
+import { fmt, money, shortTs, tsMs, xFractions } from "@/lib/dashboard-format";
+import { EXCHANGE_META } from "@/lib/exchanges";
 import { statWindow, windowSinceISO } from "@/lib/stat-window";
 
 export const dynamic = "force-dynamic";
@@ -66,6 +67,11 @@ export default async function DashboardPage() {
   ]);
   const trendCaption =
     win.key === "all" ? "All-time trends" : `Trends · last ${win.label}`;
+  // Book figures are in the linked exchange's quote currency (INR on CoinDCX, USDT on
+  // Binance); `inr` keeps its call sites but formats in whichever book this is.
+  const exMeta = EXCHANGE_META[creds.exchange];
+  const quote = exMeta.quote;
+  const inr = (n: number) => money(n, quote);
   const rate = (await usdRate(currency)) ?? 1;
   const fx = { symbol: currencySymbol(currency), rate };
 
@@ -156,7 +162,7 @@ export default async function DashboardPage() {
   }[] = [
     {
       done: creds.linked,
-      label: "Link your CoinDCX API keys",
+      label: "Link your CoinDCX or Binance API keys",
       hint: "Trading on, withdrawals off. Stored encrypted.",
       href: "/account",
     },
@@ -313,9 +319,10 @@ export default async function DashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {/* Cash-basis: ₹1,000 paper base + realized P&L, minus whatever's currently
+          {/* Cash-basis: paper base (₹1,000 / $100) + realized P&L, minus whatever's currently
             deployed in open positions (at cost) - a book figure, not the exchange balance. */}
           <GraphStatCard
+            quote={quote}
             label="Book equity"
             value={equity ? inr(equity.equity) : "-"}
             sub={
@@ -327,6 +334,7 @@ export default async function DashboardPage() {
             xs={seriesXs}
           />
           <GraphStatCard
+            quote={quote}
             label="Unrealized P&L"
             value={equity ? inr(equity.unrealized_pnl) : "-"}
             sub="Open positions · mark-to-market"
@@ -343,6 +351,7 @@ export default async function DashboardPage() {
             xs={seriesXs}
           />
           <GraphStatCard
+            quote={quote}
             label={hasLive ? "Net P&L (live)" : "Net P&L (paper)"}
             value={inr(hasLive ? stats.livePnl : stats.paperPnl)}
             sub={
@@ -365,12 +374,15 @@ export default async function DashboardPage() {
         </div>
       </div>
       <p className="font-mono text-[11px] leading-relaxed text-faint">
-        P&amp;L is net of exchange fees and GST. TDS (1% on every sell) is a
-        cash withholding tracked separately, not a cost inside P&amp;L. Win rate
-        counts closed sells only. Book equity is the engine&apos;s ledger
-        (₹1,000 paper base + realized P&amp;L, minus positions currently
-        deployed), not your CoinDCX wallet balance - check the exchange for
-        actual funds. Add Unrealized P&amp;L to see full net worth.
+        P&amp;L is net of exchange fees and GST.{" "}
+        {creds.exchange === "coindcx"
+          ? "TDS (1% on every sell) is a cash withholding tracked separately, not a cost inside P&L. "
+          : "Binance withholds no TDS on spot trades - VDA tax is still yours to file. "}
+        Win rate counts closed sells only. Book equity is the engine&apos;s
+        ledger ({inr(creds.exchange === "binance" ? 100 : 1000)} paper base +
+        realized P&amp;L, minus positions currently deployed), not your{" "}
+        {exMeta.label} wallet balance - check the exchange for actual funds.
+        Add Unrealized P&amp;L to see full net worth.
       </p>
 
       {/* Pro-view technical strip - hidden until "Pro view" is toggled on. */}
@@ -454,7 +466,7 @@ export default async function DashboardPage() {
       {/* Drawdown + P&L distribution - pro-view only. */}
       <div className="hidden grid-cols-1 gap-4 lg:grid-cols-2 [html.pro_&]:grid">
         <DrawdownCard series={series} />
-        <PnlHistogramCard daily={daily} />
+        <PnlHistogramCard daily={daily} quote={quote} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

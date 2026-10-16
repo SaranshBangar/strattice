@@ -130,7 +130,7 @@ export function AuthForm({
       </h1>
       <p className="mt-1 text-sm text-muted">
         {mode === "sign-up"
-          ? "Start running strategies on your own CoinDCX account."
+          ? "Start running strategies on your own CoinDCX or Binance account."
           : "Welcome back to Strattice."}
       </p>
 

@@ -14,6 +14,28 @@ export function sma(values: number[], period: number): (number | null)[] {
   return out;
 }
 
+/** Bollinger bands: SMA(period) ± k population standard deviations - the same band
+ *  the bb_breakout strategy trades (lib/strategy-sim.ts). Null while warming up. */
+export function bollinger(
+  values: number[],
+  period: number,
+  k: number,
+): { mid: (number | null)[]; upper: (number | null)[]; lower: (number | null)[] } {
+  const mid = sma(values, period);
+  const upper: (number | null)[] = new Array(values.length).fill(null);
+  const lower: (number | null)[] = new Array(values.length).fill(null);
+  for (let i = period - 1; i < values.length; i++) {
+    const m = mid[i];
+    if (m == null) continue;
+    let ss = 0;
+    for (let j = i - period + 1; j <= i; j++) ss += (values[j] - m) ** 2;
+    const sd = Math.sqrt(ss / period);
+    upper[i] = m + k * sd;
+    lower[i] = m - k * sd;
+  }
+  return { mid, upper, lower };
+}
+
 /** Exponential moving average, seeded with the SMA of the first window. */
 export function ema(values: number[], period: number): (number | null)[] {
   const out: (number | null)[] = new Array(values.length).fill(null);

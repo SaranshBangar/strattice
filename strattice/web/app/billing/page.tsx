@@ -91,7 +91,7 @@ export default async function BillingPage() {
       )}
 
       <p className="text-xs text-faint">
-        Your trading capital always stays in your own CoinDCX account -
+        Your trading capital always stays in your own exchange account (CoinDCX or Binance) -
         Strattice never holds funds.
       </p>
     </div>

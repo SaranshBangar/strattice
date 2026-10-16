@@ -19,18 +19,22 @@ from dataclasses import dataclass
 # reversion (loses net of India friction at every altitude) — kept in the allowlist so
 # LEGACY rows still resolve and open positions keep their exits managed, but the web UI
 # no longer offers them for new adds (see web/lib/entitlements.ts RETIRED_TEMPLATES).
+# v9 (research/FINDINGS.md v9, deep multi-cycle study on Binance 2017-2026 + CoinDCX
+# INR 2021-2026) promoted bb_breakout + donchian_trend and retired the four trend
+# templates that failed on at least one venue (ichimoku, ma_crossover,
+# squeeze_breakout, sharpe_mom).
 ACTIVE_TEMPLATES = (
-    "tsmom", "momentum", "macd_trend", "trend_regime", "ichimoku", "sharpe_mom",
-    "squeeze_breakout", "ma_crossover", "vol_expansion",
-    "supertrend", "hf_forecast", "custom",
+    "bb_breakout", "donchian_trend", "vol_expansion", "momentum", "tsmom",
+    "trend_regime", "supertrend", "macd_trend", "hf_forecast", "custom",
 )
-RETIRED_TEMPLATES = ("rsi", "fast_rsi", "bb_reversion")
+RETIRED_TEMPLATES = ("rsi", "fast_rsi", "bb_reversion",
+                     "ichimoku", "ma_crossover", "squeeze_breakout", "sharpe_mom")
 # SHORT-CAPABLE research templates (v8): symmetric long/short trend modules. The live
 # spot engine acts on exact BUY/SELL only, so their SHORT side is inert; the long side
 # trades with the user's MANDATORY stop-loss/take-profit (enforced web-side, lifted
 # into exits in config_gen._strategy_spec). Gated in the web UI behind the per-user
 # allow_shorting permission.
-SHORT_CAPABLE_TEMPLATES = ("donchian_ls", "ensemble_ls")
+SHORT_CAPABLE_TEMPLATES = ("donchian_ls", "ensemble_ls")  # ensemble_ls: retired from new adds (v9)
 ALL_TEMPLATES = ACTIVE_TEMPLATES + RETIRED_TEMPLATES + SHORT_CAPABLE_TEMPLATES
 DEFAULT_TEMPLATE = "tsmom"  # the starting template new users see first
 

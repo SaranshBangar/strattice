@@ -4,6 +4,12 @@ import { randomUUID } from "crypto";
 import { d1Query, d1First } from "./d1";
 import { encrypt } from "./crypto";
 import { resolveTier, isAllowed, type Tier } from "./entitlements";
+import {
+  DEFAULT_EXCHANGE,
+  exchangeOf,
+  marketFor,
+  type Exchange,
+} from "./exchanges";
 
 // ---------- subscription / tier ----------
 export interface SubRow {
@@ -296,14 +302,37 @@ export async function recordBillingEvent(
 }
 
 // ---------- credentials ----------
+// exchange shipped after the original table (migration 0008): self-heal the column on
+// first miss so the account page never 500s on a D1 that predates it. Every existing
+// credential row is a CoinDCX key, hence the default.
+const EXCHANGE_DDL = `alter table exchange_credentials add column exchange text not null default 'coindcx'`;
+
+async function withExchangeColumn<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    if (!String(e).includes("no such column: exchange")) throw e;
+    try {
+      await d1Query(EXCHANGE_DDL);
+    } catch (e2) {
+      if (!String(e2).includes("duplicate column")) throw e2;
+    }
+    return fn();
+  }
+}
+
 export async function credentialsLinked(
   userId: string,
-): Promise<{ linked: boolean; label?: string }> {
-  const row = await d1First<{ key_label: string }>(
-    "select key_label from exchange_credentials where user_id = ?",
-    [userId],
+): Promise<{ linked: boolean; label?: string; exchange: Exchange }> {
+  const row = await withExchangeColumn(() =>
+    d1First<{ key_label: string; exchange: string }>(
+      "select key_label, exchange from exchange_credentials where user_id = ?",
+      [userId],
+    ),
   );
-  return row ? { linked: true, label: row.key_label } : { linked: false };
+  return row
+    ? { linked: true, label: row.key_label, exchange: exchangeOf(row.exchange) }
+    : { linked: false, exchange: DEFAULT_EXCHANGE };
 }
 
 export async function saveCredentials(
@@ -311,15 +340,37 @@ export async function saveCredentials(
   apiKey: string,
   secret: string,
   label: string,
+  exchange: Exchange,
 ) {
   const [k, s] = await Promise.all([encrypt(apiKey), encrypt(secret)]);
-  await d1Query(
-    `insert into exchange_credentials(user_id, api_key_enc, secret_enc, key_label)
-     values (?,?,?,?)
-     on conflict(user_id) do update set api_key_enc=excluded.api_key_enc,
-       secret_enc=excluded.secret_enc, key_label=excluded.key_label`,
-    [userId, k, s, label || "default"],
+  await withExchangeColumn(() =>
+    d1Query(
+      `insert into exchange_credentials(user_id, api_key_enc, secret_enc, key_label, exchange)
+       values (?,?,?,?,?)
+       on conflict(user_id) do update set api_key_enc=excluded.api_key_enc,
+         secret_enc=excluded.secret_enc, key_label=excluded.key_label,
+         exchange=excluded.exchange`,
+      [userId, k, s, label || "default", exchange],
+    ),
   );
+}
+
+/** Re-spell every saved strategy market for a new exchange after an exchange switch
+ *  (I-BTC_INR <-> B-BTC_USDT), so the picker, dashboard and engine all agree. */
+export async function remapStrategyMarkets(userId: string, exchange: Exchange) {
+  const rows = await listStrategies(userId);
+  for (const r of rows) {
+    const usdt = /^B-([A-Z0-9]+)_USDT$/.exec(r.market);
+    const next =
+      exchange === "coindcx" && usdt
+        ? `I-${usdt[1]}_INR`
+        : marketFor(exchange, r.market);
+    if (next !== r.market)
+      await d1Query(
+        "update user_strategies set market = ? where id = ? and user_id = ?",
+        [next, r.id, userId],
+      );
+  }
 }
 
 // ---------- strategies ----------

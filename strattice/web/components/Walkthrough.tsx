@@ -21,12 +21,12 @@ const STEPS: Step[] = [
   {
     icon: <IconSpark />,
     title: "Welcome to Strattice",
-    body: "Automated trading strategies that run on your own CoinDCX account. It's non-custodial - we never hold your funds, and you keep control of the keys.",
+    body: "Automated trading strategies that run on your own exchange account - CoinDCX or Binance. It's non-custodial - we never hold your funds, and you keep control of the keys.",
   },
   {
     icon: <IconKey />,
-    title: "Link your CoinDCX keys",
-    body: "On the Account page, paste an API key with trading enabled and withdrawals disabled. It's encrypted at rest and never shown back to you.",
+    title: "Link your exchange keys",
+    body: "On the Account page, pick CoinDCX or Binance and paste an API key with trading enabled and withdrawals disabled. It's encrypted at rest and never shown back to you.",
     href: "/account",
     cta: "Go to Account",
   },

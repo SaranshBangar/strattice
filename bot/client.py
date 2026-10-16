@@ -44,11 +44,16 @@ _MARKETS_TTL = 3600.0         # re-fetch markets_details hourly so precision/min
                               # changes on pairs are picked up without a restart
 
 
-class CoinDCXError(Exception):
-    """Exchange/API error. Message is always scrubbed of registered secrets."""
+class ExchangeError(Exception):
+    """Any exchange/API error (CoinDCX or Binance). Message is always scrubbed of
+    registered secrets, and starts with the HTTP status for HTTP-level failures."""
 
     def __init__(self, msg: str):
         super().__init__(scrub(msg))
+
+
+class CoinDCXError(ExchangeError):
+    """CoinDCX API error."""
 
 
 _BALANCE_CACHE_TTL = 3.0  # seconds - collapses the handful of free_balance() calls a single
@@ -99,6 +104,9 @@ def _breaker_alert_close(name: str) -> None:
 
 
 class Client:
+    """CoinDCX. bot/binance_client.BinanceClient implements the same interface."""
+    exchange = "coindcx"
+
     def __init__(self, key: str = config.API_KEY, secret: str = config.SECRET_KEY):
         self.key = key
         self.secret = secret.encode()
@@ -308,7 +316,7 @@ class Client:
             payload["client_order_id"] = client_order_id
         return self._signed("/exchange/v1/orders/create", payload)
 
-    def order_status(self, *, client_order_id: str) -> dict | None:
+    def order_status(self, *, client_order_id: str, market: str | None = None) -> dict | None:
         """Look up an order by our own client_order_id. None if the exchange has no such
         order (i.e. a lost-confirmation POST never actually landed). Used by the boot
         reconciliation pass to heal bot.db after a crash mid-order."""
@@ -353,3 +361,22 @@ class Client:
     def invalidate_balance_cache(self) -> None:
         """Call right after a fill that changes the wallet, so the next read is fresh."""
         self._balance_cache.clear()
+
+
+EXCHANGES = ("coindcx", "binance")
+
+
+def make_client(exchange: str | None = None, *, key: str | None = None,
+                secret: str | None = None):
+    """The exchange client for this process: `exchange` if given, else config.yaml's
+    `exchange:` (default coindcx). key/secret override the env-loaded credentials
+    (the SaaS supervisor passes a user's own keys for balance reads)."""
+    ex = (exchange or config.exchange()).lower()
+    if ex == "binance":
+        from .binance_client import BinanceClient
+        return BinanceClient(key=key, secret=secret)
+    if ex != "coindcx":
+        raise ValueError(f"unknown exchange {ex!r} (expected one of {EXCHANGES})")
+    if key is None and secret is None:
+        return Client()
+    return Client(key=key or "", secret=secret or "")

@@ -2,7 +2,7 @@
 // exact moment someone is about to hand over an email address. Mono ledger styling
 // to match the landing page's signature panel.
 const GUARANTEES: [string, string][] = [
-  ["custody", "Funds stay in your own CoinDCX account. Always."],
+  ["custody", "Funds stay in your own CoinDCX or Binance account. Always."],
   ["keys", "Encrypted at rest; your secret is never shown back to anyone."],
   ["withdrawals", "Disabled on the key you create - we can't move money out."],
   [

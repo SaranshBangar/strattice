@@ -25,6 +25,7 @@ import {
   type CustomDef,
 } from "@/lib/custom-strategy";
 import { Select } from "@/components/Select";
+import { marketLabel } from "@/lib/coins";
 import { Spinner } from "@/components/Spinner";
 
 const C = {
@@ -96,6 +97,7 @@ export function StrategyPreview({
   params,
   custom,
   onWindowResult,
+  frictionPct = FRICTION_PCT,
 }: {
   /** Builtin template to preview (ignored when `custom` is set). */
   template?: BuiltinTemplate;
@@ -106,11 +108,16 @@ export function StrategyPreview({
   custom?: CustomDef | null;
   /** Reports the current window's candles upward (the builder compares strategies on them). */
   onWindowResult?: (interval: string, candles: Candle[]) => void;
+  /** Round-trip friction charged per trade (the linked exchange's; CoinDCX default). */
+  frictionPct?: number;
 }) {
   const [interval, setInterval_] = useState("1d"); // default = the live trading interval
   const [candles, setCandles] = useState<Candle[]>([]);
   const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
   const [hover, setHover] = useState<number | null>(null);
+  // null = auto: log scale when the window spans >= 3x (multi-month crypto
+  // windows), so early trades are not squashed flat by a later rally.
+  const [logPref, setLogPref] = useState<boolean | null>(null);
   const plotRef = useRef<HTMLDivElement>(null);
 
   const pair = market.trim().toUpperCase();
@@ -144,9 +151,9 @@ export function StrategyPreview({
 
   const sim: SimResult | null = useMemo(() => {
     if (!candles.length) return null;
-    if (custom) return simulateCustom(custom, candles);
-    return template ? simulate(template, candles, params) : null;
-  }, [template, candles, params, custom]);
+    if (custom) return simulateCustom(custom, candles, frictionPct);
+    return template ? simulate(template, candles, params, frictionPct) : null;
+  }, [template, candles, params, custom, frictionPct]);
   const lines: OverlaySeries[] = useMemo(() => {
     if (!candles.length) return [];
     if (custom) return customOverlays(custom, candles);
@@ -189,17 +196,26 @@ export function StrategyPreview({
     loRaw = 0;
     hiRaw = 1;
   }
-  const padV = (hiRaw - loRaw) * 0.07 || Math.abs(hiRaw) * 0.06 || 1;
-  const lo = loRaw - padV,
-    hi = hiRaw + padV,
+  const canLog = loRaw > 0;
+  const logScale = canLog && (logPref ?? hiRaw / loRaw >= 3);
+  // Scale in transformed space (ln for log), padded 7% either side.
+  const f = (v: number) => (logScale ? Math.log(Math.max(v, 1e-12)) : v);
+  const inv = (u: number) => (logScale ? Math.exp(u) : u);
+  const fLo = f(loRaw),
+    fHi = f(hiRaw);
+  const padV = (fHi - fLo) * 0.07 || Math.abs(fHi) * 0.06 || 1;
+  const lo = fLo - padV,
+    hi = fHi + padV,
     span = hi - lo || 1;
   const x = (i: number) => ((i + 0.5) / n) * W;
-  const y = (v: number) => ((hi - v) / span) * H;
+  const y = (v: number) => ((hi - f(v)) / span) * H;
   const xPct = (i: number) => ((i + 0.5) / n) * 100;
-  const yPct = (v: number) => ((hi - v) / span) * 100;
+  const yPct = (v: number) => ((hi - f(v)) / span) * 100;
   const slot = W / Math.max(1, n);
   const bodyW = Math.max(0.8, slot * 0.6);
-  const yTicks = Array.from({ length: N + 1 }, (_, i) => hi - (i / N) * span);
+  const yTicks = Array.from({ length: N + 1 }, (_, i) =>
+    inv(hi - (i / N) * span),
+  );
   const xk = Math.min(5, n);
   const xTicks =
     xk <= 1
@@ -260,7 +276,7 @@ export function StrategyPreview({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-baseline gap-3">
           <span className="font-mono text-sm font-semibold text-fg">
-            {pair.replace(/^I-/, "").replace("_", "/")}
+            {marketLabel(pair)}
           </span>
           {status === "ok" && (
             <span className="font-mono text-sm tnum text-dim">
@@ -275,16 +291,32 @@ export function StrategyPreview({
                 : `${n} × ${interval.toUpperCase()} bars · ${INTERVALS[interval]}`}
           </span>
         </div>
-        <Select
-          size="sm"
-          ariaLabel="Candle interval"
-          value={interval}
-          onChange={setInterval_}
-          options={Object.keys(INTERVALS).map((k) => ({
-            value: k,
-            label: `${k.toUpperCase()} bars · ${INTERVALS[k]}`,
-          }))}
-        />
+        <div className="flex items-center gap-2">
+          {canLog && status === "ok" && (
+            <button
+              onClick={() => setLogPref(!logScale)}
+              aria-pressed={logScale}
+              title="Log scale: equal % moves take equal height"
+              className={`rounded-md px-2 py-1 font-mono text-[11px] transition-colors ${
+                logScale
+                  ? "bg-accent/15 text-accent"
+                  : "text-faint hover:text-muted"
+              }`}
+            >
+              Log
+            </button>
+          )}
+          <Select
+            size="sm"
+            ariaLabel="Candle interval"
+            value={interval}
+            onChange={setInterval_}
+            options={Object.keys(INTERVALS).map((k) => ({
+              value: k,
+              label: `${k.toUpperCase()} bars · ${INTERVALS[k]}`,
+            }))}
+          />
+        </div>
       </div>
 
       {/* stats strip */}
@@ -317,7 +349,7 @@ export function StrategyPreview({
                   ? "good"
                   : "bad"
             }
-            hint={`Compounded across closed trades, after ~${FRICTION_PCT}% round-trip friction (fees + GST + TDS)`}
+            hint={`Compounded across closed trades, after ~${frictionPct}% round-trip friction (fees + GST${frictionPct >= 1 ? " + TDS" : ""})`}
           />
           <Stat
             label="Buy & hold"
@@ -426,7 +458,7 @@ export function StrategyPreview({
                 width="100%"
                 style={{ height: 300, display: "block" }}
                 role="img"
-                aria-label={`${pair} candles with simulated entries and exits`}
+                aria-label={`${marketLabel(pair)} candles with simulated entries and exits${logScale ? " (log scale)" : ""}`}
               >
                 {yTicks.map((_, i) => (
                   <line
@@ -703,11 +735,11 @@ export function StrategyPreview({
 
       <p className="text-[11px] leading-relaxed text-faint">
         Simulated preview on live Binance candles: fills at bar close,
-        long-only, net of ~{FRICTION_PCT}% round-trip friction (exchange fee +
-        GST + TDS). The live engine trades 1d bars - other intervals are for
-        exploring behavior, and results change with bar size. Not a promise of
-        future returns; the live engine also enforces daily-loss limits and
-        trade caps.
+        long-only, net of ~{frictionPct}% round-trip friction (exchange fee +
+        GST{frictionPct >= 1 ? " + TDS" : ""}). The live engine trades 1d bars -
+        other intervals are for exploring behavior, and results change with bar
+        size. Not a promise of future returns; the live engine also enforces
+        daily-loss limits and trade caps.
       </p>
     </div>
   );

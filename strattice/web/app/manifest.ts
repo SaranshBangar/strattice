@@ -5,7 +5,7 @@ import { SITE_NAME, SITE_DESCRIPTION } from "@/lib/seo";
 // and gives Android/Chrome a real icon + name instead of a screenshot thumbnail.
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: `${SITE_NAME} · Algorithmic crypto trading on your own CoinDCX account`,
+    name: `${SITE_NAME} · Algorithmic crypto trading on your own CoinDCX or Binance account`,
     short_name: SITE_NAME,
     description: SITE_DESCRIPTION,
     start_url: "/",

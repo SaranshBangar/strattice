@@ -23,9 +23,10 @@ const BASE = 1000; // the engine's paper base
 // Lower-priced markets on purpose: a ₹1,000 paper book buys quantities that
 // still read as non-zero at the tables' two-decimal formatting.
 const STRATS = [
-  { strategy: "macd_trend", market: "I-SOL_INR", px: 12_850 },
-  { strategy: "trend_regime", market: "I-DOGE_INR", px: 18.4 },
-  { strategy: "ichimoku", market: "I-ADA_INR", px: 55.2 },
+  // the v9 default engines (research/FINDINGS.md v9)
+  { strategy: "bb_breakout", market: "I-DOGE_INR", px: 18.4 },
+  { strategy: "donchian_trend", market: "I-ADA_INR", px: 55.2 },
+  { strategy: "tsmom", market: "I-SOL_INR", px: 12_850 },
 ] as const;
 
 function dayISO(offsetDays: number) {
@@ -125,7 +126,7 @@ function build() {
       avg_price: 12_480,
     },
     {
-      strategy: "ma_crossover",
+      strategy: "bb_breakout",
       market: "I-XRP_INR",
       qty: 3.8,
       avg_price: 204.6,

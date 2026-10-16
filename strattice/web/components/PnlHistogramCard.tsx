@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { PnlHistogram } from "@/components/charts";
-import { inr } from "@/lib/dashboard-format";
+import { money, type Quote } from "@/lib/dashboard-format";
 import { RangeButtons } from "@/components/RangeButtons";
 import { timeframe, timeframesFor, sliceByTime } from "@/lib/timeframes";
 
@@ -10,8 +10,10 @@ const dayMs = (day: string) => Date.parse(`${day}T00:00:00Z`);
 
 export function PnlHistogramCard({
   daily,
+  quote = "INR",
 }: {
   daily: { day: string; pnl: number }[];
+  quote?: Quote;
 }) {
   const [win, setWin] = useState("all");
   // Data is bucketed per calendar day, so only day-scale standard windows apply.
@@ -47,7 +49,7 @@ export function PnlHistogramCard({
       <div className="p-4">
         <PnlHistogram
           values={windowed.map((d) => d.pnl)}
-          fmt={(n) => inr(n)}
+          fmt={(n) => money(n, quote)}
         />
       </div>
       <p className="px-4 py-2 text-[11px] leading-relaxed text-faint">

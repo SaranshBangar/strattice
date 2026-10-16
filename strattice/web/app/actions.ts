@@ -24,6 +24,13 @@ import { sendApiKeyEmail } from "@/lib/email";
 import { sendTelegram, telegramConfigured, bullets } from "@/lib/telegram";
 import { isCurrencyCode } from "@/lib/currencies";
 import { isStatWindow } from "@/lib/stat-window";
+import {
+  DEFAULT_EXCHANGE,
+  EXCHANGE_META,
+  isExchange,
+  marketFor,
+  type Exchange,
+} from "@/lib/exchanges";
 
 export async function saveCredentialsAction(formData: FormData) {
   const user = await getUser();
@@ -31,10 +38,35 @@ export async function saveCredentialsAction(formData: FormData) {
   const apiKey = String(formData.get("apiKey") || "").trim();
   const secret = String(formData.get("secret") || "").trim();
   const label = String(formData.get("label") || "default").trim();
+  const exchangeRaw = String(formData.get("exchange") || DEFAULT_EXCHANGE);
+  if (!isExchange(exchangeRaw)) throw new Error("Choose CoinDCX or Binance.");
+  const exchange: Exchange = exchangeRaw;
   if (!apiKey || !secret) throw new Error("API key and secret required");
-  await q.saveCredentials(user.id, apiKey, secret, label);
-  await sendApiKeyEmail(user.email, label || "default");
+  if (apiKey.length > 256 || secret.length > 256)
+    throw new Error("That doesn't look like an exchange API key.");
+  const current = await q.credentialsLinked(user.id);
+  const switching = current.linked && current.exchange !== exchange;
+  if (switching) {
+    // The engine manages positions on ONE venue: a position opened on the old
+    // exchange can't be exited through the new one's keys, so refuse the switch
+    // until the book is flat - and drop back to DRY_RUN, so real-money trading on
+    // the new venue needs its own go-live confirmation.
+    const open = await q.openPositions(user.id);
+    if (open.length)
+      throw new Error(
+        `Close your ${open.length} open position${open.length === 1 ? "" : "s"} on ${EXCHANGE_META[current.exchange].label} before switching to ${EXCHANGE_META[exchange].label}.`,
+      );
+    await q.setBotState(user.id, { live: false });
+  }
+  await q.saveCredentials(user.id, apiKey, secret, label, exchange);
+  // Strategies added before any key is linked are CoinDCX-shaped (the default venue),
+  // so a first CoinDCX link keeps them as-is - including CoinDCX's own USDT pairs.
+  if (switching || (!current.linked && exchange !== DEFAULT_EXCHANGE))
+    await q.remapStrategyMarkets(user.id, exchange);
+  await sendApiKeyEmail(user.email, label || "default", EXCHANGE_META[exchange].label);
   revalidatePath("/account");
+  revalidatePath("/strategies");
+  revalidatePath("/dashboard");
 }
 
 // Validate + sanitize one (template, market, rawParams) into an insert-ready row.
@@ -126,8 +158,13 @@ export async function addStrategiesAction(
         'Enable "Allow short-capable strategies" in Settings before adding this template.',
       );
   }
+  const { exchange } = await q.credentialsLinked(userId);
   const prepared = items.map((it) =>
-    prepareStrategyInsert(String(it.template), it.market, it.params ?? null),
+    prepareStrategyInsert(
+      String(it.template),
+      marketFor(exchange, String(it.market || "").trim().toUpperCase()),
+      it.params ?? null,
+    ),
   );
   for (const p of prepared)
     await q.addStrategy(userId, p.template, p.market, p.params);
@@ -173,7 +210,7 @@ export async function setBotAction(patch: {
   if (patch.active === true) {
     const creds = await q.credentialsLinked(userId);
     if (!creds.linked)
-      throw new Error("Link your CoinDCX API keys before turning the bot on.");
+      throw new Error("Link your exchange API keys before turning the bot on.");
   }
   await q.setBotState(userId, patch);
   revalidatePath("/account");
@@ -192,7 +229,7 @@ export async function goLiveAction(confirmPhrase: string) {
     q.listStrategies(userId),
   ]);
   if (!creds.linked)
-    throw new Error("Link your CoinDCX API keys before going live.");
+    throw new Error("Link your exchange API keys before going live.");
   if (!strategies.some((s) => s.enabled))
     throw new Error("Enable at least one strategy before going live.");
   await q.setBotState(userId, { live: true });

@@ -2,10 +2,12 @@
 // Live market price chart. Seeds from /api/candles (Binance klines), then
 // streams real trades over Binance WebSocket to tick the last candle in real
 // time. The y-axis is sticky-quantized (useStickyDomain) so the scale holds
-// still while the price moves. Optional SMA-20/50 overlay lines, a dashed
-// "open" reference with a green/red wash for price above/below it, and a
-// crosshair + all-series readout on hover. The "2m" range is a true live
-// tape: fixed axes, scrolling line (LiveTape).
+// still while the price moves. Candlesticks (default) or a close line, a volume
+// strip, optional SMA-20/50 lines and Bollinger bands (20, 2σ - the band the
+// bb_breakout strategy trades), a dashed "open" reference, and a crosshair with
+// an OHLC + volume readout on hover. The "2m" range is a true live tape: fixed
+// axes, scrolling line (LiveTape). Prices are Binance spot (USDT) converted to
+// the viewer's display currency, so the header names the coin, not a pair.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toBinanceSymbol } from "@/lib/binance";
 import { MARKETS, marketLabel } from "@/lib/coins";
@@ -13,7 +15,7 @@ import { CoinLogo } from "@/components/CoinLogo";
 import { Select } from "@/components/Select";
 import { Delta } from "@/components/Delta";
 import { Spinner } from "@/components/Spinner";
-import { sma, bandPath } from "@/lib/chart-math";
+import { sma, bandPath, bollinger } from "@/lib/chart-math";
 import {
   C,
   GridLines,
@@ -66,6 +68,11 @@ const TAPE_KEEP = 320; // window (240 pts) + SMA warm-up slack
 const TAPE_CAP = 360; // prune in chunks so the epoch shifts rarely
 
 const label = marketLabel;
+// The chart shows one global (Binance) price per coin, so name the coin only:
+// "BTC/INR" next to a converted USDT price would misstate the venue.
+const coinOf = (p: string) => marketLabel(p).split("/")[0];
+const fmtVol = (v: number) =>
+  v.toLocaleString("en-US", { notation: "compact", maximumFractionDigits: 1 });
 // Sub-cent coins (SHIB and friends) need more precision than majors.
 const fmt = (n: number) =>
   n.toLocaleString("en-US", {
@@ -81,10 +88,16 @@ export function PriceChart({
   // when the user prefers USD or the FX lookup failed.
   fx?: { symbol: string; rate: number };
 }) {
-  const pairs = useMemo(
-    () => Array.from(new Set([...(markets ?? []), ...MARKETS])),
-    [markets],
-  );
+  // One entry per coin: I-BTC_INR and B-BTC_USDT stream the same Binance symbol.
+  const pairs = useMemo(() => {
+    const seen = new Set<string>();
+    return [...(markets ?? []), ...MARKETS].filter((p) => {
+      const s = toBinanceSymbol(p) ?? p;
+      if (seen.has(s)) return false;
+      seen.add(s);
+      return true;
+    });
+  }, [markets]);
   const [pair, setPair] = useState(pairs[0] ?? "I-BTC_INR");
   const [range, setRange] = useState("1h");
   const [candles, setCandles] = useState<Candle[]>([]);
@@ -96,6 +109,8 @@ export function PriceChart({
   const [hover, setHover] = useState<number | null>(null);
   const [showMa20, setShowMa20] = useState(true);
   const [showMa50, setShowMa50] = useState(false);
+  const [showBB, setShowBB] = useState(false);
+  const [mode, setMode] = useState<"candles" | "line">("candles");
   const svgRef = useRef<HTMLDivElement>(null);
   const live = range === LIVE_RANGE;
   const symbol = toBinanceSymbol(pair);
@@ -214,6 +229,8 @@ export function PriceChart({
   const closes = candles.map((c) => c.c);
   const ma20 = useMemo(() => sma(closes, 20), [closes]);
   const ma50 = useMemo(() => sma(closes, 50), [closes]);
+  const bb = useMemo(() => bollinger(closes, 20, 2), [closes]);
+  const asCandles = mode === "candles";
   const open = closes[0];
   const last = live ? (tape[tape.length - 1]?.v ?? 0) : closes[closes.length - 1];
   const ref0 = live ? (tapeOpen ?? last) : open;
@@ -223,14 +240,21 @@ export function PriceChart({
 
   const W = 1000,
     H = 260,
+    VH = 44, // volume strip height (px and viewBox units)
     N = 4;
   // Sticky quantized domain: the axis holds still while the last candle ticks.
   // Enabled overlays are included so an MA line never clips.
   let wLo = Infinity;
   let wHi = -Infinity;
   for (let i = 0; i < closes.length; i++) {
-    if (closes[i] < wLo) wLo = closes[i];
-    if (closes[i] > wHi) wHi = closes[i];
+    const lo_i = asCandles ? candles[i].l : closes[i];
+    const hi_i = asCandles ? candles[i].h : closes[i];
+    if (lo_i < wLo) wLo = lo_i;
+    if (hi_i > wHi) wHi = hi_i;
+    if (showBB && bb.upper[i] != null) {
+      wLo = Math.min(wLo, bb.lower[i]!);
+      wHi = Math.max(wHi, bb.upper[i]!);
+    }
     if (showMa20 && ma20[i] != null) {
       wLo = Math.min(wLo, ma20[i]!);
       wHi = Math.max(wHi, ma20[i]!);
@@ -243,12 +267,17 @@ export function PriceChart({
   const dom = useStickyDomain(wLo, wHi, {
     intervals: N,
     padFrac: 0.1,
-    resetKey: `${pair}|${range}|${showMa20}|${showMa50}`,
+    resetKey: `${pair}|${range}|${showMa20}|${showMa50}|${showBB}|${mode}`,
   });
   const lo = dom.lo;
   const hi = dom.hi;
   const span = hi - lo || 1;
-  const x = (i: number) => (i / Math.max(1, closes.length - 1)) * W;
+  // Candles sit centered in equal slots (no half-bodies clipped at the edges);
+  // the line runs edge to edge.
+  const n = closes.length;
+  const slot = W / Math.max(1, n);
+  const x = (i: number) =>
+    asCandles ? (i + 0.5) * slot : (i / Math.max(1, n - 1)) * W;
   const y = (v: number) => ((hi - v) / span) * H;
   const path = closes
     .map(
@@ -256,9 +285,21 @@ export function PriceChart({
     )
     .join(" ");
   const openBand =
-    closes.length > 1 && open != null
+    !asCandles && closes.length > 1 && open != null
       ? bandPath(closes, closes.map(() => open), x, y)
       : "";
+  const bbBand =
+    showBB && closes.length > 1
+      ? (() => {
+          const idx = closes.flatMap((_, i) => (bb.upper[i] != null ? [i] : []));
+          if (idx.length < 2) return "";
+          const top = idx.map((i, k) => `${k ? "L" : "M"}${x(i).toFixed(1)} ${y(bb.upper[i]!).toFixed(1)}`);
+          const bot = [...idx].reverse().map((i) => `L${x(i).toFixed(1)} ${y(bb.lower[i]!).toFixed(1)}`);
+          return `${top.join(" ")} ${bot.join(" ")} Z`;
+        })()
+      : "";
+  const vMax = Math.max(1e-12, ...candles.map((c) => c.v || 0));
+  const bodyW = Math.max(0.6, slot * 0.68);
   const linePathOf = (s: (number | null)[]) => {
     let d = "";
     let pen = false;
@@ -295,7 +336,11 @@ export function PriceChart({
     if (!el || closes.length < 2) return;
     const rect = el.getBoundingClientRect();
     const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-    setHover(Math.round(frac * (closes.length - 1)));
+    setHover(
+      asCandles
+        ? Math.min(closes.length - 1, Math.floor(frac * closes.length))
+        : Math.round(frac * (closes.length - 1)),
+    );
   }
 
   const hoverCandle = hover != null ? candles[hover] : null;
@@ -304,15 +349,27 @@ export function PriceChart({
     open != null && y(open) > -H * 0.02 && y(open) < H * 1.02;
 
   const legendItems = [
-    { label: "price", color: stroke, kind: "line" as const },
+    ...(asCandles
+      ? [
+          { label: "up", color: C.gain, kind: "area" as const },
+          { label: "down", color: C.loss, kind: "area" as const },
+        ]
+      : [{ label: "price", color: stroke, kind: "line" as const }]),
     ...(showMa20
       ? [{ label: "MA20", color: C.accent, kind: "line" as const }]
       : []),
     ...(showMa50
       ? [{ label: "MA50", color: C.accentHi, kind: "dash" as const }]
       : []),
-    { label: "above open", color: C.gain, kind: "area" as const },
-    { label: "below open", color: C.loss, kind: "area" as const },
+    ...(showBB
+      ? [{ label: "Bollinger 20", color: C.muted, kind: "area" as const }]
+      : []),
+    ...(asCandles
+      ? []
+      : [
+          { label: "above open", color: C.gain, kind: "area" as const },
+          { label: "below open", color: C.loss, kind: "area" as const },
+        ]),
   ];
 
   const maChip = (on: boolean, toggle: () => void, text: string) => (
@@ -334,7 +391,7 @@ export function PriceChart({
           <div className="flex items-baseline gap-3">
             <h3 className="flex items-center gap-2 font-display text-sm font-semibold tracking-tight text-dim">
               <CoinLogo market={pair} size={18} />
-              {label(pair)}
+              {coinOf(pair)}
             </h3>
             {status === "ok" && last > 0 && (
               <>
@@ -359,14 +416,33 @@ export function PriceChart({
                     ? "refresh failing · showing the last good data"
                     : live
                       ? "scrolling live tape · last 2 minutes"
-                      : `last ${WINDOWS[range]?.label ?? range} · streaming live from Binance`}
+                      : `last ${WINDOWS[range]?.label ?? range} · Binance spot price, streaming live`}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {!live && (
             <div className="flex items-center gap-0.5">
+              <div
+                role="group"
+                aria-label="Chart type"
+                className="mr-1.5 flex items-center rounded-md bg-inset/70 p-0.5"
+              >
+                {(["candles", "line"] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setMode(m)}
+                    aria-pressed={mode === m}
+                    className={`rounded px-2 py-0.5 font-mono text-[11px] capitalize transition-colors ${
+                      mode === m ? "bg-white/10 text-fg" : "text-faint hover:text-muted"
+                    }`}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
               {maChip(showMa20, () => setShowMa20((v) => !v), "MA20")}
               {maChip(showMa50, () => setShowMa50((v) => !v), "MA50")}
+              {maChip(showBB, () => setShowBB((v) => !v), "BB")}
             </div>
           )}
           <Select
@@ -376,7 +452,7 @@ export function PriceChart({
             onChange={setPair}
             options={pairs.map((p) => ({
               value: p,
-              label: label(p),
+              label: coinOf(p),
               icon: <CoinLogo market={p} size={14} />,
             }))}
           />
@@ -506,6 +582,27 @@ export function PriceChart({
                     />
                   )}
                   {openVisible && <RefLine y={y(open)} W={W} />}
+                  {bbBand && (
+                    <>
+                      <path d={bbBand} fill={C.muted} fillOpacity={0.08} stroke="none" />
+                      <path
+                        d={linePathOf(bb.upper)}
+                        fill="none"
+                        stroke={C.muted}
+                        strokeOpacity={0.55}
+                        strokeWidth={1}
+                        vectorEffect="non-scaling-stroke"
+                      />
+                      <path
+                        d={linePathOf(bb.lower)}
+                        fill="none"
+                        stroke={C.muted}
+                        strokeOpacity={0.55}
+                        strokeWidth={1}
+                        vectorEffect="non-scaling-stroke"
+                      />
+                    </>
+                  )}
                   {showMa50 && (
                     <path
                       d={linePathOf(ma50)}
@@ -529,15 +626,43 @@ export function PriceChart({
                       strokeLinecap="round"
                     />
                   )}
-                  <path
-                    d={path}
-                    fill="none"
-                    stroke={stroke}
-                    strokeWidth={2}
-                    vectorEffect="non-scaling-stroke"
-                    strokeLinejoin="round"
-                    strokeLinecap="round"
-                  />
+                  {asCandles ? (
+                    candles.map((c, i) => {
+                      const col = c.c >= c.o ? C.gain : C.loss;
+                      const top = y(Math.max(c.o, c.c));
+                      const bot = y(Math.min(c.o, c.c));
+                      return (
+                        <g key={c.t} opacity={hover == null || hover === i ? 1 : 0.85}>
+                          <line
+                            x1={x(i)}
+                            x2={x(i)}
+                            y1={y(c.h)}
+                            y2={y(c.l)}
+                            stroke={col}
+                            strokeWidth={1}
+                            vectorEffect="non-scaling-stroke"
+                          />
+                          <rect
+                            x={x(i) - bodyW / 2}
+                            y={top}
+                            width={bodyW}
+                            height={Math.max(bot - top, 0.8)}
+                            fill={col}
+                          />
+                        </g>
+                      );
+                    })
+                  ) : (
+                    <path
+                      d={path}
+                      fill="none"
+                      stroke={stroke}
+                      strokeWidth={2}
+                      vectorEffect="non-scaling-stroke"
+                      strokeLinejoin="round"
+                      strokeLinecap="round"
+                    />
+                  )}
                   {hover != null && (
                     <>
                       <line
@@ -597,17 +722,51 @@ export function PriceChart({
                   </span>
                 </div>
                 {hoverCandle && (
-                  <div className="pointer-events-none absolute left-2 top-2 rounded-md bg-panel/95 px-2.5 py-1.5 font-mono text-[11px] shadow-xl backdrop-blur">
-                    <div className="flex items-center gap-1.5">
-                      <span
-                        className="h-[2px] w-3 rounded-full"
-                        style={{ background: stroke }}
-                        aria-hidden="true"
-                      />
-                      <span className="tnum text-fg">
-                        {money(hoverCandle.c)}
-                      </span>
-                    </div>
+                  <div
+                    className={`pointer-events-none absolute top-2 rounded-md bg-panel/95 px-2.5 py-1.5 font-mono text-[11px] shadow-xl backdrop-blur ${
+                      hover != null && hover < closes.length / 2 ? "right-2" : "left-2"
+                    }`}
+                  >
+                    {asCandles ? (
+                      <div className="grid grid-cols-[auto_auto] gap-x-2 tnum">
+                        {(
+                          [
+                            ["O", hoverCandle.o],
+                            ["H", hoverCandle.h],
+                            ["L", hoverCandle.l],
+                            ["C", hoverCandle.c],
+                          ] as const
+                        ).map(([k, v]) => (
+                          <span key={k} className="contents">
+                            <span className="text-faint">{k}</span>
+                            <span
+                              className={
+                                k === "C"
+                                  ? hoverCandle.c >= hoverCandle.o
+                                    ? "text-gain"
+                                    : "text-loss"
+                                  : "text-fg"
+                              }
+                            >
+                              {money(v)}
+                            </span>
+                          </span>
+                        ))}
+                        <span className="text-faint">V</span>
+                        <span className="text-dim">{fmtVol(hoverCandle.v)}</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className="h-[2px] w-3 rounded-full"
+                          style={{ background: stroke }}
+                          aria-hidden="true"
+                        />
+                        <span className="tnum text-fg">
+                          {money(hoverCandle.c)}
+                        </span>
+                      </div>
+                    )}
                     {showMa20 && hover != null && ma20[hover] != null && (
                       <div className="mt-0.5 flex items-center gap-1.5">
                         <span
@@ -619,6 +778,19 @@ export function PriceChart({
                           {money(ma20[hover]!)}
                         </span>
                         <span className="text-faint">MA20</span>
+                      </div>
+                    )}
+                    {showBB && hover != null && bb.upper[hover] != null && (
+                      <div className="mt-0.5 flex items-center gap-1.5">
+                        <span
+                          className="h-2 w-3 rounded-[2px]"
+                          style={{ background: C.muted, opacity: 0.4 }}
+                          aria-hidden="true"
+                        />
+                        <span className="tnum text-dim">
+                          {money(bb.lower[hover]!)} – {money(bb.upper[hover]!)}
+                        </span>
+                        <span className="text-faint">BB</span>
                       </div>
                     )}
                     {showMa50 && hover != null && ma50[hover] != null && (
@@ -643,6 +815,34 @@ export function PriceChart({
                   </div>
                 )}
               </div>
+              {/* Volume strip, aligned with the price slots */}
+              <div className="mt-1 flex items-end justify-end pb-0.5 pr-2 font-mono text-[9px] uppercase tracking-wider text-faint">
+                vol
+              </div>
+              <svg
+                viewBox={`0 0 ${W} ${VH}`}
+                preserveAspectRatio="none"
+                width="100%"
+                style={{ height: VH, display: "block" }}
+                className="mt-1"
+                aria-hidden="true"
+              >
+                {candles.map((c, i) => {
+                  const h = ((c.v || 0) / vMax) * (VH - 2);
+                  return (
+                    <rect
+                      key={c.t}
+                      x={x(i) - bodyW / 2}
+                      y={VH - h}
+                      width={bodyW}
+                      height={h}
+                      fill={c.c >= c.o ? C.gain : C.loss}
+                      fillOpacity={hover === i ? 0.75 : 0.35}
+                    />
+                  );
+                })}
+                <line x1={0} x2={W} y1={VH} y2={VH} stroke={C.axis} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+              </svg>
               {/* Corner + X (time) axis */}
               <div />
               <div className="flex justify-between gap-1 overflow-hidden pt-1.5 font-mono text-[10px] tabular-nums text-faint">
@@ -657,9 +857,11 @@ export function PriceChart({
         )}
       </div>
       <p className="px-4 pb-3 text-[11px] leading-relaxed text-faint [html.pro_&]:hidden">
-        The gold line is the average of the last 20 candles — when price
-        crosses it, trend strategies pay attention. Green shading means price
-        is above where this window opened; red means below.
+        Each candle is one bar: the body spans open to close (green = closed
+        higher), the wicks the high and low. The gold line is the 20-bar
+        average; BB adds the 2σ Bollinger bands - a close above the upper band is
+        exactly what the Bollinger Breakout strategy buys. The bars underneath
+        are traded volume.
       </p>
     </section>
   );

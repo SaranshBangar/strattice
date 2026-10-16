@@ -22,7 +22,7 @@ from __future__ import annotations
 import logging
 
 from . import audit
-from .client import Client, CoinDCXError
+from .client import Client, ExchangeError
 from .executor import _apply_fill
 
 log = logging.getLogger("reconcile")
@@ -40,7 +40,8 @@ def _order_payload(resp: dict) -> dict:
 
 def _fill_from(resp: dict) -> tuple[float, float, str]:
     """(filled_qty, avg_price, exchange_status) out of an order-status payload.
-    Field names vary across CoinDCX endpoints; try the documented ones in order."""
+    Field names vary across CoinDCX endpoints (the Binance client normalizes into
+    the same names); try the documented ones in order."""
     o = _order_payload(resp)
     status = str(o.get("status", "")).lower()
     qty = 0.0
@@ -74,8 +75,8 @@ def resolve_one(client: Client, row) -> tuple[str, str | None]:
        line is a human-readable description (None for lookup_failed)."""
     coid = row["client_order_id"]
     try:
-        resp = client.order_status(client_order_id=coid)
-    except CoinDCXError as e:
+        resp = client.order_status(client_order_id=coid, market=row["market"])
+    except ExchangeError as e:
         log.warning("reconcile: status lookup failed for %s: %s", coid, e)
         return "lookup_failed", None
     if resp is None:

@@ -29,7 +29,7 @@ export default function TermsPage() {
 
       <H>1. What Strattice is</H>
       <P>
-        Strattice is a non-custodial tool for running algorithmic trading strategies on your own CoinDCX account, using API keys you provide and
+        Strattice is a non-custodial tool for running algorithmic trading strategies on your own exchange account (CoinDCX or Binance), using API keys you provide and
         control. We never take custody of your funds, and orders execute on your own exchange account. Strattice is a software tool, not a broker,
         exchange, portfolio manager, or investment adviser.
       </P>
@@ -55,7 +55,7 @@ export default function TermsPage() {
 
       <H>5. Your account and API keys</H>
       <P>
-        You are responsible for keeping your login credentials and CoinDCX API keys secure. We strongly recommend creating keys with trading enabled
+        You are responsible for keeping your login credentials and exchange API keys secure. We strongly recommend creating keys with trading enabled
         and withdrawals disabled, so funds cannot leave your exchange account through Strattice. API keys are encrypted at rest and never shown back
         to you or anyone else. You may remove your keys or delete your account at any time.
       </P>
@@ -68,7 +68,7 @@ export default function TermsPage() {
 
       <H>7. Third-party services</H>
       <P>
-        The Service depends on third parties including CoinDCX (order execution), public market-data providers, email delivery, and optional Google
+        The Service depends on third parties including your exchange, CoinDCX or Binance (order execution), public market-data providers, email delivery, and optional Google
         sign-in and Telegram alerts. Your use of those services is subject to their own terms, and we are not responsible for their availability or
         actions.
       </P>

@@ -35,17 +35,24 @@ import store
 
 REPO = Path(__file__).resolve().parents[2]   # strattice/worker -> strattice -> repo root
 sys.path.insert(0, str(REPO))  # so `bot.client` (repo-root package) is importable below
-from bot.client import Client, CoinDCXError  # noqa: E402  (needs sys.path fixup above)
+from bot.client import ExchangeError, make_client  # noqa: E402  (needs sys.path fixup above)
 
 USERS_DIR = REPO / "data" / "users"
 load_dotenv(REPO / "strattice" / ".env")
 load_dotenv(REPO / ".env")  # fall back to repo .env if present
 POLL = int(os.getenv("SUPERVISOR_POLL", "30"))
-STARTING_EQUITY = 1000.0  # mirrors config_gen._BASE; DRY_RUN book equity baseline
-CRED_ERROR_MSG = (
-    "CoinDCX API keys look invalid, expired, or disabled - update them in "
-    "Account to resume live trading."
-)
+_EXCHANGE_NAME = {"coindcx": "CoinDCX", "binance": "Binance"}
+
+
+def cred_error_msg(exchange: str) -> str:
+    return (f"{_EXCHANGE_NAME.get(exchange, exchange)} API keys look invalid, expired, or "
+            "disabled - update them in Account to resume live trading.")
+
+
+def _starting_equity(exchange: str) -> float:
+    """DRY_RUN paper-wallet baseline, in the exchange's quote currency (config_gen)."""
+    return config_gen.EXCHANGE_PROFILE[config_gen.normalize_exchange(exchange)][
+        "starting_equity"]
 
 _procs: dict[str, dict] = {}  # uid -> {"proc": Popen, "hash": str}
 
@@ -138,8 +145,14 @@ def _spawn(u: dict, cfg_path: Path, db: Path, log: Path,
     env["CONFIG_PATH"] = str(cfg_path)
     env["BOT_DB_PATH"] = str(db)
     env["BOT_LOG_PATH"] = str(log)
-    env["COINDCX_API_KEY"] = u["api_key"]
-    env["COINDCX_SECRET_KEY"] = u["secret"]
+    # Keys go ONLY into the variables of the user's own exchange; the other venue's are
+    # scrubbed so a supervisor-level .env can never leak into a user's engine.
+    for k in ("COINDCX_API_KEY", "COINDCX_SECRET_KEY", "BINANCE_API_KEY",
+              "BINANCE_SECRET_KEY", "EXCHANGE"):
+        env.pop(k, None)
+    prefix = "BINANCE" if u.get("exchange") == "binance" else "COINDCX"
+    env[f"{prefix}_API_KEY"] = u["api_key"]
+    env[f"{prefix}_SECRET_KEY"] = u["secret"]
     # A config-only recycle (strategy add/remove/edit) must not fire a fresh "bot started"
     # Telegram alert - the engine reads this flag and stays quiet on start. Genuine first
     # starts and go-live transitions leave it unset so those still alert.
@@ -172,30 +185,45 @@ def _stop_all() -> None:
         _stop(_procs.pop(uid)["proc"])
 
 
-_price_client: Client | None = None
+_price_clients: dict[str, object] = {}  # exchange -> public (keyless) client
+# Mark prices are cached for one poll cycle: many users hold the same few markets, and
+# the publish pool would otherwise fetch the same last close once per user per cycle.
+_PRICE_TTL = 20.0
+_price_cache: dict[tuple[str, str], tuple[float | None, float]] = {}
+_price_lock = threading.Lock()
 
 
-def _mark_price(pair: str) -> float | None:
-    """Last close for a market, via the public (no-auth) candles endpoint. None on any
-    failure - callers must treat that position's unrealized P&L as unknown, not zero. The
-    endpoint wants the candle "pair" id (e.g. "I-SOL_INR"), which is exactly what positions
-    store, so no symbol translation is needed. A thin market can momentarily have no 1m bar,
-    so fall back to a coarser interval before giving up."""
-    global _price_client
-    if _price_client is None:
-        _price_client = Client()
+def _mark_price(pair: str, exchange: str = "coindcx") -> float | None:
+    """Last close for a market on the user's exchange, via the public (no-auth) candles
+    endpoint. None on any failure - callers must treat that position's unrealized P&L as
+    unknown, not zero. Positions store the bot's pair id (I-SOL_INR / B-SOL_USDT), which
+    both clients accept. A thin market can momentarily have no 1m bar, so fall back to a
+    coarser interval before giving up."""
+    key = (exchange, pair)
+    now = time.monotonic()
+    with _price_lock:
+        hit = _price_cache.get(key)
+        if hit is not None and now - hit[1] < _PRICE_TTL:
+            return hit[0]
+        client = _price_clients.get(exchange)
+        if client is None:
+            client = _price_clients[exchange] = make_client(exchange, key="", secret="")
+    price = None
     for interval in ("1m", "15m", "1d"):
         try:
-            bars = _price_client.candles(pair, interval, limit=1)
+            bars = client.candles(pair, interval, limit=1)
             if bars:
-                return float(bars[-1]["close"])
+                price = float(bars[-1]["close"])
+                break
         except Exception as e:
             print(f"[supervisor] mark price fetch failed for {pair} @ {interval}: {e}",
                   file=sys.stderr)
-    return None
+    with _price_lock:
+        _price_cache[key] = (price, time.monotonic())
+    return price
 
 
-def _unrealized_pnl(pos: list[dict]) -> float:
+def _unrealized_pnl(pos: list[dict], exchange: str = "coindcx") -> float:
     """Mark-to-market P&L on open positions (qty * (last price - avg cost)), summed across
     positions. Skips a position (contributes 0) if its price can't be fetched, rather than
     failing the whole publish over one flaky market. Logs any markets it couldn't price so a
@@ -203,7 +231,7 @@ def _unrealized_pnl(pos: list[dict]) -> float:
     total = 0.0
     unpriced: list[str] = []
     for p in pos:
-        mark = _mark_price(p["market"])
+        mark = _mark_price(p["market"], exchange)
         if mark is None:
             unpriced.append(p["market"])
             continue
@@ -217,14 +245,17 @@ def _unrealized_pnl(pos: list[dict]) -> float:
 def _live_book(u: dict, quote: str, car: float) -> tuple[float | None, str | None]:
     """Real free balance + capital-at-risk for a LIVE user, mirroring bot/sizing.py's
     equity(). (None, None) on a flaky exchange/network error, so callers can fall back
-    rather than fail the whole publish. (None, CRED_ERROR_MSG) when a 401/403 means the
+    rather than fail the whole publish. (None, cred_error_msg(...)) when a 401/403 means the
     keys themselves are the problem - callers must not paper over that with a fake
-    balance (see _project)."""
+    balance (see _project). Uses the user's own exchange (CoinDCX or Binance)."""
+    ex = u.get("exchange") or "coindcx"
     try:
-        return Client(key=u["api_key"], secret=u["secret"]).free_balance(quote) + car, None
+        client = make_client(ex, key=u["api_key"], secret=u["secret"])
+        return client.free_balance(quote) + car, None
     except Exception as e:
         print(f"[supervisor] live balance fetch failed for {u['user_id']}: {e}", file=sys.stderr)
-        cred_error = CRED_ERROR_MSG if isinstance(e, CoinDCXError) and str(e)[:3] in ("401", "403") else None
+        cred_error = cred_error_msg(ex) if isinstance(e, ExchangeError) and \
+            str(e)[:3] in ("401", "403") else None
         return None, cred_error
 
 
@@ -246,7 +277,7 @@ def _project(db: Path, u: dict, quote: str) -> tuple[list[dict], list[dict], dic
     live = bool(u.get("live"))
     if not db.exists():
         book, cred_error = _live_book(u, quote, 0.0) if live else (None, None)
-        eq = book or STARTING_EQUITY
+        eq = book or _starting_equity(u.get("exchange"))
         return [], [], {"equity": eq, "free": eq, "unrealized_pnl": 0.0,
                         "realized_today": 0.0, "trades_today": 0}, cred_error
     con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=5)
@@ -274,10 +305,10 @@ def _project(db: Path, u: dict, quote: str) -> tuple[list[dict], list[dict], dic
             """select count(*) n, coalesce(sum(realized_pnl),0) p from orders
                where status in ('placed','dry_run') and substr(ts,1,10)=?""", (day,)).fetchone()
         book, cred_error = _live_book(u, quote, car) if live else (None, None)
-        raw_equity = book or (STARTING_EQUITY + total_realized)
+        raw_equity = book or (_starting_equity(u.get("exchange")) + total_realized)
         book_equity = raw_equity - car
         equity = {"equity": book_equity, "free": book_equity,
-                  "unrealized_pnl": _unrealized_pnl(pos),
+                  "unrealized_pnl": _unrealized_pnl(pos, u.get("exchange") or "coindcx"),
                   "realized_today": today["p"], "trades_today": today["n"]}
         if pos:
             print(f"[supervisor] {u['user_id'][:8]} book_equity={book_equity:.2f} "
@@ -324,7 +355,8 @@ def _reconcile(conn) -> None:
         uid = u["user_id"]
         desired.add(uid)
         d = USERS_DIR / uid
-        cfg = config_gen.build_config(u["tier"], u["strategies"], kill_switch_file=_kill_rel(uid))
+        cfg = config_gen.build_config(u["tier"], u["strategies"], kill_switch_file=_kill_rel(uid),
+                                      exchange=u.get("exchange"))
         cfg_path, db, log = d / "config.yaml", d / "bot.db", d / "bot.log"
         # Dumped once and reused for both the write and the change-hash (previously dumped twice).
         dumped = yaml.safe_dump(cfg, sort_keys=False)
@@ -358,8 +390,8 @@ def _reconcile(conn) -> None:
                     "live": u["live"],
                     "held": False,
                 }
-                print(f"[supervisor] (re)started engine for {uid} (tier={u['tier']} "
-                      f"live={u['live']} quiet_start={config_only})")
+                print(f"[supervisor] (re)started engine for {uid} (exchange={cfg['exchange']} "
+                      f"tier={u['tier']} live={u['live']} quiet_start={config_only})")
             else:
                 cur["held"] = True
 
